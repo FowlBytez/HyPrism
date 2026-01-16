@@ -93,8 +93,8 @@ jobs:
           APPRUN
           chmod +x HyPrism.AppDir/AppRun
           
-          # Build AppImage
-          ./appimagetool --appimage-extract-and-run HyPrism.AppDir HyPrism-x86_64.AppImage
+          # Build AppImage with ARCH set
+          ARCH=x86_64 ./appimagetool --appimage-extract-and-run HyPrism.AppDir HyPrism-x86_64.AppImage
           
           # Replace binary with AppImage
           rm -rf build/bin/*
