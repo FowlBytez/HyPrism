@@ -67,10 +67,13 @@ www.curseforge.com:443  - Mod database (CurseForge API)
 ## Recent Security Improvements
 
 ### v1.0.8 (January 17, 2026)
-- **Fixed Windows Terminal Popup**: Replaced `tasklist` command with native Windows API
-  - Before: Spawned visible console windows every 2 seconds
-  - After: In-process check using `CreateToolhelp32Snapshot`
-- **Reduced Polling**: Increased intervals from 2s to 3s to reduce CPU usage
+- **Fixed Windows Terminal Popup (Issue #11)**: Eliminated all console window flashes
+  - Replaced `tasklist` command with native Windows API (`CreateToolhelp32Snapshot`)
+  - Implemented `HideConsoleWindow()` function (was previously a non-functional placeholder)
+  - Applied window hiding to all butler commands (game installation/updates)
+  - Result: No more visible console windows during operation
+- **Reduced CPU Usage (Issue #12)**: Increased polling intervals from 2s to 3s
+- **Fixed Linux Update 404 Errors (Issues #9, #13)**: Added version.json to release assets
 
 ## Reporting Security Issues
 
