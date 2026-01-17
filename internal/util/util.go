@@ -9,9 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -226,11 +224,4 @@ func CopyDir(src, dst string) error {
 }
 
 // HideConsoleWindow hides the console window on Windows
-func HideConsoleWindow(cmd *exec.Cmd) {
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
-		}
-	}
-}
+// Implementation is in util_windows.go and util_unix.go
