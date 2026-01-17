@@ -140,7 +140,7 @@ const App: React.FC = () => {
       } catch (e) {
         console.error('Failed to check game state:', e);
       }
-    }, 2000); // Check every 2 seconds
+    }, 3000); // Check every 3 seconds (reduced frequency)
     
     return () => clearInterval(pollInterval);
   }, [isGameRunning]);

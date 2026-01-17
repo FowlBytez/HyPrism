@@ -40,9 +40,9 @@ export const LogsModal: React.FC<LogsModalProps> = ({
     fetchLogs();
   }, []);
 
-  // Always auto-refresh every 2 seconds
+  // Auto-refresh every 3 seconds
   useEffect(() => {
-    const interval = setInterval(fetchLogs, 2000);
+    const interval = setInterval(fetchLogs, 3000);
     return () => clearInterval(interval);
   }, []);
 
