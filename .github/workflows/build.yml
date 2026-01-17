@@ -296,6 +296,13 @@ jobs:
         with:
           path: artifacts
       
+      - name: Flatten artifacts
+        run: |
+          # Move all files from subdirectories to artifacts root
+          find artifacts -type f -mindepth 2 -exec mv {} artifacts/ \;
+          # Remove empty subdirectories
+          find artifacts -type d -empty -delete
+      
       - name: Create version.json for auto-updater
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
@@ -346,4 +353,4 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*
+          files: artifacts/*
