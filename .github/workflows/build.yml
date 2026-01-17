@@ -247,6 +247,46 @@ jobs:
           tar -czvf ../../../HyPrism-linux-x86_64.tar.gz HyPrism
           cd ../../..
           mv HyPrism-linux-x86_64.tar.gz build/bin/
+          
+          # Keep a copy of the binary for Flatpak
+          cp HyPrism.AppDir/usr/bin/HyPrism build/bin/HyPrism-binary
+
+      - name: Build Flatpak (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          # Install Flatpak and flatpak-builder
+          sudo apt-get install -y flatpak flatpak-builder
+          
+          # Add Flathub remote
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          
+          # Install required runtime
+          sudo flatpak install -y flathub org.gnome.Platform//46 org.gnome.Sdk//46
+          
+          # Prepare flatpak build directory with pre-built binary
+          mkdir -p flatpak-build-dir
+          cp build/bin/HyPrism-binary flatpak-build-dir/HyPrism
+          cp build/appicon.png flatpak-build-dir/dev.hyprism.HyPrism.png
+          cp flatpak/dev.hyprism.HyPrism.desktop flatpak-build-dir/
+          cp flatpak/dev.hyprism.HyPrism.metainfo.xml flatpak-build-dir/
+          cp flatpak/dev.hyprism.HyPrism.json flatpak-build-dir/
+          
+          # Build the Flatpak
+          cd flatpak-build-dir
+          flatpak-builder \
+            --force-clean \
+            --repo=flatpak-repo \
+            --state-dir=.flatpak-builder \
+            flatpak-build \
+            dev.hyprism.HyPrism.json
+          
+          # Create bundle
+          flatpak build-bundle flatpak-repo HyPrism.flatpak dev.hyprism.HyPrism
+          mv HyPrism.flatpak ../build/bin/
+          cd ..
+          
+          # Clean up temporary binary
+          rm build/bin/HyPrism-binary
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

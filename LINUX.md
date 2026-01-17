@@ -1,10 +1,33 @@
 # Linux Installation Guide
 
-HyPrism on Linux requires WebKitGTK 4.0 to run. We provide AppImage and tar.gz packages for easy installation.
+HyPrism on Linux is available as Flatpak, AppImage, and standalone binary.
 
-## Recommended: AppImage
+## Recommended: Flatpak
 
-AppImage is a portable format that works on most Linux distributions.
+Flatpak bundles all dependencies for maximum compatibility.
+
+### Prerequisites
+
+Install Flatpak if not already installed:
+
+```bash
+# Ubuntu/Debian
+sudo apt install flatpak
+
+# Fedora
+sudo dnf install flatpak
+
+# Arch Linux
+sudo pacman -S flatpak
+```
+
+### Install HyPrism
+
+1. Download `HyPrism.flatpak` from [releases](https://github.com/yyyumeniku/HyPrism/releases/latest)
+2. Install: `flatpak install HyPrism.flatpak`
+3. Run: `flatpak run dev.hyprism.HyPrism`
+
+## Alternative: AppImage
 
 ### Prerequisites
 
@@ -39,34 +62,36 @@ If AppImage doesn't work, use the standalone binary:
 
 ### "libwebkit2gtk-4.0.so.37: cannot open shared object file"
 
-Your system is missing WebKitGTK. Install it using the commands above for your distribution.
+Your system is missing WebKitGTK. Use Flatpak (recommended) or install WebKitGTK using the commands above.
 
 ### AppImage won't launch
 
-Try extracting and running directly:
+Try Flatpak instead, or extract and run directly:
 ```bash
 ./HyPrism-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
-Or use the tar.gz binary instead.
-
 ### Game launches but crashes
 
 1. Update to the latest HyPrism release
 2. Ensure you have the latest graphics drivers
-3. Check if WebKitGTK version is 2.40 or newer
+3. Try using Flatpak for isolated environment
 
 ## SteamOS / Steam Deck
 
-For Steam Deck, use Desktop Mode and run the AppImage:
+For Steam Deck, Flatpak is recommended:
 
+```bash
+flatpak install HyPrism.flatpak
+flatpak run dev.hyprism.HyPrism
+```
+
+Or use AppImage in Desktop Mode:
 ```bash
 chmod +x HyPrism-x86_64.AppImage
 ./HyPrism-x86_64.AppImage
 ```
-
-If AppImage fails, use the tar.gz binary.
 
 ## Building from Source
 
