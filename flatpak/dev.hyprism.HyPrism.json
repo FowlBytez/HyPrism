@@ -1,7 +1,7 @@
 {
   "app-id": "dev.hyprism.HyPrism",
   "runtime": "org.gnome.Platform",
-  "runtime-version": "45",
+  "runtime-version": "47",
   "sdk": "org.gnome.Sdk",
   "command": "HyPrism",
   "finish-args": [
@@ -17,6 +17,9 @@
     "--talk-name=org.freedesktop.Notifications",
     "--talk-name=org.freedesktop.secrets",
     "--env=XDG_CURRENT_DESKTOP=GNOME"
+  ],
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.golang"
   ],
   "modules": [
     {
