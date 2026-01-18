@@ -22,6 +22,6 @@ Download `HyPrism.exe` from [releases](https://github.com/yyyumeniku/HyPrism/rel
 See [LINUX.md](LINUX.md) for detailed installation instructions. **TL;DR:** Use Flatpak for best compatibility.
 
 ## Platform Support
-- ✅ Windows (fully supported)
-- ✅ macOS (ARM64, Intel)
-- ⚠️ Linux (Flatpak recommended, AppImage has dependency issues)
+- Windows (fully supported)
+- macOS (ARM64, Intel)
+- Linux (Flatpak recommended, AppImage has dependency issues)
