@@ -184,8 +184,10 @@ func EnsureInstalledVersionSpecific(ctx context.Context, versionType string, ver
 
 	if _, err := os.Stat(clientPath); err == nil {
 		fmt.Printf("Instance %s v%d already installed at %s\n", versionType, version, instanceGameDir)
+		// Don't just say "complete" - we still need to indicate we're launching
+		// This ensures the frontend transitions to the correct state
 		if progress != nil {
-			progress("complete", 100, fmt.Sprintf("%s v%d is ready", versionType, version), "", "", 0, 0)
+			progress("complete", 100, fmt.Sprintf("%s v%d is already installed", versionType, version), "", "", 0, 0)
 		}
 		return nil
 	}

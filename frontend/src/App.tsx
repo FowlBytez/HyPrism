@@ -217,9 +217,11 @@ const App: React.FC = () => {
       setDownloaded(data.downloaded);
       setTotal(data.total);
       
-      if (data.progress >= 100 && data.stage === 'launch') {
+      // When launch stage is received, game is starting
+      if (data.stage === 'launch') {
         setIsGameRunning(true);
         setIsDownloading(false);
+        setProgress(0);
       }
     });
 
@@ -280,6 +282,9 @@ const App: React.FC = () => {
     setIsDownloading(true);
     try {
       await DownloadAndLaunch(username);
+      // Button state will be managed by progress events:
+      // - 'launch' event sets isGameRunning=true and isDownloading=false
+      // - 'error' event sets isDownloading=false
     } catch (err) {
       console.error('Launch failed:', err);
       setIsDownloading(false);
@@ -306,6 +311,14 @@ const App: React.FC = () => {
       const selectedDir = await SelectInstanceDirectory();
       if (selectedDir) {
         console.log('Instance directory updated to:', selectedDir);
+        
+        // Show info about what gets moved
+        setError({
+          type: 'INFO',
+          message: 'Instance Directory Updated',
+          technical: `Game instances will now be stored in:\n${selectedDir}\n\nNote: The following remain in AppData:\n• Java Runtime (JRE)\n• Butler tool\n• Cache files\n• Logs\n• Launcher settings\n• WebView2 (EBWebView folder)\n\nYou may need to reinstall the game if switching drives.`,
+          timestamp: new Date().toISOString()
+        });
         
         // Reload version list and check installed versions for new directory
         setIsLoadingVersions(true);
