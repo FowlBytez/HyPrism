@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Minus, Square, X } from 'lucide-react';
 import { Quit, WindowMinimise, WindowToggleMaximise } from '../../wailsjs/runtime/runtime';
 import { GetLauncherVersion } from '../../wailsjs/go/app/App';
-import appIcon from '../assets/appicon.png';
+import appIcon from '../assets/appicon.svg';
 
 export const Titlebar: React.FC = () => {
   const [version, setVersion] = useState<string>('');
@@ -18,8 +18,8 @@ export const Titlebar: React.FC = () => {
     >
       {/* Logo/Title */}
       <div className="flex items-center gap-3" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
-        <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#4A90E2] to-[#2E5C9A] flex items-center justify-center p-0.5">
-          <img src={appIcon} alt="HyPrism" className="w-full h-full object-contain" />
+        <div className="w-6 h-6 flex items-center justify-center">
+          <img src={appIcon} alt="HyPrism" className="w-full h-full object-contain" style={{ imageRendering: 'crisp-edges' }} />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-white/80 text-sm font-semibold tracking-tight">HyPrism</span>

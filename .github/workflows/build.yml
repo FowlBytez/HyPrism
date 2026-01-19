@@ -180,9 +180,15 @@ jobs:
           cp build/bin/HyPrism HyPrism.AppDir/usr/bin/
           chmod +x HyPrism.AppDir/usr/bin/HyPrism
           
-          # Copy icon
-          cp build/appicon.png HyPrism.AppDir/usr/share/icons/hicolor/256x256/apps/hyprism.png
-          cp build/appicon.png HyPrism.AppDir/hyprism.png
+          # Copy icon at 512x512 for high resolution displays
+          mkdir -p HyPrism.AppDir/usr/share/icons/hicolor/512x512/apps
+          convert build/appicon.png -resize 512x512 HyPrism.AppDir/usr/share/icons/hicolor/512x512/apps/hyprism.png || {
+            echo "ImageMagick convert failed, trying sips..."
+            sips -z 512 512 build/appicon.png --out HyPrism.AppDir/usr/share/icons/hicolor/512x512/apps/hyprism.png
+          }
+          convert build/appicon.png -resize 512x512 HyPrism.AppDir/hyprism.png || {
+            cp HyPrism.AppDir/usr/share/icons/hicolor/512x512/apps/hyprism.png HyPrism.AppDir/hyprism.png
+          }
           
           # Create desktop file (must be at root of AppDir)
           cat > HyPrism.AppDir/hyprism.desktop << 'DESKTOP'
