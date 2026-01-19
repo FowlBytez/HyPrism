@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FolderOpen, Play, Package, Square, Github, Bug, GitBranch, Loader2, Download, ChevronDown, HardDrive, Check } from 'lucide-react';
+import { FolderOpen, Play, Package, Square, Github, Bug, GitBranch, Loader2, Download, ChevronDown, HardDrive, Check, Coffee } from 'lucide-react';
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
 
 interface ControlSectionProps {
@@ -81,6 +81,7 @@ export const ControlSection: React.FC<ControlSectionProps> = ({
 
   const openGitHub = () => BrowserOpenURL('https://github.com/yyyumeniku/HyPrism');
   const openBugReport = () => BrowserOpenURL('https://github.com/yyyumeniku/HyPrism/issues/new');
+  const openCoffee = () => BrowserOpenURL('https://buymeacoffee.com/yyyumeniku');
 
   // Close dropdowns on click outside
   useEffect(() => {
@@ -256,6 +257,7 @@ export const ControlSection: React.FC<ControlSectionProps> = ({
         />
         <NavBtn onClick={openGitHub} icon={<Github size={20} />} tooltip="GitHub" />
         <NavBtn onClick={openBugReport} icon={<Bug size={20} />} tooltip="Report Bug" />
+        <NavBtn onClick={openCoffee} icon={<Coffee size={20} />} tooltip="Buy Me a Coffee" />
         
         {/* Spacer + Disclaimer in center */}
         <div className="flex-1 flex justify-center">
