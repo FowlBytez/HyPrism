@@ -433,6 +433,10 @@ jobs:
           # Handle XDG directories for proper file access
           export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
           
+          # CRITICAL: Tell WebKit where to find bundled helper processes
+          export WEBKIT_EXEC_PATH="${HERE}/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1"
+          export WEBKIT_PROCESS_CMD_PREFIX="${HERE}/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1"
+          
           # WebKit environment variables for better compatibility
           export WEBKIT_DISABLE_COMPOSITING_MODE="${WEBKIT_DISABLE_COMPOSITING_MODE:-0}"
           export WEBKIT_DISABLE_DMABUF_RENDERER=1
