@@ -1,33 +1,51 @@
-#!/usr/bin/env bash
-set -e
+# HyPrism Linux Installer
 
-# Check python
-if command -v python3 >/dev/null 2>&1; then
-    echo "Python installed"
-else
-    echo "Python not installed. Please install Python 3"
-    exit 1
-fi
+This document explains how to install and run HyPrism on Linux using the provided bash script.
 
-# Check pip
-if python3 -m pip --version >/dev/null 2>&1; then
-    echo "pip installed"
-else
-    echo "pip not installed. Please install pip"
-    exit 1
-fi
+## Features
 
-# Create venv if not exists
-if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
-fi
+* Downloads the latest `x86_64` AppImage from the official HyPrism GitHub releases.
+* Makes the AppImage executable.
+* Creates Desktop and application menu shortcuts (`.desktop` files) with proper icons.
+* Automatically sets up a Python virtual environment and installs required dependencies (`requests`).
 
-# Activate venv
-source .venv/bin/activate
+## Requirements
 
-# Install deps
-python3 -m pip install --upgrade pip
-python3 -m pip install requests
+* Linux system with bash
+* Python 3 installed
+* pip installed
 
-# Run app
-python3 main.py
+## Usage
+
+1. Make sure the bash script is executable:
+
+```bash
+chmod +x install.sh
+```
+
+2. Run the installer:
+
+```bash
+./install.sh [installation_directory]
+```
+
+* `[installation_directory]` is optional. Default is `~/Applications/HyPrism`.
+
+3. The script will:
+
+   * Check for Python 3 and pip
+   * Create a virtual environment (`.venv`) if it doesn't exist
+   * Install dependencies
+   * Run the Python installer (`main.py`) to download AppImage and create shortcuts
+
+4. When prompted, type `y` to create shortcuts:
+
+   * Desktop: `~/Desktop/HyPrism.desktop`
+   * Application menu: `~/.local/share/applications/HyPrism.desktop`
+
+## Notes
+
+* Tested on Arch Linux. Should work on most Linux distributions with Python 3 and bash.
+* If the icon does not appear in the menu, ensure `HyPrism_icon.png` is in the installation directory.
+* You can re-run the installer at any time to update AppImage or recreate shortcuts.
+
