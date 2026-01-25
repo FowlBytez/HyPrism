@@ -534,6 +534,21 @@ public class AppService : IDisposable
                 if (updated)
                 {
                     SaveConfigInternal(_config);
+                    
+                    // Delete old config.toml after successful migration
+                    var legacyTomlPath = Path.Combine(legacyRoot, "config.toml");
+                    if (File.Exists(legacyTomlPath))
+                    {
+                        try
+                        {
+                            File.Delete(legacyTomlPath);
+                            Logger.Success("Migrate", $"Deleted legacy config.toml at {legacyTomlPath}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warning("Migrate", $"Failed to delete legacy config.toml: {ex.Message}");
+                        }
+                    }
                 }
 
                 // Detect legacy instance folders and copy to new structure
