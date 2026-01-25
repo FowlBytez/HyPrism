@@ -1915,10 +1915,12 @@ public class AppService : IDisposable
         }
     }
 
-    // Update
+    // Update - DISABLED: No update implementation exists. Return false to prevent broken updates.
+    // Users must manually download new versions from GitHub releases.
     public Task<bool> UpdateAsync(JsonElement[]? args)
     {
-        return Task.FromResult(true);
+        Logger.Warning("Update", "Auto-update is disabled - returning false");
+        return Task.FromResult(false);
     }
 
     // Browser

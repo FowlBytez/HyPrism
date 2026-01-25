@@ -424,22 +424,14 @@ const App: React.FC = () => {
   }, []);
 
   const handleUpdate = async () => {
-    setIsUpdatingLauncher(true);
-    setProgress(0);
-    setUpdateStats({ d: 0, t: 0 });
-
-    try {
-      await Update();
-    } catch (err) {
-      console.error('Update failed:', err);
-      setError({
-        type: 'UPDATE_ERROR',
-        message: t('Failed to update launcher'),
-        technical: err instanceof Error ? err.message : String(err),
-        timestamp: new Date().toISOString()
-      });
-      setIsUpdatingLauncher(false);
-    }
+    // Auto-update is not implemented in v2.0.0
+    // Direct users to GitHub releases page for manual update
+    setError({
+      type: 'INFO',
+      message: t('Manual Update Required'),
+      technical: t('Please download the latest version from GitHub: https://github.com/yyyumeniku/HyPrism/releases'),
+      timestamp: new Date().toISOString()
+    });
   };
 
   const handlePlay = async () => {
