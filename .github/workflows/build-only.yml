@@ -221,6 +221,11 @@ jobs:
           # Create PkgInfo
           echo "APPL????" > "artifacts/HyPrism-arm64.app/Contents/PkgInfo"
 
+      - name: Sign macOS apps (ad-hoc, required after install_name_tool)
+        run: |
+          codesign --force --deep --sign - "artifacts/HyPrism-x64.app"
+          codesign --force --deep --sign - "artifacts/HyPrism-arm64.app"
+
       - name: Create DMG files
         run: |
           mkdir -p dmg-x64
