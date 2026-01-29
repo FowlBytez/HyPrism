@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v2.0.0)'
-        required: true
-        default: 'v2.0.0'
+        description: 'Override version tag - Version will be inferred from app.manifest or git tag if not provided'
+        required: false
+        default: ''
       do_release:
         description: 'Set to true to create the GitHub Release'
         required: false
