@@ -375,15 +375,44 @@ jobs:
           fi
           echo "Installed user flatpak runtimes:"; flatpak --user list || true
 
-          # Build the Flatpak repo and create a single bundle file (use --user so flatpak-builder doesn't require system permissions)
-          flatpak-builder --force-clean --repo=repo --user builddir packaging/flatpak/dev.hyprism.HyPrism.json || true
-          flatpak build-bundle repo artifacts/HyPrism.flatpak dev.hyprism.HyPrism || true
+          # Build the Flatpak repo and create a single bundle file (capture logs for debugging)
+          set -x
+          flatpak-builder --force-clean --repo=repo --user builddir packaging/flatpak/dev.hyprism.HyPrism.json > flatpak-build.log 2>&1 || true
+          echo "----- flatpak-builder log (head) -----"
+          sed -n '1,400p' flatpak-build.log || true
+          echo "Repo listing (if created):"; ls -la repo || true
+          echo "Builddir listing (if created):"; ls -la builddir || true
+
+          # Attempt to produce a bundle if repo was created
+          if [ -d repo ] && [ "$(ls -A repo | wc -c)" -gt 0 ]; then
+            flatpak build-bundle repo artifacts/HyPrism.flatpak dev.hyprism.HyPrism > flatpak-build.log 2>&1 || true
+          fi
+
+          # Copy build log into artifacts so it can be uploaded regardless of failure
+          mkdir -p artifacts
+          cp flatpak-build.log artifacts/flatpak-build.log || true
+
+          # Fail fast if bundle wasn't produced
+          if [ ! -f artifacts/HyPrism.flatpak ]; then
+            echo "ERROR: artifacts/HyPrism.flatpak not produced by flatpak build. See artifacts/flatpak-build.log for details."
+            echo "Recent flatpak-builder output:"; sed -n '1,400p' artifacts/flatpak-build.log || true
+            exit 1
+          fi
 
       - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v4
         with:
           name: flatpak
           path: artifacts/HyPrism.flatpak
+          if-no-files-found: warn
+
+      - name: Upload Flatpak build log (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-build-log
+          path: artifacts/flatpak-build.log
+          if-no-files-found: warn
 
   package-deb-rpm:
     needs: assemble-linux-publish
@@ -624,14 +653,14 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
           fi
 
-          # --- If triggered by a tag, ensure consistency with the derived version ---
-          if [ -n "${GITHUB_REF_NAME:-}" ]; then
-            if [ "${GITHUB_REF_NAME}" != "v$VERSION" ]; then
-              echo "ERROR: Tag '${GITHUB_REF_NAME}' does not match version '${VERSION}' (derived from app.manifest or override)."
+          # --- Tag consistency: only enforce when run is for a tag (refs/tags/*) ---
+          if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            if [ "${TAG_NAME}" != "v$VERSION" ]; then
+              echo "ERROR: Tag '${TAG_NAME}' does not match version '${VERSION}' (derived from app.manifest or override)."
               echo "Please tag as v$VERSION or provide the correct version via workflow input."
               exit 1
             fi
-            TAG_NAME="${GITHUB_REF_NAME}"
           else
             TAG_NAME="v$VERSION"
           fi
