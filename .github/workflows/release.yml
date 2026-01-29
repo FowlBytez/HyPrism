@@ -340,7 +340,7 @@ jobs:
           ls -la "$FOUND" | sed -n '1,200p'
           chmod +x "$FOUND"/HyPrism || true
 
-      - name: Build Flatpak (simplified)
+      - name: Build Flatpak
         run: |
           set -euo pipefail
 
