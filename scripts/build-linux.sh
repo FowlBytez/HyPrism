@@ -12,7 +12,7 @@ SKIP_REMOTE="${SKIP_REMOTE:-0}"
 
 show_help() {
   cat <<'EOF'
-Usage: ./scripts/build-all.sh [options]
+Usage: ./$0 [options]
 
 Options:
   --help                Show this help message and exit
