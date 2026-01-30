@@ -1,9 +1,12 @@
 {
   "app-id": "dev.hyprism.HyPrism",
-  "runtime": "org.freedesktop.Platform",
-  "runtime-version": "22.08",
-  "sdk": "org.freedesktop.Sdk",
-  "sdk-extensions": ["org.freedesktop.Sdk.Extension.golang", "org.freedesktop.Sdk.Extension.node18"],
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "48",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.golang",
+    "org.freedesktop.Sdk.Extension.node22"
+  ],
   "command": "HyPrism",
   "finish-args": [
     "--share=ipc",
@@ -12,19 +15,9 @@
     "--socket=pulseaudio",
     "--share=network",
     "--device=dri",
-    "--filesystem=xdg-documents",
-    "--filesystem=xdg-download",
-    "--talk-name=org.freedesktop.Notifications",
-    "--talk-name=org.freedesktop.secrets",
-    "--env=XDG_CURRENT_DESKTOP=GNOME"
+    "--talk-name=org.freedesktop.Notifications"
   ],
   "modules": [
-    {
-      "name": "webkit2gtk-4.0",
-      "buildsystem": "simple",
-      "build-commands": [],
-      "sources": []
-    },
     {
       "name": "HyPrism",
       "buildsystem": "simple",
@@ -33,8 +26,7 @@
         "install -Dm755 bundle/HyPrism /app/lib/hyprism/HyPrism",
         "cp -R bundle/wwwroot /app/lib/hyprism/ 2>/dev/null || true",
         "cp -R bundle/runtimes /app/lib/hyprism/ 2>/dev/null || true",
-        "install -Dm644 bundle/jre.json /app/lib/hyprism/jre.json 2>/dev/null || true",
-        "ln -sf /app/lib/hyprism/HyPrism /app/bin/HyPrism",
+        "install -Dm644 bundle/jre.json /app/lib/hyprism/jre.json 2>/dev/null || true",          "install -d /app/bin",        "ln -sf /app/lib/hyprism/HyPrism /app/bin/HyPrism",
         "install -Dm644 dev.hyprism.HyPrism.png /app/share/icons/hicolor/256x256/apps/dev.hyprism.HyPrism.png",
         "install -Dm644 dev.hyprism.HyPrism.desktop /app/share/applications/dev.hyprism.HyPrism.desktop",
         "install -Dm644 dev.hyprism.HyPrism.metainfo.xml /app/share/metainfo/dev.hyprism.HyPrism.metainfo.xml"

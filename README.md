@@ -1,5 +1,5 @@
 <p align="left">
-  <img src="assets/Hyprism.svg" alt="HyPrism Logo" width="64" height="64" />
+  <img src="assets/Hyprism.png" alt="HyPrism Logo" width="64" height="64" />
 </p>
 
 # HyPrism
