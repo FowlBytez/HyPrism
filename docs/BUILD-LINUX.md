@@ -79,7 +79,7 @@ This short guide explains common Linux build issues and how to get a working dev
 
 - Error: `Unable to load shared library 'Photino.Native' ... libwebkit2gtk-4.1.so.0: cannot open shared object file`
   - Cause: The native Photino library requires WebKitGTK and other system GUI libraries which are not installed on the system.
-  - Fix: Install WebKitGTK and GTK packages for your distribution. Examples:
+  - Fix: Install WebKitGTK (webkit2gtk-4.1) and GTK packages for your distribution. Examples:
     - Fedora:
       ```bash
       sudo dnf install webkit2gtk4.1
@@ -92,6 +92,7 @@ This short guide explains common Linux build issues and how to get a working dev
       ```bash
       sudo pacman -S webkit2gtk
       ```
+      (package provides libwebkit2gtk-4.1)
   - After installing the native packages re-run `./scripts/run.sh`. See `scripts/run.sh` for an early runtime check that will warn when these libraries are missing.
 
 ## Tips for CI / Packaging 🧰

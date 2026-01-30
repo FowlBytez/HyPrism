@@ -290,6 +290,10 @@ EOF
     flatpak-builder --user --force-clean "$FLATPAK_STAGE" \
       --install-deps-from=flathub --install-deps-from=flathub-beta \
       "$ROOT/packaging/flatpak/dev.hyprism.HyPrism.json" --repo="$FLATPAK_REPO"
+    echo "==> Bundling Flatpak"
+    rm -f "$ARTIFACTS/HyPrism-linux-x64.flatpak"
+    flatpak build-bundle "$FLATPAK_REPO" "$ARTIFACTS/HyPrism-linux-x64.flatpak" dev.hyprism.HyPrism \
+      --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
   else
     echo "==> Skipping Flatpak (--no-flatpak/--only-*)"
   fi

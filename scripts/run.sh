@@ -39,9 +39,9 @@ dotnet build
 
 echo "Starting HyPrism..."
 
-# Check for native dependencies required by Photino (libwebkit2gtk)
-if ! ldconfig -p | grep -q "libwebkit2gtk"; then
-  echo "WARNING: Required native library 'libwebkit2gtk' not found. Photino may fail to start."
+# Check for native dependencies required by Photino (libwebkit2gtk-4.1)
+if ! ldconfig -p | grep -q "libwebkit2gtk-4.1"; then
+  echo "WARNING: Required native library 'libwebkit2gtk-4.1' not found. Photino may fail to start."
   # Try to detect distro and suggest install commands
   if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -56,11 +56,11 @@ if ! ldconfig -p | grep -q "libwebkit2gtk"; then
         echo "On Arch: sudo pacman -S webkit2gtk"
         ;;
       *)
-        echo "Install webkit2gtk (package name may vary by distro)."
+        echo "Install webkit2gtk-4.1 (package name may vary by distro)."
         ;;
     esac
   else
-    echo "Install webkit2gtk (package name may vary by distro)."
+    echo "Install webkit2gtk-4.1 (package name may vary by distro)."
   fi
   echo "
 See docs/BUILD-LINUX.md for more details. Exiting."
