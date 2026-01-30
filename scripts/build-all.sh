@@ -123,7 +123,11 @@ EOF
     echo "==> Building Flatpak"
     FLATPAK_STAGE="$ARTIFACTS/linux-x64/flatpak-build"
     FLATPAK_REPO="$ARTIFACTS/flatpak-repo"
-    cp "$LINUX_OUT/HyPrism" "$ROOT/packaging/flatpak/HyPrism"
+    rm -rf "$ROOT/packaging/flatpak/bundle"
+    mkdir -p "$ROOT/packaging/flatpak/bundle"
+    cp -R "$LINUX_OUT"/* "$ROOT/packaging/flatpak/bundle/"
+    cp "$ROOT/packaging/flatpak/dev.hyprism.HyPrism."* "$ROOT/packaging/flatpak/bundle/" || true
+    chmod +x "$ROOT/packaging/flatpak/bundle/HyPrism" || true
     flatpak-builder --force-clean "$FLATPAK_STAGE" "$ROOT/packaging/flatpak/dev.hyprism.HyPrism.json" --repo="$FLATPAK_REPO"
   else
     echo "!! flatpak-builder not found; skipping Flatpak"
