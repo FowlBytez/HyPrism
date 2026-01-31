@@ -139,8 +139,41 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flatpak
-          path: artifacts/HyPrism.flatpak
+          path: artifacts/HyPrism-linux-x64.flatpak
           if-no-files-found: warn
+
+      - name: Upload Flatpak repo artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-repo
+          path: artifacts/flatpak-repo/**
+          if-no-files-found: warn
+
+  publish-flatpak-remote:
+    needs: package-flatpak
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Download Flatpak repo artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flatpak-repo
+          path: flatpak-repo
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: flatpak-repo
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
 
   package-deb-rpm:
     needs: generate-linux-bundle
