@@ -267,20 +267,30 @@ if [[ "$(uname -s)" == "Linux" ]]; then
   if [[ "$DO_APPIMAGE" == "1" ]]; then
     echo "==> Building AppImage"
     APPDIR="$ARTIFACTS/linux-x64/AppDir"
+    
+    # Prepare AppDir Structure
     rm -rf "$APPDIR"
-    mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/256x256/apps"
-    cp -r "$LINUX_OUT/" "$APPDIR/usr/bin/"
+    mkdir -p "$APPDIR/usr/bin"
+    mkdir -p "$APPDIR/usr/share/applications"
+    mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+        
+    # Copy from portable output
+    cp -r "$LINUX_OUT/." "$APPDIR/usr/bin/"
     chmod +x "$APPDIR/usr/bin/HyPrism"
+    
+    # Copy desktop file and Icon
     [[ -f "$DESKTOP_SRC" ]] && cp "$DESKTOP_SRC" "$APPDIR/usr/share/applications/dev.hyprism.HyPrism.desktop"
     [[ -f "$ICON_SRC" ]] && cp "$ICON_SRC" "$APPDIR/usr/share/icons/hicolor/256x256/apps/dev.hyprism.HyPrism.png"
-    # appimagetool expects the icon at AppDir root when referenced in desktop file
     [[ -f "$ICON_SRC" ]] && cp "$ICON_SRC" "$APPDIR/dev.hyprism.HyPrism.png"
+    
+    # Symlink desktop file to root so AppImage finds it
+    (cd "$APPDIR" && ln -sf usr/share/applications/dev.hyprism.HyPrism.desktop HyPrism.desktop)
+    
     cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
 exec "$(dirname "$0")/usr/bin/HyPrism" "$@"
 EOF
     chmod +x "$APPDIR/AppRun"
-    (cd "$APPDIR" && ln -sf usr/share/applications/dev.hyprism.HyPrism.desktop HyPrism.desktop)
     # Remove existing artifact to avoid interactive overwrite prompts
     rm -f "$ARTIFACTS/HyPrism-linux-x64.AppImage"
     appimagetool "$APPDIR" "$ARTIFACTS/HyPrism-linux-x64.AppImage"
