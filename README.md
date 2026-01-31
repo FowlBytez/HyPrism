@@ -18,28 +18,11 @@ A multiplatform Hytale launcher with mod manager and more!
 ## Installation
 Downloads are available in [releases](https://github.com/yyyumeniku/HyPrism/releases)
 
-### Available builds
-HyPrism is availalbe for:
-- **Windows x86_64**
-- **macOS arm**
-- **Linux x86_64**: 4 options (AppImage, DEB, RPM, Flatpak)
-
 For older Linux OSes the Flatpak will be the only feasable solution.
-
-### Flatpak Remote (Experimental)
-You can try the experimental Flatpak remote hosted on GitHub Pages. Updates may be unstable.
-
-1) Add the remote:
-  - `flatpak remote-add --if-not-exists hyprism https://yyyumeniku.github.io/HyPrism/flatpak-repo`
-2) Install:
-  - `flatpak install hyprism dev.hyprism.HyPrism`
-3) Update later:
-  - `flatpak update dev.hyprism.HyPrism`
 
 ## Build instructions
 **Backend**: 
 - Default/Modern build: `dotnet build`
-- Legacy build: `dotnet build /p:PhotinoVersion=legacy`
 - Run: `dotnet run`
 
 **Frontend**: 
@@ -47,3 +30,4 @@ You can try the experimental Flatpak remote hosted on GitHub Pages. Updates may 
 
 ## Credits
 Sanasol for maintaining and creating the auth server (https://github.com/sanasol/hytale-auth-server)
+And all of the awesome people that has contributed to this launcher
