@@ -142,40 +142,6 @@ jobs:
           path: artifacts/HyPrism-linux-x64.flatpak
           if-no-files-found: warn
 
-      - name: Upload Flatpak repo artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: flatpak-repo
-          path: artifacts/flatpak-repo/**
-          if-no-files-found: warn
-
-  publish-flatpak-remote:
-    needs: package-flatpak
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - name: Download Flatpak repo artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: flatpak-repo
-          path: site/flatpak-repo
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - name: Deploy to GitHub Pages
-        id: deploy
-        uses: actions/deploy-pages@v4
-
   package-deb-rpm:
     needs: generate-linux-bundle
     runs-on: ubuntu-latest
@@ -380,7 +346,7 @@ jobs:
       - name: Remove Flatpak repo metadata from release assets
         run: |
           set -euo pipefail
-          echo "Removing unwanted repo metadata files (summary, summary.idx, config) from release-assets/"
+          echo "Cleaning up unwanted metadata files from release-assets/"
           find release-assets -type f \( -name 'summary' -o -name 'summary.idx' -o -name 'config' \) -print -exec rm -f {} + || true
 
       - name: List release assets
