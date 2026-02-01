@@ -12,7 +12,6 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
-using Photino.NET;
 
 namespace HyPrism.Backend;
 
@@ -26,7 +25,7 @@ public class AppService : IDisposable
     private readonly DiscordService _discordService;
     private CancellationTokenSource? _downloadCts;
     private bool _disposed;
-    private PhotinoWindow? _mainWindow;
+    private MainWindow? _mainWindow;
     
     // Skin protection: Watch for skin file overwrites during gameplay
     private FileSystemWatcher? _skinWatcher;
@@ -3571,7 +3570,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
     }
 
     // Game
-    public async Task<DownloadProgress> DownloadAndLaunchAsync(PhotinoWindow window)
+    public async Task<DownloadProgress> DownloadAndLaunchAsync(MainWindow window)
     {
         try
         {
@@ -4026,7 +4025,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         }
     }
 
-    private void SendProgress(PhotinoWindow window, string stage, int progress, string message, long downloaded, long total)
+    private void SendProgress(MainWindow window, string stage, int progress, string message, long downloaded, long total)
     {
         var progressInfo = new 
         { 
@@ -5562,7 +5561,7 @@ exec env \
         }
     }
     
-    public void SetMainWindow(PhotinoWindow window)
+    public void SetMainWindow(MainWindow window)
     {
         _mainWindow = window;
     }

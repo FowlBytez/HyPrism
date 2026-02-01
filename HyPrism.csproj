@@ -1,16 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <!-- Windows-specific settings -->
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows')) OR '$(RuntimeIdentifier)' == 'win-x64' OR '$(RuntimeIdentifier)' == 'win-arm64'">
-    <OutputType>WinExe</OutputType>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>packaging/windows/HyPrism.ico</ApplicationIcon>
     <!-- Enable single-file publishing for Windows only -->
     <PublishSingleFile>true</PublishSingleFile>
@@ -27,24 +27,30 @@
     <EmbeddedResource Remove="IMPORTANT/**/*" />
   </ItemGroup>
 
+  <!-- Avalonia packages -->
   <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.9" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.9" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.9" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="11.3.9" />
+    <PackageReference Include="Avalonia.Controls.WebView" Version="11.3.16" />
     <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
     <PackageReference Include="System.Text.Json" Version="10.0.2" />
   </ItemGroup>
 
-  <!-- Modern build (webkit2gtk-4.1) - default -->
-  <ItemGroup Condition="'$(PhotinoVersion)' == '' OR '$(PhotinoVersion)' == 'modern'">
-    <PackageReference Include="Photino.NET" Version="4.0.16" />
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <!-- Legacy build (webkit2gtk-4.0) - for older Linux distributions -->
-  <ItemGroup Condition="'$(PhotinoVersion)' == 'legacy'">
-    <PackageReference Include="Photino.NET" Version="3.1.18" />
+  <!-- Avalonia XAML files -->
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="wwwroot/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
     <Content Include="jre.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
