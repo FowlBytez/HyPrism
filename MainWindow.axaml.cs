@@ -1,14 +1,11 @@
 using System;
 using System.IO;
 using System.Net;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using AvaloniaWebView;
 using HyPrism.Backend;
 
 namespace HyPrism;
@@ -19,7 +16,6 @@ public partial class MainWindow : Window
     private static int _port = 49152;
     private static string _wwwroot = "";
     private readonly AppService _app;
-    private IWebView? _webView;
     
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -50,9 +46,6 @@ public partial class MainWindow : Window
         // Start local HTTP server for serving static files
         StartLocalServer();
         
-        // Initialize WebView
-        InitializeWebView();
-        
         // Set main window reference for game state events
         _app.SetMainWindow(this);
         
@@ -64,69 +57,35 @@ public partial class MainWindow : Window
             await Task.Delay(2000); // Wait for UI to load
             await _app.CheckForLauncherUpdatesAsync();
         });
+        
+        // Open browser to the local server
+        Task.Run(async () =>
+        {
+            await Task.Delay(500);
+            OpenBrowser($"http://localhost:{_port}/index.html");
+        });
     }
     
-    private void InitializeWebView()
+    private void OpenBrowser(string url)
     {
         try
         {
-            // Create WebView using AvaloniaWebView
-            _webView = WebViewBuilder.Initialize(opt =>
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                opt.IsDevToolEnabled = true;
-                opt.DefaultContextMenuEnabled = false;
-            }).AsControl();
-            
-            if (_webView is Control webViewControl)
-            {
-                // Add WebView to the grid
-                var grid = this.FindControl<Grid>("RootGrid");
-                if (grid != null)
-                {
-                    grid.Children.Add(webViewControl);
-                }
-                
-                // Subscribe to WebMessage events
-                _webView.WebMessageReceived += OnWebMessageReceived;
-                
-                // Load the page
-                _webView.Navigate(new Uri($"http://localhost:{_port}/index.html"));
-            }
+                FileName = url,
+                UseShellExecute = true
+            });
         }
         catch (Exception ex)
         {
-            Logger.Error("WebView", $"Failed to initialize: {ex.Message}");
-        }
-    }
-    
-    private void OnWebMessageReceived(object? sender, WebMessageReceivedEventArgs e)
-    {
-        try
-        {
-            var message = e.WebMessage.Data;
-            if (string.IsNullOrEmpty(message)) return;
-            
-            HandleMessage(message);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("WebView", $"Message handling error: {ex.Message}");
+            Logger.Error("Browser", $"Failed to open: {ex.Message}");
         }
     }
     
     public void SendWebMessage(string message)
     {
-        Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            try
-            {
-                _webView?.PostWebMessage(message);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("WebView", $"Failed to send message: {ex.Message}");
-            }
-        });
+        // For now, just log - we'll implement WebSocket or similar later
+        Logger.Info("WebMessage", $"Would send: {message.Substring(0, Math.Min(100, message.Length))}...");
     }
     
     static void StartLocalServer()
@@ -223,41 +182,8 @@ public partial class MainWindow : Window
     
     private void HandleMessage(string message)
     {
-        try
-        {
-            var request = JsonSerializer.Deserialize<RpcRequest>(message);
-            if (request == null) return;
-            
-            Task.Run(async () =>
-            {
-                object? result = null;
-                string? error = null;
-                
-                try
-                {
-                    result = await ExecuteRpcMethod(request);
-                }
-                catch (Exception ex)
-                {
-                    error = ex.Message;
-                    Logger.Error("RPC", $"{request.Method}: {ex.Message}");
-                }
-                
-                var response = new RpcResponse
-                {
-                    Id = request.Id,
-                    Result = result,
-                    Error = error
-                };
-                
-                var json = JsonSerializer.Serialize(response, JsonOptions);
-                SendWebMessage(json);
-            });
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("RPC", $"Message parse error: {ex.Message}");
-        }
+        // Temporarily disabled - will implement WebSocket bridge
+        Logger.Info("RPC", $"Received message: {message.Substring(0, Math.Min(100, message.Length))}...");
     }
     
     private async Task<object?> ExecuteRpcMethod(RpcRequest request)
@@ -301,18 +227,10 @@ public partial class MainWindow : Window
             // Assets
             "HasAssetsZip" => _app.HasAssetsZip(GetArg<string>(request.Args, 0), GetArg<int>(request.Args, 1)),
             "GetAssetsZipPath" => _app.GetAssetsZipPath(GetArg<string>(request.Args, 0), GetArg<int>(request.Args, 1)),
-            "DownloadAndInstallAssetsZip" => await _app.DownloadAndInstallAssetsZipAsync(GetArg<string>(request.Args, 0), GetArg<int>(request.Args, 1)),
-            
-            // Avatar & Skin
-            "SaveAvatar" => _app.SaveAvatar(GetArg<string>(request.Args, 0), GetArg<bool>(request.Args, 1)),
-            "GetAvatar" => _app.GetAvatar(),
-            "SetSkin" => _app.SetSkin(GetArg<string>(request.Args, 0)),
-            "GetSkin" => _app.GetSkin(),
             
             // Game
             "DownloadAndLaunch" => await _app.DownloadAndLaunchAsync(this),
             "CancelDownload" => _app.CancelDownload(),
-            "KillGameProcess" => _app.KillGameProcess(),
             "IsGameRunning" => _app.IsGameRunning(),
             "GetRecentLogs" => _app.GetRecentLogs(GetArg<int>(request.Args, 0)),
             "ExitGame" => _app.ExitGame(),
@@ -320,60 +238,12 @@ public partial class MainWindow : Window
             
             // Multiplayer & News
             "GetNews" => await _app.GetNewsAsync(GetArg<int>(request.Args, 0)),
-            "GetServerList" => await _app.GetServerListAsync(GetArg<bool>(request.Args, 0)),
-            "AddServerToFavorites" => _app.AddServerToFavorites(GetArg<string>(request.Args, 0)),
-            "RemoveServerFromFavorites" => _app.RemoveServerFromFavorites(GetArg<string>(request.Args, 0)),
-            "ToggleServerFavorite" => _app.ToggleServerFavorite(GetArg<string>(request.Args, 0)),
-            "GetFavoriteServers" => _app.GetFavoriteServers(),
-            
-            // Mods
-            "GetInstalledMods" => _app.GetInstalledMods(),
-            "SetModEnabled" => _app.SetModEnabled(GetArg<string>(request.Args, 0), GetArg<bool>(request.Args, 1)),
-            "UninstallMod" => _app.UninstallMod(GetArg<string>(request.Args, 0)),
-            "GetAvailableMods" => await _app.GetAvailableModsAsync(),
-            "InstallMod" => await _app.InstallModAsync(GetArg<string>(request.Args, 0)),
-            "UpdateMod" => await _app.UpdateModAsync(GetArg<string>(request.Args, 0)),
-            "GetModInfo" => await _app.GetModInfoAsync(GetArg<string>(request.Args, 0)),
-            "OpenModsFolder" => _app.OpenModsFolder(),
-            "SearchMods" => await _app.SearchModsAsync(GetArg<string>(request.Args, 0), GetArg<int>(request.Args, 1)),
-            "GetModFiles" => await _app.GetModFilesAsync(GetArg<string>(request.Args, 0)),
-            "GetModCategories" => await _app.GetModCategoriesAsync(),
-            "GetInstanceInstalledMods" => _app.GetInstanceInstalledMods(GetArg<string>(request.Args, 0), GetArg<int>(request.Args, 1)),
-            "InstallModFileToInstance" => await _app.InstallModFileToInstanceAsync(GetArg<string>(request.Args, 0), GetArg<int>(request.Args, 1), GetArg<int>(request.Args, 2)),
-            "UninstallInstanceMod" => _app.UninstallInstanceMod(GetArg<string>(request.Args, 0), GetArg<int>(request.Args, 1), GetArg<string>(request.Args, 2)),
-            
-            // JVM Settings
-            "GetJavaMemory" => _app.GetJavaMemory(),
-            "SetJavaMemory" => _app.SetJavaMemory(GetArg<int>(request.Args, 0)),
-            "GetJavaPath" => _app.GetJavaPath(),
-            "SetJavaPath" => _app.SetJavaPath(GetArg<string>(request.Args, 0)),
-            "GetJavaArgs" => _app.GetJavaArgs(),
-            "SetJavaArgs" => _app.SetJavaArgs(GetArg<string>(request.Args, 0)),
-            "DetectJavaPath" => _app.DetectJavaPath(),
-            
-            // Game Settings
-            "GetGameWidth" => _app.GetGameWidth(),
-            "SetGameWidth" => _app.SetGameWidth(GetArg<int>(request.Args, 0)),
-            "GetGameHeight" => _app.GetGameHeight(),
-            "SetGameHeight" => _app.SetGameHeight(GetArg<int>(request.Args, 0)),
-            "GetFullscreen" => _app.GetFullscreen(),
-            "SetFullscreen" => _app.SetFullscreen(GetArg<bool>(request.Args, 0)),
-            "GetGameArgs" => _app.GetGameArgs(),
-            "SetGameArgs" => _app.SetGameArgs(GetArg<string>(request.Args, 0)),
             
             // Launcher Settings
-            "GetShowSnapshots" => _app.GetShowSnapshots(),
-            "SetShowSnapshots" => _app.SetShowSnapshots(GetArg<bool>(request.Args, 0)),
-            "GetKeepLauncherOpen" => _app.GetKeepLauncherOpen(),
-            "SetKeepLauncherOpen" => _app.SetKeepLauncherOpen(GetArg<bool>(request.Args, 0)),
-            "GetAutoUpdate" => _app.GetAutoUpdate(),
-            "SetAutoUpdate" => _app.SetAutoUpdate(GetArg<bool>(request.Args, 0)),
-            "GetDiscordRichPresence" => _app.GetDiscordRichPresence(),
-            "SetDiscordRichPresence" => _app.SetDiscordRichPresence(GetArg<bool>(request.Args, 0)),
-            "GetSkinProtection" => _app.GetSkinProtection(),
-            "SetSkinProtection" => _app.SetSkinProtection(GetArg<bool>(request.Args, 0)),
             "GetMusicEnabled" => _app.GetMusicEnabled(),
             "SetMusicEnabled" => _app.SetMusicEnabled(GetArg<bool>(request.Args, 0)),
+            "GetShowDiscordAnnouncements" => _app.GetShowDiscordAnnouncements(),
+            "SetShowDiscordAnnouncements" => _app.SetShowDiscordAnnouncements(GetArg<bool>(request.Args, 0)),
             
             // Utility
             "OpenFolder" => _app.OpenFolder(),
@@ -381,10 +251,6 @@ public partial class MainWindow : Window
             "BrowseFolder" => await _app.BrowseFolderAsync(GetArg<string?>(request.Args, 0)),
             "BrowseModFiles" => await _app.BrowseModFilesAsync(),
             "BrowserOpenURL" => _app.BrowserOpenURL(GetArg<string>(request.Args, 0)),
-            "GetSystemInfo" => _app.GetSystemInfo(),
-            "ClearCache" => _app.ClearCache(),
-            "ExportLogs" => _app.ExportLogs(),
-            "Update" => await _app.UpdateAsync(request.Args),
             
             // Window controls
             "SetMinimized" => SetMinimized(GetArg<bool>(request.Args, 0)),
