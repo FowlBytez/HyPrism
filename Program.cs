@@ -2,6 +2,7 @@
 using System.Runtime.InteropServices;
 using Avalonia;
 using HyPrism.Backend;
+using HyPrism.UI;
 
 using Avalonia.ReactiveUI;
 using Avalonia.Svg.Skia;

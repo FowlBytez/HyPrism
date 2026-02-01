@@ -1,12 +1,14 @@
 using ReactiveUI;
 using System.Reactive;
 using HyPrism.Backend;
+using HyPrism.UI.Models;
 using System.Threading.Tasks;
 using System;
 using Avalonia.Threading;
 using System.Collections.ObjectModel;
+using System.Linq;
 
-namespace HyPrism.ViewModels;
+namespace HyPrism.UI.ViewModels;
 
 public class MainViewModel : ReactiveObject
 {
@@ -105,12 +107,24 @@ public class MainViewModel : ReactiveObject
     }
 
     public ObservableCollection<string> Branches { get; } = new() { "Release", "Pre-Release" };
+    
+    // News
+    public ObservableCollection<NewsItem> News { get; } = new();
+    
+    private bool _isLoadingNews;
+    public bool IsLoadingNews
+    {
+        get => _isLoadingNews;
+        set => this.RaiseAndSetIfChanged(ref _isLoadingNews, value);
+    }
 
     // Commands
     public ReactiveCommand<Unit, Unit> LaunchCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenFolderCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleSettingsCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleModsCommand { get; }
+    public ReactiveCommand<Unit, Unit> RefreshNewsCommand { get; }
+    public ReactiveCommand<string, Unit> OpenNewsLinkCommand { get; }
     
     public MainViewModel()
     {
@@ -150,6 +164,27 @@ public class MainViewModel : ReactiveObject
             IsModsOpen = !IsModsOpen;
             if (IsModsOpen) IsSettingsOpen = false;
         });
+        
+        RefreshNewsCommand = ReactiveCommand.CreateFromTask(LoadNewsAsync);
+        OpenNewsLinkCommand = ReactiveCommand.Create<string>(url => 
+        {
+            if (!string.IsNullOrEmpty(url))
+            {
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                }
+                catch { }
+            }
+        });
+        
+        // Load initial news
+        _ = LoadNewsAsync();
         
         // Event subscriptions need to be marshaled to UI thread
         AppService.DownloadProgressChanged += (state, progress, speed, dl, total) => 
@@ -209,6 +244,46 @@ public class MainViewModel : ReactiveObject
         finally
         {
              // If game started, logic is handled by event. 
+        }
+    }
+    
+    private async Task LoadNewsAsync()
+    {
+        if (AppService.Configuration.DisableNews) return;
+        
+        IsLoadingNews = true;
+        try
+        {
+            var newsItems = await AppService.GetNewsAsync(10);
+            
+            Dispatcher.UIThread.Post(() =>
+            {
+                News.Clear();
+                if (newsItems != null)
+                {
+                    foreach (var item in newsItems)
+                    {
+                        News.Add(new NewsItem
+                        {
+                            Title = item.Title,
+                            Excerpt = item.Excerpt,
+                            Url = item.Url,
+                            Date = item.Date,
+                            Author = item.Author,
+                            ImageUrl = item.ImageUrl,
+                            Source = "hytale"
+                        });
+                    }
+                }
+            });
+        }
+        catch
+        {
+            // Ignore news loading errors
+        }
+        finally
+        {
+            IsLoadingNews = false;
         }
     }
 }

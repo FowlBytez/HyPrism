@@ -1,7 +1,7 @@
 using Avalonia.Controls;
-using HyPrism.ViewModels;
+using HyPrism.UI.ViewModels;
 
-namespace HyPrism;
+namespace HyPrism.UI;
 
 public partial class MainWindow : Window
 {

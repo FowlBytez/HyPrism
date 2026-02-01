@@ -6,7 +6,7 @@ using System.Reactive;
 using Avalonia.Threading;
 using System.Collections.Generic;
 
-namespace HyPrism.ViewModels;
+namespace HyPrism.UI.ViewModels;
 
 public class ModManagerViewModel : ReactiveObject
 {

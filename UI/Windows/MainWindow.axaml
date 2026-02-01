@@ -2,10 +2,11 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="using:HyPrism.ViewModels"
-        xmlns:views="using:HyPrism.Views"
+        xmlns:vm="using:HyPrism.UI.ViewModels"
+        xmlns:views="using:HyPrism.UI.Views"
+        xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Avalonia.Svg.Skia"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
-        x:Class="HyPrism.MainWindow"
+        x:Class="HyPrism.UI.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="HyPrism"
         Width="1280" Height="800"
@@ -66,10 +67,10 @@
         <Rectangle Fill="#CC090909"/> 
         
         <!-- Main Layout -->
-        <Grid RowDefinitions="Auto, *, Auto" Margin="20">
+        <Grid RowDefinitions="Auto, *, Auto" Margin="20" ColumnDefinitions="*, Auto">
             
             <!-- Header -->
-            <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto">
+            <Grid Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" ColumnDefinitions="Auto, *, Auto">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <!-- Profile Picture Placeholder -->
                     <Border Width="40" Height="40" CornerRadius="20" Background="{StaticResource HytaleOrangeBrush}" ClipToBounds="True">
@@ -82,18 +83,103 @@
                 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
                     <Button Command="{Binding ToggleSettingsCommand}" Background="Transparent" Padding="8" CornerRadius="8">
-                        <PathIcon Data="{StaticResource IconSettings}" Classes="outline" Foreground="White" Width="24" Height="24"/>
+                        <svg:Svg Path="/Assets/Icons/settings.svg" Width="24" Height="24"/>
                     </Button>
                 </StackPanel>
             </Grid>
             
             <!-- Central Content (Logo) -->
-            <Grid Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <Grid Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center">
                 <Image Source="/Assets/logo.png" Width="400" Height="150" Stretch="Uniform"/>
             </Grid>
             
+            <!-- News Panel -->
+            <Border Grid.Row="1" Grid.Column="1" 
+                    Width="350" 
+                    Margin="20,0,0,0"
+                    VerticalAlignment="Stretch"
+                    Background="#CC111111" 
+                    CornerRadius="12" 
+                    BorderBrush="#33FFFFFF" 
+                    BorderThickness="1"
+                    IsVisible="{Binding !AppService.Configuration.DisableNews}">
+                <Grid RowDefinitions="Auto, *">
+                    <!-- News Header -->
+                    <Border Grid.Row="0" Background="#111111" CornerRadius="12,12,0,0" Padding="15">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <svg:Svg Path="/Assets/Icons/info.svg" Width="18" Height="18"/>
+                                <TextBlock Text="News" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" 
+                                    Command="{Binding RefreshNewsCommand}" 
+                                    Background="Transparent" 
+                                    Padding="6" 
+                                    CornerRadius="6">
+                                <svg:Svg Path="/Assets/Icons/refresh-cw.svg" Width="14" Height="14"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- News List -->
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding News}" Margin="10">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Command="{Binding $parent[Window].DataContext.OpenNewsLinkCommand}"
+                                            CommandParameter="{Binding Url}"
+                                            Background="Transparent"
+                                            Padding="0"
+                                            Margin="0,0,0,10"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch">
+                                        <Border Background="#252525" 
+                                                CornerRadius="8" 
+                                                Padding="12"
+                                                BorderBrush="#333"
+                                                BorderThickness="1">
+                                            <Border.Styles>
+                                                <Style Selector="Border:pointerover">
+                                                    <Setter Property="Background" Value="#2a2a2a"/>
+                                                    <Setter Property="BorderBrush" Value="#444"/>
+                                                </Style>
+                                            </Border.Styles>
+                                            <StackPanel Spacing="6">
+                                                <TextBlock Text="{Binding Title}" 
+                                                           FontWeight="Bold" 
+                                                           Foreground="White" 
+                                                           FontSize="13"
+                                                           TextWrapping="Wrap"
+                                                           MaxLines="2"/>
+                                                <TextBlock Text="{Binding Excerpt}" 
+                                                           FontSize="11" 
+                                                           Foreground="#999"
+                                                           TextWrapping="Wrap"
+                                                           MaxLines="3"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <Grid ColumnDefinitions="Auto, *">
+                                                    <TextBlock Grid.Column="0" 
+                                                               Text="{Binding Date}" 
+                                                               FontSize="10" 
+                                                               Foreground="#666"/>
+                                                    <TextBlock Grid.Column="1" 
+                                                               Text="{Binding Author}" 
+                                                               FontSize="10" 
+                                                               Foreground="#666"
+                                                               HorizontalAlignment="Right"/>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+            
             <!-- Footer Controls -->
-            <StackPanel Grid.Row="2" Spacing="15" HorizontalAlignment="Center" Width="600">
+            <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Spacing="15" HorizontalAlignment="Center" Width="600">
                 
                 <!-- Status Info -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" IsVisible="{Binding IsDownloading}">
@@ -128,7 +214,9 @@
                             CornerRadius="8" BorderThickness="0">
                         <Panel>
                             <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding !IsDownloading}" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <PathIcon Data="{StaticResource IconPlay}" Classes="outline" Foreground="#111" Width="20" Height="20" />
+                                <svg:Svg Path="/Assets/Icons/play.svg" Width="20" Height="20">
+                                    <svg:Svg.Css>* { stroke: #111 !important; fill: #111 !important; }</svg:Svg.Css>
+                                </svg:Svg>
                                 <TextBlock Text="PLAY" VerticalAlignment="Center"/>
                             </StackPanel>
                             <TextBlock Text="INSTALLING..." IsVisible="{Binding IsDownloading}"/>
@@ -147,7 +235,7 @@
                             VerticalAlignment="Stretch" Height="50" Width="50" CornerRadius="8"
                             Background="#333" Padding="0"
                             HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                        <PathIcon Data="{StaticResource IconFolder}" Classes="outline" Foreground="White" Width="24" Height="24"/>
+                        <svg:Svg Path="/Assets/Icons/folder.svg" Width="24" Height="24"/>
                     </Button>
                             
                     <Button Grid.Column="6"
@@ -155,7 +243,7 @@
                             VerticalAlignment="Stretch" Height="50" Width="50" CornerRadius="8"
                             Background="#333" Padding="0"
                             HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                        <PathIcon Data="{StaticResource IconPackage}" Classes="outline" Foreground="White" Width="24" Height="24"/>
+                        <svg:Svg Path="/Assets/Icons/package.svg" Width="24" Height="24"/>
                     </Button>
                 </Grid>
             </StackPanel>

@@ -2,7 +2,7 @@ using Avalonia.Data.Converters;
 using System;
 using System.Globalization;
 
-namespace HyPrism.Converters;
+namespace HyPrism.UI.Converters;
 
 public class StringEqualityConverter : IValueConverter
 {

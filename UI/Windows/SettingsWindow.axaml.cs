@@ -1,10 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using HyPrism.ViewModels;
+using HyPrism.UI.ViewModels;
 using System;
 
-namespace HyPrism;
+namespace HyPrism.UI;
 
 public partial class SettingsWindow : Window
 {

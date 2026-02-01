@@ -1,9 +1,9 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using HyPrism.ViewModels;
+using HyPrism.UI.ViewModels;
 
-namespace HyPrism;
+namespace HyPrism.UI;
 
 public partial class App : Application
 {

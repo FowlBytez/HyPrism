@@ -1,8 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using HyPrism.ViewModels;
+using HyPrism.UI.ViewModels;
 
-namespace HyPrism.Views;
+namespace HyPrism.UI.Views;
 
 public partial class ModManagerView : UserControl
 {

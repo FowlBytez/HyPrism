@@ -1,9 +1,9 @@
 using Avalonia.Controls;
-using HyPrism.ViewModels;
+using HyPrism.UI.ViewModels;
 using System;
 using ReactiveUI;
 
-namespace HyPrism;
+namespace HyPrism.UI;
 
 public partial class ModManagerWindow : Window
 {
