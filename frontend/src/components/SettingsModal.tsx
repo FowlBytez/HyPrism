@@ -9,6 +9,7 @@ import {
     DeleteLauncherData,
     GetLauncherFolderPath,
     GetCustomInstanceDir,
+    GetDefaultInstanceDir,
     SetInstanceDirectory,
     BrowseFolder,
     GetDisableNews,
@@ -465,8 +466,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     const handleResetInstanceDir = async () => {
         try {
-            setInstanceDir(launcherFolderPath);
-            await SetInstanceDirectory(launcherFolderPath);
+            const defaultDir = await GetDefaultInstanceDir();
+            setInstanceDir(defaultDir);
+            await SetInstanceDirectory(defaultDir);
         } catch (err) {
             console.error('Failed to reset instance directory:', err);
         }

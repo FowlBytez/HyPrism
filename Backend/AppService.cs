@@ -1581,6 +1581,8 @@ public class AppService : IDisposable
 
     public string GetCustomInstanceDir() => _config.InstanceDirectory ?? "";
 
+    public string GetDefaultInstanceDir() => Path.Combine(_appDir, "instances");
+
     public bool SetUUID(string uuid)
     {
         if (string.IsNullOrWhiteSpace(uuid)) return false;
@@ -7256,6 +7258,17 @@ rm -f ""$0""
                 url += $"&index={page * pageSize}";
             }
             
+            // Category filter - categoryId parameter for CurseForge API
+            if (categories != null && categories.Length > 0)
+            {
+                // CurseForge API uses categoryId for single category or categoryIds for multiple
+                // For simplicity, use the first category if multiple provided
+                if (int.TryParse(categories[0], out int categoryId) && categoryId > 0)
+                {
+                    url += $"&categoryId={categoryId}";
+                }
+            }
+            
             // Sort field: 1=Featured, 2=Popularity, 3=LastUpdated, 4=Name, 5=Author, 6=TotalDownloads
             if (sortField > 0)
             {
@@ -8121,15 +8134,39 @@ rm -f ""$0""
                 return new List<ModCategory>();
             }
             
-            // Filter only root categories (classId == 0 or parentCategoryId == 0)
-            return cfResponse.Data
-                .Where(c => c.ParentCategoryId == 0 || c.IsClass == true)
+            // Find the "Mods" class category first
+            var modsClass = cfResponse.Data.FirstOrDefault(c => c.IsClass == true && c.Name?.ToLower() == "mods");
+            int modsClassId = modsClass?.Id ?? 0;
+            
+            // Get all mod subcategories (categories under the "Mods" class)
+            // These are the actual filter categories like "Quality of Life", "Gameplay", etc.
+            var modCategories = cfResponse.Data
+                .Where(c => c.ParentCategoryId == modsClassId && c.IsClass != true)
                 .Select(c => new ModCategory
                 {
                     Id = c.Id,
-                    Name = c.Name ?? ""
+                    Name = c.Name ?? "",
+                    Slug = c.Slug ?? ""
                 })
+                .OrderBy(c => c.Name)
                 .ToList();
+            
+            // If no subcategories found, return all non-class categories as fallback
+            if (modCategories.Count == 0)
+            {
+                modCategories = cfResponse.Data
+                    .Where(c => c.IsClass != true)
+                    .Select(c => new ModCategory
+                    {
+                        Id = c.Id,
+                        Name = c.Name ?? "",
+                        Slug = c.Slug ?? ""
+                    })
+                    .OrderBy(c => c.Name)
+                    .ToList();
+            }
+            
+            return modCategories;
         }
         catch (Exception ex)
         {
@@ -8727,7 +8764,20 @@ rm -f ""$0""
             }
             
             string versionPath = existingPath;
-            string modsPath = GetModsPath(versionPath);
+            
+            // Check if a profile is active and use profile mods folder instead
+            string modsPath;
+            if (_config.ActiveProfileIndex >= 0 && _config.ActiveProfileIndex < _config.Profiles.Count)
+            {
+                var activeProfile = _config.Profiles[_config.ActiveProfileIndex];
+                modsPath = GetProfileModsFolder(activeProfile);
+                Logger.Info("Mods", $"Using profile mods folder for update check: {modsPath}");
+            }
+            else
+            {
+                modsPath = GetModsPath(versionPath);
+            }
+            
             var manifestPath = Path.Combine(modsPath, "manifest.json");
             
             if (!File.Exists(manifestPath))
@@ -8757,7 +8807,7 @@ rm -f ""$0""
                     // Get mod details from CurseForge to find latest file
                     var url = $"https://api.curseforge.com/v1/mods/{mod.CurseForgeId}";
                     using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                    request.Headers.Add("x-api-key", "$2a$10$1W4EvLWzLe4.RM1kcxW9n.vxmBPEYcg9dvpT4r5OAlkQk/.6jQE4e");
+                    request.Headers.Add("x-api-key", CurseForgeApiKey);
                     
                     using var response = await HttpClient.SendAsync(request);
                     if (!response.IsSuccessStatusCode) continue;

@@ -518,6 +518,11 @@ export const SaveConfig = () => callBackend<void>('SaveConfig');
 export const GetCustomInstanceDir = () => callBackend<string>('GetCustomInstanceDir');
 
 /**
+ * Gets the default directory path for instances
+ */
+export const GetDefaultInstanceDir = () => callBackend<string>('GetDefaultInstanceDir');
+
+/**
  * Sets the custom directory for instances
  * @param dir - Absolute path
  */

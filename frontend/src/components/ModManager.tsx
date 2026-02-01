@@ -3,7 +3,7 @@ import {
   X, Search, Download, Trash2, FolderOpen,
   Package, Loader2, AlertCircle,
   RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, ArrowUpCircle, FileText,
-  Upload, Share
+  Upload, FilePlus2
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BrowserOpenURL } from '@/api/bridge';
@@ -1217,7 +1217,7 @@ export const ModManager: React.FC<ModManagerProps> = ({
               className={`p-2 rounded-xl hover:bg-white/10 ${isImporting ? 'text-white/20 cursor-not-allowed' : 'text-white/60 hover:text-white'}`}
               title={t('Add Mods')}
             >
-              <Share size={20} />
+              <FilePlus2 size={20} />
             </button>
             <button
               onClick={handleOpenExportModal}
@@ -1611,6 +1611,22 @@ export const ModManager: React.FC<ModManagerProps> = ({
                                 {formatDownloads(mod.downloadCount)}
                               </span>
                             </div>
+                            {mod.categories && mod.categories.length > 0 && (
+                              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                {mod.categories.slice(0, 3).map((cat: string | { id: number; name: string }, idx: number) => {
+                                  const catName = typeof cat === 'string' ? cat : cat.name;
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className="px-1.5 py-0.5 text-[10px] rounded-md font-medium"
+                                      style={{ backgroundColor: `${accentColor}25`, color: accentColor }}
+                                    >
+                                      {t(catName)}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

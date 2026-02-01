@@ -279,6 +279,7 @@ class Program
                         "OpenCurrentProfileFolder" => app.OpenCurrentProfileFolder(),
                         
                         "GetCustomInstanceDir" => app.GetCustomInstanceDir(),
+                        "GetDefaultInstanceDir" => app.GetDefaultInstanceDir(),
                         "SetInstanceDirectory" => await app.SetInstanceDirectoryAsync(GetArg<string>(request.Args, 0)),
                         
                         // Version Management
