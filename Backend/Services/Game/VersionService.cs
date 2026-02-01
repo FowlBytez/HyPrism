@@ -145,6 +145,75 @@ public class VersionService
         }
         return info.Version != latest;
     }
+    
+    /// <summary>
+    /// Gets the version status for the latest instance.
+    /// Returns detailed status with installed and latest version numbers.
+    /// </summary>
+    public async Task<VersionStatus> GetLatestVersionStatusAsync(string branch, Func<string, bool> isClientPresent, Func<string> getLatestInstancePath, Func<string, LatestVersionInfo?> loadLatestInfo)
+    {
+        try
+        {
+            var normalizedBranch = NormalizeBranch(branch);
+            var versions = await GetVersionListAsync(normalizedBranch);
+            
+            if (versions.Count == 0)
+            {
+                return new VersionStatus { Status = "none", InstalledVersion = 0, LatestVersion = 0 };
+            }
+            
+            var latestAvailable = versions[0];
+            var latestPath = getLatestInstancePath();
+            var info = loadLatestInfo(normalizedBranch);
+            var baseOk = isClientPresent(latestPath);
+            
+            // Not installed
+            if (!baseOk)
+            {
+                return new VersionStatus 
+                { 
+                    Status = "not_installed", 
+                    InstalledVersion = 0, 
+                    LatestVersion = latestAvailable 
+                };
+            }
+            
+            // No version info - assume update needed
+            if (info == null)
+            {
+                return new VersionStatus 
+                { 
+                    Status = "update_available", 
+                    InstalledVersion = 0, 
+                    LatestVersion = latestAvailable 
+                };
+            }
+            
+            // Compare versions
+            if (info.Version < latestAvailable)
+            {
+                return new VersionStatus 
+                { 
+                    Status = "update_available", 
+                    InstalledVersion = info.Version, 
+                    LatestVersion = latestAvailable 
+                };
+            }
+            
+            // Current version
+            return new VersionStatus 
+            { 
+                Status = "current", 
+                InstalledVersion = info.Version, 
+                LatestVersion = latestAvailable 
+            };
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Version", $"Failed to get latest version status: {ex.Message}");
+            return new VersionStatus { Status = "error", InstalledVersion = 0, LatestVersion = 0 };
+        }
+    }
 
     /// <summary>
     /// Get pending update information.

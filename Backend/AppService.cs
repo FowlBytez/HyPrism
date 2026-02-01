@@ -141,7 +141,10 @@ public class AppService : IDisposable
             BrowserOpenURL,
             UtilityService.NormalizeVersionType,
             branch => _instanceService.LoadLatestInfo(branch),
-            (branch, version) => _instanceService.SaveLatestInfo(branch, version));
+            (branch, version) => _instanceService.SaveLatestInfo(branch, version),
+            () => GetLatestInstancePath(UtilityService.NormalizeVersionType(_config.VersionType)),
+            path => _instanceService.IsClientPresent(path),
+            (branch, version, createIfMissing) => ResolveInstancePath(branch, version, createIfMissing));
         _skinService = new SkinService(
             UtilityService.NormalizeVersionType,
             ResolveInstancePath,
@@ -496,6 +499,17 @@ public class AppService : IDisposable
     /// Returns the created profile.
     /// </summary>
     public Profile? SaveCurrentAsProfile() => _profileManagementService.SaveCurrentAsProfile();
+    
+    /// <summary>
+    /// Duplicates an existing profile (copies UserData folder too).
+    /// Returns the newly created profile.
+    /// </summary>
+    public Profile? DuplicateProfile(string profileId) => _profileManagementService.DuplicateProfile(profileId);
+    
+    /// <summary>
+    /// Opens the current active profile's folder in the file manager.
+    /// </summary>
+    public bool OpenCurrentProfileFolder() => _profileManagementService.OpenCurrentProfileFolder();
 
     public Task<string?> SetInstanceDirectoryAsync(string path)
     {
@@ -721,11 +735,33 @@ public class AppService : IDisposable
     }
     
     /// <summary>
+    /// Gets the version status for the latest instance.
+    /// </summary>
+    public async Task<VersionStatus> GetLatestVersionStatusAsync(string branch)
+    {
+        return await _versionService.GetLatestVersionStatusAsync(
+            branch,
+            _instanceService.IsClientPresent,
+            () => GetLatestInstancePath(UtilityService.NormalizeVersionType(branch)),
+            (b) => {
+                var info = _instanceService.LoadLatestInfo(b);
+                return info != null ? new LatestVersionInfo { Version = info.Version } : null;
+            }
+        );
+    }
+    
+    /// <summary>
     /// Forces the latest instance to update by resetting its version info.
     /// This will trigger a differential update on next launch.
     /// </summary>
     public async Task<bool> ForceUpdateLatestAsync(string branch) => 
         await _updateService.ForceUpdateLatestAsync(branch);
+    
+    /// <summary>
+    /// Duplicates the current latest instance as a versioned instance.
+    /// </summary>
+    public async Task<bool> DuplicateLatestAsync(string branch) => 
+        await _updateService.DuplicateLatestAsync(branch);
 
     /// <summary>
     /// Get information about the pending update, including old version details.

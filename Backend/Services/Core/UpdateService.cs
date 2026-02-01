@@ -30,6 +30,9 @@ public class UpdateService
     private readonly Func<string, string> _normalizeVersionType;
     private readonly Func<string, LatestInstanceInfo?> _loadLatestInfo;
     private readonly Action<string, int> _saveLatestInfo;
+    private readonly Func<string> _getLatestInstancePath;
+    private readonly Func<string, bool> _isClientPresent;
+    private readonly Func<string, int, bool, string> _resolveInstancePath;
 
     public UpdateService(
         HttpClient httpClient,
@@ -39,7 +42,10 @@ public class UpdateService
         Func<string, bool> browserOpenUrl,
         Func<string, string> normalizeVersionType,
         Func<string, LatestInstanceInfo?> loadLatestInfo,
-        Action<string, int> saveLatestInfo)
+        Action<string, int> saveLatestInfo,
+        Func<string> getLatestInstancePath,
+        Func<string, bool> isClientPresent,
+        Func<string, int, bool, string> resolveInstancePath)
     {
         _httpClient = httpClient;
         _config = config;
@@ -49,6 +55,9 @@ public class UpdateService
         _normalizeVersionType = normalizeVersionType;
         _loadLatestInfo = loadLatestInfo;
         _saveLatestInfo = saveLatestInfo;
+        _getLatestInstancePath = getLatestInstancePath;
+        _isClientPresent = isClientPresent;
+        _resolveInstancePath = resolveInstancePath;
     }
 
     #region Public API
@@ -347,6 +356,85 @@ public class UpdateService
         {
             Logger.Error("Update", $"Failed to force update: {ex.Message}");
             return false;
+        }
+    }
+    
+    /// <summary>
+    /// Duplicates the current latest instance as a versioned instance.
+    /// Creates a copy with the current version number.
+    /// </summary>
+    public async Task<bool> DuplicateLatestAsync(string branch)
+    {
+        try
+        {
+            var normalizedBranch = _normalizeVersionType(branch);
+            var info = _loadLatestInfo(normalizedBranch);
+            
+            if (info == null)
+            {
+                Logger.Warning("Update", "Cannot duplicate latest: no version info found");
+                return false;
+            }
+            
+            var currentVersion = info.Version;
+            var latestPath = _getLatestInstancePath();
+            
+            if (!_isClientPresent(latestPath))
+            {
+                Logger.Warning("Update", "Cannot duplicate latest: instance not found");
+                return false;
+            }
+            
+            // Get versioned instance path
+            var versionedPath = _resolveInstancePath(normalizedBranch, currentVersion, true);
+            
+            // Check if this version already exists
+            if (_isClientPresent(versionedPath))
+            {
+                Logger.Warning("Update", $"Version {currentVersion} already exists, skipping duplicate");
+                return false;
+            }
+            
+            // Copy the entire latest instance folder to versioned folder
+            Logger.Info("Update", $"Duplicating latest (v{currentVersion}) to versioned instance...");
+            CopyDirectory(latestPath, versionedPath);
+            
+            // Save version info for the duplicated instance
+            var versionInfoPath = Path.Combine(versionedPath, "version.json");
+            var versionInfo = new { Version = currentVersion, Branch = normalizedBranch };
+            File.WriteAllText(versionInfoPath, System.Text.Json.JsonSerializer.Serialize(versionInfo));
+            
+            Logger.Success("Update", $"Duplicated latest to versioned instance v{currentVersion}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Update", $"Failed to duplicate latest: {ex.Message}");
+            return false;
+        }
+    }
+    
+    /// <summary>
+    /// Recursively copies a directory and all its contents.
+    /// </summary>
+    private void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        
+        // Copy files
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var fileName = Path.GetFileName(file);
+            var destFile = Path.Combine(destDir, fileName);
+            File.Copy(file, destFile, true);
+        }
+        
+        // Copy subdirectories recursively
+        foreach (var subDir in Directory.GetDirectories(sourceDir))
+        {
+            var dirName = Path.GetFileName(subDir);
+            var destSubDir = Path.Combine(destDir, dirName);
+            CopyDirectory(subDir, destSubDir);
         }
     }
 

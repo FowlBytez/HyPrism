@@ -311,6 +311,188 @@ public class ProfileManagementService
     }
     
     /// <summary>
+    /// Duplicates an existing profile (copies UserData folder too).
+    /// Returns the newly created profile.
+    /// </summary>
+    public Profile? DuplicateProfile(string profileId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(profileId))
+            {
+                Logger.Warning("Profile", "Cannot duplicate profile with empty ID");
+                return null;
+            }
+            
+            var config = _getConfig();
+            var sourceProfile = config.Profiles?.FirstOrDefault(p => p.Id == profileId);
+            if (sourceProfile == null)
+            {
+                Logger.Warning("Profile", $"Profile not found: {profileId}");
+                return null;
+            }
+            
+            // Generate new UUID and name with " Copy" suffix
+            var newUuid = Guid.NewGuid().ToString();
+            var newName = $"{sourceProfile.Name} Copy";
+            
+            // Ensure name is unique
+            int copyCount = 1;
+            while (config.Profiles != null && config.Profiles.Any(p => p.Name == newName))
+            {
+                copyCount++;
+                newName = $"{sourceProfile.Name} Copy {copyCount}";
+            }
+            
+            // Create new profile
+            var newProfile = new Profile
+            {
+                Id = Guid.NewGuid().ToString(),
+                UUID = newUuid,
+                Name = newName,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            config.Profiles ??= new List<Profile>();
+            config.Profiles.Add(newProfile);
+            _saveConfig();
+            
+            // Save profile to disk
+            SaveProfileToDisk(newProfile);
+            
+            // Copy source profile's mods folder to new profile
+            try
+            {
+                var sourceModsPath = GetProfileModsFolder(sourceProfile);
+                var destModsPath = GetProfileModsFolder(newProfile);
+                
+                if (Directory.Exists(sourceModsPath))
+                {
+                    CopyDirectory(sourceModsPath, destModsPath);
+                    Logger.Info("Profile", $"Copied mods from '{sourceProfile.Name}' to '{newProfile.Name}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Profile", $"Failed to copy mods during duplication: {ex.Message}");
+            }
+            
+            // Copy UserData from source profile if it exists
+            try
+            {
+                var branch = _normalizeVersionType(config.VersionType);
+                var versionPath = _resolveInstancePath(branch, 0, true);
+                var userDataPath = _getInstanceUserDataPath(versionPath);
+                
+                if (Directory.Exists(userDataPath))
+                {
+                    var profilesDir = GetProfilesFolder();
+                    var sourceProfileFolder = Path.Combine(profilesDir, SanitizeFileName(sourceProfile.Name));
+                    var sourceUserDataBackup = Path.Combine(sourceProfileFolder, "UserData");
+                    var destProfileFolder = Path.Combine(profilesDir, SanitizeFileName(newProfile.Name));
+                    var destUserDataBackup = Path.Combine(destProfileFolder, "UserData");
+                    
+                    // If source profile has a UserData backup, copy it
+                    if (Directory.Exists(sourceUserDataBackup))
+                    {
+                        CopyDirectory(sourceUserDataBackup, destUserDataBackup);
+                        Logger.Info("Profile", $"Copied UserData from '{sourceProfile.Name}' to '{newProfile.Name}'");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Profile", $"Failed to copy UserData during duplication: {ex.Message}");
+            }
+            
+            // Copy skin/avatar data
+            try
+            {
+                var profilesDir = GetProfilesFolder();
+                var sourceProfileDir = Path.Combine(profilesDir, SanitizeFileName(sourceProfile.Name));
+                var destProfileDir = Path.Combine(profilesDir, SanitizeFileName(newProfile.Name));
+                
+                // Copy skin.png if exists
+                var sourceSkin = Path.Combine(sourceProfileDir, "skin.png");
+                if (File.Exists(sourceSkin))
+                {
+                    File.Copy(sourceSkin, Path.Combine(destProfileDir, "skin.png"), true);
+                }
+                
+                // Copy avatar.png if exists
+                var sourceAvatar = Path.Combine(sourceProfileDir, "avatar.png");
+                if (File.Exists(sourceAvatar))
+                {
+                    File.Copy(sourceAvatar, Path.Combine(destProfileDir, "avatar.png"), true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Profile", $"Failed to copy skin/avatar during duplication: {ex.Message}");
+            }
+            
+            Logger.Success("Profile", $"Duplicated profile '{sourceProfile.Name}' → '{newProfile.Name}'");
+            return newProfile;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Profile", $"Failed to duplicate profile: {ex.Message}");
+            return null;
+        }
+    }
+    
+    /// <summary>
+    /// Opens the current active profile's folder in the file manager.
+    /// </summary>
+    public bool OpenCurrentProfileFolder()
+    {
+        try
+        {
+            var config = _getConfig();
+            if (config.ActiveProfileIndex < 0 || config.Profiles == null ||
+                config.ActiveProfileIndex >= config.Profiles.Count)
+            {
+                Logger.Warning("Profile", "No active profile to open folder for");
+                return false;
+            }
+            
+            var profile = config.Profiles[config.ActiveProfileIndex];
+            var profilesDir = GetProfilesFolder();
+            var safeName = SanitizeFileName(profile.Name);
+            var profileDir = Path.Combine(profilesDir, safeName);
+            
+            if (!Directory.Exists(profileDir))
+            {
+                Logger.Warning("Profile", $"Profile folder does not exist: {profileDir}");
+                return false;
+            }
+            
+            // Open folder in file manager (cross-platform)
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                Process.Start("explorer.exe", profileDir);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                Process.Start("open", profileDir);
+            }
+            else // Linux
+            {
+                Process.Start("xdg-open", profileDir);
+            }
+            
+            Logger.Success("Profile", $"Opened profile folder: {profileDir}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Profile", $"Failed to open profile folder: {ex.Message}");
+            return false;
+        }
+    }
+
+    
+    /// <summary>
     /// Initializes the profile mods symlink on startup if an active profile exists.
     /// </summary>
     public void InitializeProfileModsSymlink()
@@ -658,5 +840,27 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         var invalid = Path.GetInvalidFileNameChars();
         var sanitized = string.Join("_", name.Split(invalid, StringSplitOptions.RemoveEmptyEntries));
         return string.IsNullOrWhiteSpace(sanitized) ? "profile" : sanitized;
+    }
+    
+    /// <summary>
+    /// Recursively copies a directory and all its contents.
+    /// </summary>
+    private void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        
+        // Copy files
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var destFile = Path.Combine(destDir, Path.GetFileName(file));
+            File.Copy(file, destFile, true);
+        }
+        
+        // Copy subdirectories recursively
+        foreach (var subDir in Directory.GetDirectories(sourceDir))
+        {
+            var destSubDir = Path.Combine(destDir, Path.GetFileName(subDir));
+            CopyDirectory(subDir, destSubDir);
+        }
     }
 }
