@@ -31,23 +31,8 @@ import { BrowserOpenURL } from '@/api/bridge';
 import { useAccentColor } from '../contexts/AccentColorContext';
 import { Language } from '../constants/enums';
 import { LANGUAGE_CONFIG } from '../constants/languages';
+import { ACCENT_COLORS } from '../constants/colors';
 import appIcon from '../assets/appicon.png';
-
-// Color palette for accent colors (same as SettingsModal)
-const ACCENT_COLORS = [
-    '#FFA845', // Orange (default)
-    '#FF6B6B', // Red
-    '#FF85C0', // Pink
-    '#B37FEB', // Purple
-    '#5C7CFA', // Blue
-    '#339AF0', // Light Blue
-    '#22B8CF', // Cyan
-    '#20C997', // Teal
-    '#51CF66', // Green
-    '#94D82D', // Lime
-    '#FCC419', // Yellow
-    '#FFFFFF', // White
-];
 
 // Background images (matching SettingsModal) - using the correct path
 const backgroundModulesJpg = import.meta.glob('../assets/bg_*.jpg', { query: '?url', import: 'default', eager: true });

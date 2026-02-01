@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, RefreshCw, Check, User, Edit3, Copy, CheckCircle, Plus, Trash2, Dices } from 'lucide-react';
+import { X, RefreshCw, Check, User, Edit3, Copy, CheckCircle, Plus, Trash2, Dices, FolderOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccentColor } from '../contexts/AccentColorContext';
-import { GetUUID, SetUUID, GetNick, SetNick, GetAvatarPreview, GetAvatarPreviewForUUID, GetProfiles, CreateProfile, DeleteProfile, SwitchProfile, SaveCurrentAsProfile } from '@/api/backend';
+import { GetUUID, SetUUID, GetNick, SetNick, GetAvatarPreview, GetAvatarPreviewForUUID, GetProfiles, CreateProfile, DeleteProfile, SwitchProfile, SaveCurrentAsProfile, OpenCurrentProfileFolder } from '@/api/backend';
 import type { Profile } from '@/api/backend';
 
 interface ProfileEditorProps {
@@ -276,15 +276,34 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                 return;
             }
             
-            // Clear avatar immediately to prevent showing old avatar
-            setLocalAvatar('');
+            const targetProfile = profiles[actualIndex];
+            
+            // Optimistically update the UI immediately (no loading state)
+            setUsernameState(targetProfile.name);
+            setEditUsername(targetProfile.name);
+            setUuid(targetProfile.uuid);
+            setEditUuid(targetProfile.uuid);
+            
+            // Pre-load the avatar for the target profile
+            const targetAvatar = profileAvatars[targetProfile.uuid];
+            if (targetAvatar) {
+                setLocalAvatar(targetAvatar);
+            }
             
             console.log('[ProfileEditor] Switching to profile at index:', actualIndex, 'with ID:', profileId);
             const success = await SwitchProfile(actualIndex);
+            
             if (success) {
+                // Refresh avatar in the background (don't wait)
+                GetAvatarPreview().then(avatar => {
+                    if (avatar) setLocalAvatar(avatar);
+                }).catch(() => {});
+                
+                onProfileUpdate?.();
+            } else {
+                // Revert on failure
                 await loadProfile();
                 await loadAvatar();
-                onProfileUpdate?.();
             }
         } catch (err) {
             console.error('Failed to switch profile:', err);
@@ -365,7 +384,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                     allProfiles: profiles,
                                     filteredProfiles: filtered
                                 }, null, 2));
-                                return filtered.map((profile, index) => {
+                                return filtered.map((profile) => {
                                 const isCurrentProfile = profile.uuid === uuid;
                                 const profileAvatar = profileAvatars[profile.uuid];
                                 
@@ -632,6 +651,17 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                             <p className="text-white font-mono text-sm truncate">{uuid}</p>
                                         )}
                                     </div>
+
+                                    {/* Open Profile Folder Button */}
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => OpenCurrentProfileFolder()}
+                                        className="w-full p-3 rounded-xl bg-[#151515] border border-white/10 hover:border-white/20 flex items-center justify-center gap-2 text-white/60 hover:text-white transition-colors"
+                                    >
+                                        <FolderOpen size={18} />
+                                        <span className="text-sm">{t('Open Profile Folder')}</span>
+                                    </motion.button>
 
                                     {/* Save Status */}
                                     {saveStatus === 'saved' && (

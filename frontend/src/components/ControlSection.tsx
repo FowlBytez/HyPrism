@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, Play, Package, Square, Settings, Loader2, Download, ChevronDown, Check, X, GitBranch } from 'lucide-react';
+import { FolderOpen, Play, Package, Square, Settings, Loader2, Download, ChevronDown, Check, X, GitBranch, RefreshCw } from 'lucide-react';
 import { CoffeeIcon } from './CoffeeIcon';
 import { OnlineToggle } from './OnlineToggle';
 import { BrowserOpenURL } from '@/api/bridge';
 import { GameBranch } from '../constants/enums';
 import { useAccentColor } from '../contexts/AccentColorContext';
+import { formatBytes } from '../utils/format';
 
 // Memoized NavBtn component to prevent unnecessary re-renders
 const NavBtn = memo(({ onClick, icon, tooltip, accentColor }: { onClick?: () => void; icon: React.ReactNode; tooltip?: string; accentColor: string }) => (
@@ -31,6 +32,7 @@ NavBtn.displayName = 'NavBtn';
 interface ControlSectionProps {
   onPlay: () => void;
   onDownload?: () => void;
+  onUpdate?: () => void;
   onExit?: () => void;
   onCancelDownload?: () => void;
   isDownloading: boolean;
@@ -62,6 +64,7 @@ interface ControlSectionProps {
 export const ControlSection: React.FC<ControlSectionProps> = memo(({
   onPlay,
   onDownload,
+  onUpdate,
   onExit,
   onCancelDownload,
   isDownloading,
@@ -69,10 +72,10 @@ export const ControlSection: React.FC<ControlSectionProps> = memo(({
   canCancel = true,
   isGameRunning,
   isVersionInstalled,
-  latestNeedsUpdate: _latestNeedsUpdate = false,
+  latestNeedsUpdate = false,
   progress,
-  downloaded: _downloaded,
-  total: _total,
+  downloaded,
+  total,
   currentBranch,
   currentVersion,
   availableVersions,
@@ -92,6 +95,13 @@ export const ControlSection: React.FC<ControlSectionProps> = memo(({
   const versionDropdownRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
   const { accentColor, accentTextColor } = useAccentColor();
+
+  // Reset cancel button visibility when download starts/stops
+  useEffect(() => {
+    if (!isDownloading) {
+      setShowCancelButton(false);
+    }
+  }, [isDownloading]);
 
   const openCoffee = () => BrowserOpenURL('https://buymeacoffee.com/yyyumeniku');
 
@@ -256,24 +266,20 @@ export const ControlSection: React.FC<ControlSectionProps> = memo(({
                     <button
                       key={version}
                       onClick={() => handleVersionSelect(version)}
-                      className={`w-full px-3 py-2 flex items-center justify-between gap-2 text-sm rounded-lg ${
+                      className={`w-full px-3 py-2 flex items-center gap-2 text-sm rounded-lg ${
                         isSelected ? '' : 'text-white/70 hover:bg-white/10 hover:text-white'
                       }`}
                       style={isSelected ? { backgroundColor: `${accentColor}33`, color: accentColor } : undefined}
                     >
-                      <div className="flex items-center gap-2">
-                        {isSelected && (
-                          <Check size={14} style={{ color: accentColor }} strokeWidth={3} />
-                        )}
-                        <span className={isSelected ? '' : 'ml-[22px]'}>
-                          {version === 0 ? t('latest') : `v${version}`}
-                        </span>
-                      </div>
-                      {isInstalled && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 font-medium">
-                          {version === 0 ? t('latest') : '✓'}
-                        </span>
+                      {/* Show checkmark for installed versions */}
+                      {isInstalled ? (
+                        <Check size={14} className={isSelected ? '' : 'text-green-400'} style={isSelected ? { color: accentColor } : undefined} strokeWidth={3} />
+                      ) : (
+                        <span className="w-[14px]" />
                       )}
+                      <span>
+                        {version === 0 ? t('latest') : `v${version}`}
+                      </span>
                     </button>
                   );
                 })
@@ -325,14 +331,17 @@ export const ControlSection: React.FC<ControlSectionProps> = memo(({
           ) : isDownloading ? (
             <div 
               tabIndex={-1}
-              className={`h-12 px-3 rounded-xl bg-[#151515] border border-white/10 flex items-center justify-center relative overflow-hidden min-w-[170px] max-w-[190px] group ${canCancel ? 'cursor-pointer' : 'cursor-default'}`}
+              className={`h-12 px-4 rounded-xl bg-[#1a1a1a] border border-white/10 flex items-center justify-center relative overflow-hidden min-w-[220px] group ${canCancel ? 'cursor-pointer' : 'cursor-default'}`}
               onMouseEnter={() => canCancel && setShowCancelButton(true)}
               onMouseLeave={() => setShowCancelButton(false)}
               onClick={() => showCancelButton && canCancel && onCancelDownload?.()}
             >
               <div
-                className="absolute inset-0 bg-gradient-to-r from-cyan-500/40 to-blue-500/40 transition-all duration-300"
-                style={{ width: `${Math.min(progress, 100)}%` }}
+                className="absolute inset-0 transition-all duration-300"
+                style={{ 
+                  width: `${Math.min(progress, 100)}%`,
+                  backgroundColor: `${accentColor}50`
+                }}
               />
               {showCancelButton && canCancel && onCancelDownload ? (
                 <div className="relative z-10 flex items-center gap-2 text-red-500 hover:text-red-400 transition-colors">
@@ -340,14 +349,21 @@ export const ControlSection: React.FC<ControlSectionProps> = memo(({
                   <span className="text-xs font-bold">{t('CANCEL')}</span>
                 </div>
               ) : (
-                <div className="relative z-10 flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin text-white flex-shrink-0" />
-                  <span className="text-[10px] font-bold text-white uppercase truncate">
-                    {downloadState === 'downloading' && t('Downloading...')}
-                    {downloadState === 'extracting' && t('Extracting...')}
-                    {downloadState === 'launching' && t('Launching...')}
-                  </span>
-                  <span className="text-xs font-mono text-white/80 flex-shrink-0">{Math.min(Math.round(progress), 100)}%</span>
+                <div className="relative z-10 flex flex-col items-center justify-center gap-0.5">
+                  <div className="flex items-center gap-2">
+                    <Loader2 size={12} className="animate-spin text-white flex-shrink-0" />
+                    <span className="text-[10px] font-bold text-white uppercase">
+                      {downloadState === 'downloading' && t('Downloading...')}
+                      {downloadState === 'extracting' && t('Extracting...')}
+                      {downloadState === 'launching' && t('Launching...')}
+                    </span>
+                    <span className="text-xs font-mono text-white/80 flex-shrink-0">{Math.min(Math.round(progress), 100)}%</span>
+                  </div>
+                  {downloadState === 'downloading' && total > 0 && (
+                    <span className="text-[10px] font-mono text-white/60">
+                      {formatBytes(downloaded)} / {formatBytes(total)}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -360,6 +376,31 @@ export const ControlSection: React.FC<ControlSectionProps> = memo(({
               <Loader2 size={16} className="animate-spin" />
               <span>{t('CHECKING...')}</span>
             </button>
+          ) : isVersionInstalled && latestNeedsUpdate && currentVersion === 0 ? (
+            // Show UPDATE button when latest instance needs an update
+            <div className="flex items-center gap-2">
+              <button
+                tabIndex={-1}
+                onClick={onUpdate || onDownload}
+                className="h-12 px-5 rounded-xl font-black text-base tracking-tight flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:shadow-lg hover:shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
+              >
+                <RefreshCw size={16} />
+                <span>{t('UPDATE')}</span>
+              </button>
+              <button
+                tabIndex={-1}
+                onClick={onPlay}
+                className="h-12 px-5 rounded-xl font-black text-base tracking-tight flex items-center justify-center gap-2 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
+                style={{ 
+                  background: `linear-gradient(to right, ${accentColor}, ${accentColor}cc)`,
+                  boxShadow: `0 10px 15px -3px ${accentColor}40`,
+                  color: accentTextColor
+                }}
+              >
+                <Play size={16} fill="currentColor" />
+                <span>{t('PLAY')}</span>
+              </button>
+            </div>
           ) : isVersionInstalled ? (
             <button
               tabIndex={-1}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, User, Edit3, Shuffle, Copy, CheckCircle, Download, Archive, Loader2, HardDrive, Languages } from 'lucide-react';
+import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, User, Edit3, Shuffle, Copy, CheckCircle, Download, Loader2, HardDrive, Languages, FlaskConical, Box } from 'lucide-react';
 import { BrowserOpenURL } from '@/api/bridge';
 import { 
     GetCloseAfterLaunch, 
@@ -35,6 +35,7 @@ import { useAccentColor } from '../contexts/AccentColorContext';
 import { DiscordIcon } from './DiscordIcon';
 import { Language } from '../constants/enums';
 import { LANGUAGE_CONFIG } from '../constants/languages';
+import { ACCENT_COLORS, SOLID_COLORS } from '../constants/colors';
 import appIcon from '../assets/appicon.png';
 
 // Import background images for previews
@@ -52,32 +53,6 @@ const backgroundImages = Object.entries(allBackgrounds)
     url: url as string 
   }));
 
-// Color palette for accent colors (12 colors)
-const ACCENT_COLORS = [
-    '#FFA845', // Orange (default)
-    '#FF6B6B', // Red
-    '#FF85C0', // Pink
-    '#B37FEB', // Purple
-    '#5C7CFA', // Blue
-    '#339AF0', // Light Blue
-    '#22B8CF', // Cyan
-    '#20C997', // Teal
-    '#51CF66', // Green
-    '#94D82D', // Lime
-    '#FCC419', // Yellow
-    '#FFFFFF', // White
-];
-
-// Solid color wallpapers (36 colors)
-const SOLID_COLORS = [
-    '#0a0a0a', '#1a1a1a', '#2a2a2a', '#3a3a3a', '#4a4a4a', '#5a5a5a',
-    '#1a0000', '#2a0000', '#3a1010', '#4a2020', '#5a3030', '#6a4040',
-    '#001a00', '#002a00', '#103a10', '#204a20', '#305a30', '#406a40',
-    '#00001a', '#00002a', '#10103a', '#20204a', '#30305a', '#40406a',
-    '#1a1a00', '#2a2a00', '#3a3a10', '#4a4a20', '#5a5a30', '#6a6a40',
-    '#1a001a', '#2a002a', '#3a103a', '#4a204a', '#5a305a', '#6a406a',
-];
-
 interface Contributor {
     login: string;
     avatar_url: string;
@@ -94,6 +69,7 @@ interface SettingsModalProps {
     onBackgroundModeChange?: (mode: string) => void;
     onNewsDisabledChange?: (disabled: boolean) => void;
     onAccentColorChange?: (color: string) => void;
+    onInstanceDeleted?: () => void;
 }
 
 type SettingsTab = 'profile' | 'general' | 'visual' | 'language' | 'data' | 'instances' | 'about' | 'developer';
@@ -109,7 +85,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     rosettaWarning,
     onBackgroundModeChange,
     onNewsDisabledChange,
-    onAccentColorChange
+    onAccentColorChange,
+    onInstanceDeleted
 }) => {
     const { i18n, t } = useTranslation();
     const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
@@ -138,6 +115,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [isLoadingInstances, setIsLoadingInstances] = useState(false);
     const [exportingInstance, setExportingInstance] = useState<string | null>(null);
     const [instanceToDelete, setInstanceToDelete] = useState<InstalledVersionInfo | null>(null);
+    const [instanceBranchFilter, setInstanceBranchFilter] = useState<'all' | 'release' | 'pre-release'>('all');
 
     // Profile state
     const [profileUsername, setProfileUsername] = useState('');
@@ -259,6 +237,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             const version = typeof instanceToDelete.Version === 'number' ? instanceToDelete.Version : parseInt(String(instanceToDelete.Version)) || 0;
             await DeleteGame(instanceToDelete.Branch, version);
             await loadInstances();
+            // Notify parent to refresh installed versions in dropdown
+            onInstanceDeleted?.();
         } catch (err) {
             console.error('Failed to delete instance:', err);
         }
@@ -1130,6 +1110,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                                 {t('Refresh')}
                                             </button>
                                         </div>
+                                        
+                                        {/* Branch Filter */}
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <button
+                                                onClick={() => setInstanceBranchFilter('all')}
+                                                className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
+                                                    instanceBranchFilter === 'all' 
+                                                        ? 'bg-white/20 text-white' 
+                                                        : 'bg-white/5 text-white/50 hover:text-white/70'
+                                                }`}
+                                            >
+                                                {t('All')}
+                                            </button>
+                                            <button
+                                                onClick={() => setInstanceBranchFilter('release')}
+                                                className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 ${
+                                                    instanceBranchFilter === 'release' 
+                                                        ? 'bg-white/20 text-white' 
+                                                        : 'bg-white/5 text-white/50 hover:text-white/70'
+                                                }`}
+                                            >
+                                                <Box size={12} />
+                                                {t('Release')}
+                                            </button>
+                                            <button
+                                                onClick={() => setInstanceBranchFilter('pre-release')}
+                                                className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 ${
+                                                    instanceBranchFilter === 'pre-release' 
+                                                        ? 'bg-white/20 text-white' 
+                                                        : 'bg-white/5 text-white/50 hover:text-white/70'
+                                                }`}
+                                            >
+                                                <FlaskConical size={12} />
+                                                {t('Pre-Release')}
+                                            </button>
+                                        </div>
+                                        
                                         {isLoadingInstances ? (
                                             <div className="flex items-center justify-center py-8">
                                                 <Loader2 size={24} className="animate-spin" style={{ color: accentColor }} />
@@ -1138,66 +1155,88 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                             <div className="py-8 text-center text-white/40 text-sm">
                                                 {t('No instances installed')}
                                             </div>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                {installedInstances.map((instance) => {
-                                                    const key = `${instance.Branch}-${instance.Version}`;
-                                                    const versionLabel = instance.Version === 0 || instance.Version === undefined ? t('latest') : `v${instance.Version}`;
-                                                    // Determine branch from Path - check if path contains 'pre-release' or 'release'
-                                                    const pathLower = (instance.Path || '').toLowerCase();
-                                                    const isReleaseFromPath = pathLower.includes('/release/') || pathLower.includes('\\release\\') || pathLower.includes('/release-') || pathLower.includes('\\release-');
-                                                    const isPreReleaseFromPath = pathLower.includes('/pre-release/') || pathLower.includes('\\pre-release\\') || pathLower.includes('/pre-release-') || pathLower.includes('\\pre-release-');
-                                                    // Use path-based detection, fallback to Branch property
-                                                    const isRelease = isPreReleaseFromPath ? false : (isReleaseFromPath ? true : (instance.Branch?.toLowerCase() === 'release'));
-                                                    const branchLabel = isRelease ? t('Release') : t('Pre-Release');
-                                                    const isExporting = exportingInstance === key;
-                                                    
-                                                    return (
-                                                        <div key={key} className="p-3 rounded-xl bg-[#151515] border border-white/10 flex items-center gap-3">
-                                                            <Archive size={18} className="text-white/40 flex-shrink-0" />
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="text-white text-sm font-medium">
-                                                                    {branchLabel} {versionLabel}
-                                                                </div>
-                                                                {instance.HasUserData && (
-                                                                    <div className="text-white/40 text-xs">
-                                                                        {t('UserData')}: {formatSize(instance.UserDataSize)}
+                                        ) : (() => {
+                                            const filteredInstances = installedInstances.filter((instance) => {
+                                                if (instanceBranchFilter === 'all') return true;
+                                                const pathLower = (instance.Path || '').toLowerCase();
+                                                const isReleaseFromPath = pathLower.includes('/release/') || pathLower.includes('\\release\\') || pathLower.includes('/release-') || pathLower.includes('\\release-');
+                                                const isPreReleaseFromPath = pathLower.includes('/pre-release/') || pathLower.includes('\\pre-release\\') || pathLower.includes('/pre-release-') || pathLower.includes('\\pre-release-');
+                                                const isRelease = isPreReleaseFromPath ? false : (isReleaseFromPath ? true : (instance.Branch?.toLowerCase() === 'release'));
+                                                return instanceBranchFilter === 'release' ? isRelease : !isRelease;
+                                            });
+                                            
+                                            if (filteredInstances.length === 0) {
+                                                return (
+                                                    <div className="py-8 text-center text-white/40 text-sm">
+                                                        {t('No instances match the filter')}
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            return (
+                                                <div className="space-y-2">
+                                                    {filteredInstances.map((instance) => {
+                                                        const key = `${instance.Branch}-${instance.Version}`;
+                                                        const versionLabel = instance.Version === 0 || instance.Version === undefined ? t('latest') : `v${instance.Version}`;
+                                                        // Determine branch from Path - check if path contains 'pre-release' or 'release'
+                                                        const pathLower = (instance.Path || '').toLowerCase();
+                                                        const isReleaseFromPath = pathLower.includes('/release/') || pathLower.includes('\\release\\') || pathLower.includes('/release-') || pathLower.includes('\\release-');
+                                                        const isPreReleaseFromPath = pathLower.includes('/pre-release/') || pathLower.includes('\\pre-release\\') || pathLower.includes('/pre-release-') || pathLower.includes('\\pre-release-');
+                                                        // Use path-based detection, fallback to Branch property
+                                                        const isRelease = isPreReleaseFromPath ? false : (isReleaseFromPath ? true : (instance.Branch?.toLowerCase() === 'release'));
+                                                        const branchLabel = isRelease ? t('Release') : t('Pre-Release');
+                                                        const isExporting = exportingInstance === key;
+                                                        
+                                                        // Different icon based on branch type
+                                                        const BranchIcon = isRelease ? Box : FlaskConical;
+                                                        
+                                                        return (
+                                                            <div key={key} className="p-3 rounded-xl bg-[#151515] border border-white/10 flex items-center gap-3">
+                                                                <BranchIcon size={18} className={isRelease ? "text-green-400/60 flex-shrink-0" : "text-yellow-400/60 flex-shrink-0"} />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="text-white text-sm font-medium">
+                                                                        {branchLabel} {versionLabel}
                                                                     </div>
-                                                                )}
-                                                            </div>
-                                                            <div className="flex items-center gap-1">
-                                                                <button
-                                                                    onClick={() => OpenInstanceFolder(instance.Branch, instance.Version ?? 0)}
-                                                                    className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white"
-                                                                    title={t('Open Folder')}
-                                                                >
-                                                                    <FolderOpen size={16} />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleExportInstance(instance)}
-                                                                    disabled={isExporting || !instance.HasUserData}
-                                                                    className={`p-2 rounded-lg hover:bg-white/10 ${instance.HasUserData ? 'text-white/40 hover:text-white' : 'text-white/20 cursor-not-allowed'}`}
-                                                                    title={t('Export as ZIP')}
-                                                                >
-                                                                    {isExporting ? (
-                                                                        <Loader2 size={16} className="animate-spin" />
-                                                                    ) : (
-                                                                        <Download size={16} />
+                                                                    {instance.HasUserData && (
+                                                                        <div className="text-white/40 text-xs">
+                                                                            {t('UserData')}: {formatSize(instance.UserDataSize)}
+                                                                        </div>
                                                                     )}
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setInstanceToDelete(instance)}
-                                                                    className="p-2 rounded-lg hover:bg-red-500/10 text-white/40 hover:text-red-400"
-                                                                    title={t('Delete Instance')}
-                                                                >
-                                                                    <Trash2 size={16} />
-                                                                </button>
+                                                                </div>
+                                                                <div className="flex items-center gap-1">
+                                                                    <button
+                                                                        onClick={() => OpenInstanceFolder(instance.Branch, instance.Version ?? 0)}
+                                                                        className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white"
+                                                                        title={t('Open Folder')}
+                                                                    >
+                                                                        <FolderOpen size={16} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleExportInstance(instance)}
+                                                                        disabled={isExporting || !instance.HasUserData}
+                                                                        className={`p-2 rounded-lg hover:bg-white/10 ${instance.HasUserData ? 'text-white/40 hover:text-white' : 'text-white/20 cursor-not-allowed'}`}
+                                                                        title={t('Export as ZIP')}
+                                                                    >
+                                                                        {isExporting ? (
+                                                                            <Loader2 size={16} className="animate-spin" />
+                                                                        ) : (
+                                                                            <Download size={16} />
+                                                                        )}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => setInstanceToDelete(instance)}
+                                                                        className="p-2 rounded-lg hover:bg-red-500/10 text-white/40 hover:text-red-400"
+                                                                        title={t('Delete Instance')}
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             )}

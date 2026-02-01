@@ -41,6 +41,7 @@ import {
   IsVersionInstalled,
   GetInstalledVersionsForBranch,
   CheckLatestNeedsUpdate,
+  ForceUpdateLatest,
   GetPendingUpdateInfo,
   CopyUserData,
   // Settings
@@ -635,6 +636,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleGameUpdate = async () => {
+    // Force the update by resetting the version info in latest.json
+    try {
+      await ForceUpdateLatest(currentBranch);
+      // After forcing, set latestNeedsUpdate to false since we're about to update
+      setLatestNeedsUpdate(false);
+    } catch (err) {
+      console.error('Failed to force update:', err);
+    }
+    // Now launch which will trigger the differential update
+    doLaunch();
+  };
+
   const handleUpdateConfirmWithCopy = async () => {
     if (!pendingUpdate) return;
     try {
@@ -878,6 +892,7 @@ const App: React.FC = () => {
         <ControlSection
           onPlay={handlePlay}
           onDownload={handlePlay}
+          onUpdate={handleGameUpdate}
           onExit={handleExit}
           onCancelDownload={handleCancelDownload}
           isDownloading={isDownloading}
@@ -961,6 +976,7 @@ const App: React.FC = () => {
             currentBranch={currentBranch}
             currentVersion={currentVersion}
             initialSearchQuery={modManagerSearchQuery}
+            currentProfileName={username}
           />
         )}
 
@@ -977,6 +993,22 @@ const App: React.FC = () => {
             onBackgroundModeChange={(mode) => setBackgroundMode(mode)}
             onNewsDisabledChange={(disabled) => setNewsDisabled(disabled)}
             onAccentColorChange={(color) => setAccentColor(color)}
+            onInstanceDeleted={async () => {
+              // Refresh installed versions for current branch after deletion
+              const installed = await GetInstalledVersionsForBranch(currentBranch);
+              const latestInstalled = await IsVersionInstalled(currentBranch, 0);
+              const installedWithLatest = [...(installed || [])];
+              if (latestInstalled && !installedWithLatest.includes(0)) installedWithLatest.unshift(0);
+              setInstalledVersions(installedWithLatest);
+              // Also refresh if current version was the one deleted
+              const stillInstalled = await IsVersionInstalled(currentBranch, currentVersion);
+              setIsVersionInstalled(stillInstalled);
+              // Refresh latest needs update check
+              if (currentVersion === 0) {
+                const needsUpdate = await CheckLatestNeedsUpdate(currentBranch);
+                setLatestNeedsUpdate(needsUpdate);
+              }
+            }}
           />
         )}
 

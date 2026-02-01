@@ -81,6 +81,9 @@ public class AppService : IDisposable
         _butlerService = new ButlerService(_appDir);
         _discordService = new DiscordService();
         _discordService.Initialize();
+        
+        // Initialize profile mods symlink if an active profile exists
+        InitializeProfileModsSymlink();
     }
 
     /// <summary>
@@ -1962,6 +1965,9 @@ public class AppService : IDisposable
             _config.UserUuids ??= new Dictionary<string, string>();
             _config.UserUuids[profile.Name] = profile.UUID;
             
+            // Switch mods symlink to the new profile's mods folder
+            SwitchProfileModsSymlink(profile);
+            
             SaveConfig();
             
             Logger.Success("Profile", $"Switched to profile '{profile.Name}'");
@@ -1971,6 +1977,212 @@ public class AppService : IDisposable
         {
             Logger.Error("Profile", $"Failed to switch profile: {ex.Message}");
             return false;
+        }
+    }
+    
+    /// <summary>
+    /// Gets the path to a profile's mods folder.
+    /// </summary>
+    private string GetProfileModsFolder(Profile profile)
+    {
+        var profilesDir = GetProfilesFolder();
+        var safeName = SanitizeFileName(profile.Name);
+        var profileDir = Path.Combine(profilesDir, safeName);
+        var modsDir = Path.Combine(profileDir, "Mods");
+        Directory.CreateDirectory(modsDir);
+        return modsDir;
+    }
+    
+    /// <summary>
+    /// Gets the path to a profile's mods folder by name.
+    /// </summary>
+    private string GetProfileModsFolderByName(string profileName)
+    {
+        var profilesDir = GetProfilesFolder();
+        var safeName = SanitizeFileName(profileName);
+        var profileDir = Path.Combine(profilesDir, safeName);
+        var modsDir = Path.Combine(profileDir, "Mods");
+        Directory.CreateDirectory(modsDir);
+        return modsDir;
+    }
+    
+    /// <summary>
+    /// Switches the mods symlink to point to the new profile's mods folder.
+    /// On Windows, creates a directory junction. On Unix, creates a symlink.
+    /// </summary>
+    private void SwitchProfileModsSymlink(Profile profile)
+    {
+        try
+        {
+            // Get the game's UserData/Mods path
+            var branch = NormalizeVersionType(_config.VersionType);
+            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
+            var userDataPath = Path.Combine(versionPath, "UserData");
+            var gameModsPath = Path.Combine(userDataPath, "Mods");
+            
+            // Get the profile's mods folder
+            var profileModsPath = GetProfileModsFolder(profile);
+            
+            // If the game mods path exists and is not a symlink, migrate existing mods
+            if (Directory.Exists(gameModsPath))
+            {
+                var dirInfo = new DirectoryInfo(gameModsPath);
+                bool isSymlink = dirInfo.Attributes.HasFlag(FileAttributes.ReparsePoint);
+                
+                if (!isSymlink)
+                {
+                    // Real directory - migrate mods to profile folder then delete
+                    Logger.Info("Mods", "Migrating existing mods to profile folder...");
+                    
+                    foreach (var file in Directory.GetFiles(gameModsPath))
+                    {
+                        var destFile = Path.Combine(profileModsPath, Path.GetFileName(file));
+                        if (!File.Exists(destFile))
+                        {
+                            File.Copy(file, destFile);
+                        }
+                    }
+                    
+                    // Also copy manifest.json if it exists
+                    var manifestPath = Path.Combine(gameModsPath, "manifest.json");
+                    var destManifest = Path.Combine(profileModsPath, "manifest.json");
+                    if (File.Exists(manifestPath) && !File.Exists(destManifest))
+                    {
+                        File.Copy(manifestPath, destManifest);
+                    }
+                    
+                    // Delete the original directory
+                    Directory.Delete(gameModsPath, true);
+                    Logger.Success("Mods", $"Migrated mods from game folder to profile: {profile.Name}");
+                }
+                else
+                {
+                    // It's already a symlink - just delete it
+                    Directory.Delete(gameModsPath, false);
+                }
+            }
+            
+            // Create the symlink/junction
+            Directory.CreateDirectory(userDataPath);
+            
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // On Windows, create a directory junction (works without admin rights)
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c mklink /J \"{gameModsPath}\" \"{profileModsPath}\"",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                
+                using var process = Process.Start(processInfo);
+                process?.WaitForExit(5000);
+                
+                if (process?.ExitCode != 0)
+                {
+                    Logger.Warning("Mods", "Failed to create junction, falling back to directory copy");
+                    // Fallback: just create the directory
+                    Directory.CreateDirectory(gameModsPath);
+                }
+                else
+                {
+                    Logger.Success("Mods", $"Created junction: {gameModsPath} -> {profileModsPath}");
+                }
+            }
+            else
+            {
+                // On Unix (macOS/Linux), create a symbolic link
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = "ln",
+                    Arguments = $"-s \"{profileModsPath}\" \"{gameModsPath}\"",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                
+                using var process = Process.Start(processInfo);
+                process?.WaitForExit(5000);
+                
+                if (process?.ExitCode != 0)
+                {
+                    Logger.Warning("Mods", "Failed to create symlink, falling back to directory copy");
+                    Directory.CreateDirectory(gameModsPath);
+                }
+                else
+                {
+                    Logger.Success("Mods", $"Created symlink: {gameModsPath} -> {profileModsPath}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Mods", $"Failed to switch profile mods symlink: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Initializes the profile mods symlink on startup if an active profile exists.
+    /// </summary>
+    private void InitializeProfileModsSymlink()
+    {
+        try
+        {
+            if (_config.ActiveProfileIndex < 0 || _config.Profiles == null || 
+                _config.ActiveProfileIndex >= _config.Profiles.Count)
+            {
+                Logger.Info("Mods", "No active profile, skipping symlink initialization");
+                return;
+            }
+            
+            var profile = _config.Profiles[_config.ActiveProfileIndex];
+            
+            // Check if the game instance folder exists
+            var branch = NormalizeVersionType(_config.VersionType);
+            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
+            var userDataPath = Path.Combine(versionPath, "UserData");
+            var gameModsPath = Path.Combine(userDataPath, "Mods");
+            
+            // Check if symlink already exists and points to correct profile
+            if (Directory.Exists(gameModsPath))
+            {
+                var dirInfo = new DirectoryInfo(gameModsPath);
+                bool isSymlink = dirInfo.Attributes.HasFlag(FileAttributes.ReparsePoint);
+                
+                if (isSymlink)
+                {
+                    // Symlink exists, verify it points to correct profile
+                    var profileModsPath = GetProfileModsFolder(profile);
+                    
+                    // Get symlink target
+                    string? targetPath = null;
+                    try
+                    {
+                        targetPath = dirInfo.ResolveLinkTarget(true)?.FullName;
+                    }
+                    catch { /* Ignore errors getting target */ }
+                    
+                    if (targetPath != null && Path.GetFullPath(targetPath) == Path.GetFullPath(profileModsPath))
+                    {
+                        Logger.Info("Mods", $"Mods symlink already points to active profile: {profile.Name}");
+                        return;
+                    }
+                    
+                    // Wrong target, recreate
+                    Logger.Info("Mods", "Mods symlink points to wrong profile, updating...");
+                }
+            }
+            
+            // Create/update symlink
+            SwitchProfileModsSymlink(profile);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Mods", $"Failed to initialize profile mods symlink: {ex.Message}");
         }
     }
     
@@ -2031,6 +2243,52 @@ public class AppService : IDisposable
     }
     
     /// <summary>
+    /// Opens the current profile's folder in the file manager.
+    /// </summary>
+    public bool OpenCurrentProfileFolder()
+    {
+        try
+        {
+            if (_config.ActiveProfileIndex < 0 || _config.Profiles == null || 
+                _config.ActiveProfileIndex >= _config.Profiles.Count)
+            {
+                Logger.Warning("Profile", "No active profile to open folder for");
+                return false;
+            }
+            
+            var profile = _config.Profiles[_config.ActiveProfileIndex];
+            var safeName = SanitizeFileName(profile.Name);
+            var profileDir = Path.Combine(GetProfilesFolder(), safeName);
+            
+            if (!Directory.Exists(profileDir))
+            {
+                Directory.CreateDirectory(profileDir);
+            }
+            
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                Process.Start("explorer.exe", $"\"{profileDir}\"");
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                Process.Start(new ProcessStartInfo("open", $"\"{profileDir}\"") { UseShellExecute = false });
+            }
+            else
+            {
+                Process.Start("xdg-open", $"\"{profileDir}\"");
+            }
+            
+            Logger.Success("Profile", $"Opened profile folder: {profileDir}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Profile", $"Failed to open profile folder: {ex.Message}");
+            return false;
+        }
+    }
+    
+    /// <summary>
     /// Saves a profile to disk as a .sh file with name and UUID, plus avatar if available.
     /// </summary>
     private void SaveProfileToDisk(Profile profile)
@@ -2042,6 +2300,10 @@ public class AppService : IDisposable
             var safeName = SanitizeFileName(profile.Name);
             var profileDir = Path.Combine(profilesDir, safeName);
             Directory.CreateDirectory(profileDir);
+            
+            // Create the Mods folder for this profile
+            var modsDir = Path.Combine(profileDir, "Mods");
+            Directory.CreateDirectory(modsDir);
             
             // Create the shell script with profile info
             var shPath = Path.Combine(profileDir, $"{profile.Name}.sh");
@@ -2354,10 +2616,12 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                             
                             // Use the account-data endpoint which accepts skin updates
                             // The UUID in the path tells the server which profile to update
-                            var response = await httpClient.PutAsync(
-                                $"https://{_config.AuthDomain}/account-data/skin/{profile.UUID}",
-                                content
-                            );
+                            // AuthDomain is typically sessions.X.ws, we need account-data.X.ws
+                            var baseDomain = _config.AuthDomain.Replace("sessions.", "");
+                            var accountDataUrl = $"https://account-data.{baseDomain}/account-data/skin/{profile.UUID}";
+                            Logger.Info("Profile", $"Syncing skin to: {accountDataUrl}");
+                            
+                            var response = await httpClient.PutAsync(accountDataUrl, content);
                             
                             if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NoContent)
                             {
@@ -2415,6 +2679,19 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                 _protectedSkinPath = skinCachePath;
                 _protectedSkinContent = File.ReadAllText(skinCachePath);
                 _skinProtectionEnabled = true;
+            }
+            
+            // Set file to READ-ONLY to prevent game from overwriting it
+            // This is more reliable than FileSystemWatcher because the game will fail to write
+            try
+            {
+                var fileInfo = new FileInfo(skinCachePath);
+                fileInfo.IsReadOnly = true;
+                Logger.Success("SkinProtection", $"Set skin file to READ-ONLY to prevent overwrites");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("SkinProtection", $"Failed to set read-only: {ex.Message}");
             }
             
             var directory = Path.GetDirectoryName(skinCachePath);
@@ -2492,11 +2769,28 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
     {
         try
         {
+            string? pathToUnprotect = null;
             lock (_skinProtectionLock)
             {
+                pathToUnprotect = _protectedSkinPath;
                 _skinProtectionEnabled = false;
                 _protectedSkinPath = null;
                 _protectedSkinContent = null;
+            }
+            
+            // Remove READ-ONLY flag so file can be modified again
+            if (!string.IsNullOrEmpty(pathToUnprotect) && File.Exists(pathToUnprotect))
+            {
+                try
+                {
+                    var fileInfo = new FileInfo(pathToUnprotect);
+                    fileInfo.IsReadOnly = false;
+                    Logger.Info("SkinProtection", "Removed READ-ONLY flag from skin file");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning("SkinProtection", $"Failed to remove read-only: {ex.Message}");
+                }
             }
             
             if (_skinWatcher != null)
@@ -3107,10 +3401,58 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         if (!baseOk) return true;
         if (info == null)
         {
-            SaveLatestInfo(normalizedBranch, latest);
-            return false;
+            // Game is installed but no version tracking - assume needs update to be safe
+            // Don't write anything here - let the user decide via UPDATE button
+            Logger.Info("Update", $"No latest.json found for {normalizedBranch}, assuming update may be needed");
+            return true;
         }
         return info.Version != latest;
+    }
+    
+    /// <summary>
+    /// Forces the latest instance to update by resetting its version info.
+    /// This will trigger a differential update on next launch.
+    /// </summary>
+    public async Task<bool> ForceUpdateLatestAsync(string branch)
+    {
+        try
+        {
+            var normalizedBranch = NormalizeVersionType(branch);
+            var versions = await GetVersionListAsync(normalizedBranch);
+            if (versions.Count == 0) return false;
+
+            var latestPath = GetLatestInstancePath(normalizedBranch);
+            var info = LoadLatestInfo(normalizedBranch);
+            
+            if (info == null)
+            {
+                // No version info, assume version 1 to force full update path
+                SaveLatestInfo(normalizedBranch, 1);
+                Logger.Info("Update", $"No version info found, set to v1 to force update");
+            }
+            else
+            {
+                // Set installed version to one less than latest to trigger update
+                int latestVersion = versions[0];
+                if (info.Version < latestVersion)
+                {
+                    // Already behind, just return true
+                    Logger.Info("Update", $"Already needs update: v{info.Version} -> v{latestVersion}");
+                    return true;
+                }
+                // If somehow at or ahead of latest, force update by going back one version
+                int forcedVersion = Math.Max(1, latestVersion - 1);
+                SaveLatestInfo(normalizedBranch, forcedVersion);
+                Logger.Info("Update", $"Forced version to v{forcedVersion} to trigger update to v{latestVersion}");
+            }
+            
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Update", $"Failed to force update: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>
@@ -3274,10 +3616,73 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                     int installedVersion = info?.Version ?? 0;
                     int latestVersion = versions[0];
                     
+                    // If no latest.json exists, we need to determine the installed version
+                    if (installedVersion == 0)
+                    {
+                        // First, check if there's a Butler receipt which indicates the game was installed via Butler
+                        var receiptPath = Path.Combine(versionPath, ".itch", "receipt.json.gz");
+                        bool hasButlerReceipt = File.Exists(receiptPath);
+                        
+                        if (hasButlerReceipt)
+                        {
+                            // Butler receipt exists - the game was installed/patched by Butler
+                            // Check if we have any cached PWR files that indicate a version
+                            var cacheDir = Path.Combine(_appDir, "cache");
+                            if (Directory.Exists(cacheDir))
+                            {
+                                var pwrFiles = Directory.GetFiles(cacheDir, $"{branch}_patch_*.pwr")
+                                    .Concat(Directory.GetFiles(cacheDir, $"{branch}_*.pwr"))
+                                    .Select(f => Path.GetFileNameWithoutExtension(f))
+                                    .SelectMany(n => {
+                                        // Try to extract version from filename patterns like "release_patch_7" or "release_7"
+                                        var parts = n.Split('_');
+                                        var versions = new List<int>();
+                                        foreach (var part in parts)
+                                        {
+                                            if (int.TryParse(part, out var v) && v > 0)
+                                            {
+                                                versions.Add(v);
+                                            }
+                                        }
+                                        return versions;
+                                    })
+                                    .OrderByDescending(v => v)
+                                    .ToList();
+                                
+                                if (pwrFiles.Count > 0)
+                                {
+                                    // The highest version in cache is likely the installed version
+                                    installedVersion = pwrFiles[0];
+                                    Logger.Info("Download", $"Detected installed version from cache: v{installedVersion}");
+                                    // Save the detected version
+                                    SaveLatestInfo(branch, installedVersion);
+                                }
+                            }
+                            
+                            // If still no version detected but receipt exists, don't assume anything
+                            // User can click UPDATE button if they want to ensure they're on latest
+                            if (installedVersion == 0)
+                            {
+                                // Game has Butler receipt but no version info - don't assume version
+                                // Just launch as-is, user can click UPDATE if needed
+                                Logger.Info("Download", $"Butler receipt exists but no version info, launching as-is (user can UPDATE manually)");
+                            }
+                        }
+                        else
+                        {
+                            // No Butler receipt - this is a legacy installation or was installed differently
+                            // Don't assume version, just launch as-is
+                            Logger.Info("Download", $"No Butler receipt, launching current installation as-is (user can UPDATE manually)");
+                        }
+                        
+                        // Only save if we actually detected a version from cache
+                        // Don't assume latest - that breaks update detection
+                    }
+                    
                     Logger.Info("Download", $"Installed version: {installedVersion}, Latest version: {latestVersion}");
                     
-                    // If installed version is different from latest, apply differential update
-                    if (installedVersion > 0 && installedVersion != latestVersion)
+                    // Only apply differential update if we're BEHIND the latest version
+                    if (installedVersion > 0 && installedVersion < latestVersion)
                     {
                         Logger.Info("Download", $"Differential update available: {installedVersion} -> {latestVersion}");
                         SendProgress(window, "update", 0, $"Updating game from v{installedVersion} to v{latestVersion}...", 0, 0);
@@ -3311,6 +3716,35 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                                 
                                 Directory.CreateDirectory(Path.GetDirectoryName(patchPwrPath)!);
                                 Logger.Info("Download", $"Downloading patch: {patchUrl}");
+                                
+                                // Check if patch file is very large (> 500MB) - might indicate wrong version detection
+                                // In that case, we should fall back to the existing installation
+                                try
+                                {
+                                    using var headRequest = new HttpRequestMessage(HttpMethod.Head, patchUrl);
+                                    using var headResponse = await HttpClient.SendAsync(headRequest);
+                                    
+                                    if (!headResponse.IsSuccessStatusCode)
+                                    {
+                                        Logger.Warning("Download", $"Patch file not found at {patchUrl}, skipping differential update");
+                                        throw new Exception("Patch file not available");
+                                    }
+                                    
+                                    var contentLength = headResponse.Content.Headers.ContentLength ?? 0;
+                                    Logger.Info("Download", $"Patch file size: {contentLength / 1024 / 1024} MB");
+                                    
+                                    // If patch is > 500MB, something is wrong - patches should be small
+                                    if (contentLength > 500 * 1024 * 1024)
+                                    {
+                                        Logger.Warning("Download", $"Patch file is too large ({contentLength / 1024 / 1024} MB), likely wrong version detection");
+                                        throw new Exception("Patch file unexpectedly large - version detection may be incorrect");
+                                    }
+                                }
+                                catch (HttpRequestException)
+                                {
+                                    Logger.Warning("Download", $"Cannot check patch file at {patchUrl}, skipping differential update");
+                                    throw new Exception("Cannot access patch file");
+                                }
                                 
                                 await DownloadFileAsync(patchUrl, patchPwrPath, (progress, downloaded, total) =>
                                 {
@@ -3350,14 +3784,16 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                         catch (Exception ex)
                         {
                             Logger.Error("Download", $"Differential update failed: {ex.Message}");
-                            // Don't fail completely - game is still playable at old version
-                            Logger.Warning("Download", "Continuing with existing version...");
+                            // Don't update latest.json - keep the old version so user can try UPDATE again
+                            // Just launch the game as-is with whatever version is installed
+                            Logger.Warning("Download", "Keeping current version, user can try UPDATE again later");
                         }
                     }
-                    else if (info == null)
+                    else if (installedVersion >= latestVersion)
                     {
-                        // No version info saved, save current
-                        SaveLatestInfo(branch, targetVersion);
+                        Logger.Info("Download", "Already at latest version, no update needed");
+                        // Ensure latest.json is correct
+                        SaveLatestInfo(branch, latestVersion);
                     }
                 }
                 
@@ -5417,7 +5853,7 @@ exec env \
                 result.Add(new NewsItemResponse
                 {
                     Title = item.Title ?? "",
-                    Excerpt = HttpUtility.HtmlDecode(item.BodyExcerpt ?? ""),
+                    Excerpt = CleanNewsExcerpt(item.BodyExcerpt, item.Title),
                     Url = url2,
                     Date = date,
                     PublishedAt = item.PublishedAt ?? "",
@@ -5435,6 +5871,41 @@ exec env \
             Logger.Error("News", $"Error fetching news: {ex.Message}");
             return new List<NewsItemResponse>();
         }
+    }
+
+    /// <summary>
+    /// Cleans news excerpt by removing HTML tags, duplicate title, and date prefixes.
+    /// From PR #294
+    /// </summary>
+    private static string CleanNewsExcerpt(string? rawExcerpt, string? title)
+    {
+        var excerpt = HttpUtility.HtmlDecode(rawExcerpt ?? "");
+        if (string.IsNullOrWhiteSpace(excerpt))
+        {
+            return "";
+        }
+
+        // Remove HTML tags
+        excerpt = Regex.Replace(excerpt, @"<[^>]+>", " ");
+        excerpt = Regex.Replace(excerpt, @"\s+", " ").Trim();
+
+        // Remove title prefix if present
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            var normalizedTitle = Regex.Replace(title.Trim(), @"\s+", " ");
+            var escapedTitle = Regex.Escape(normalizedTitle);
+            excerpt = Regex.Replace(excerpt, $@"^\s*{escapedTitle}\s*[:\-–—]?\s*", "", RegexOptions.IgnoreCase);
+        }
+
+        // Remove date prefixes like "January 30, 2026 –"
+        excerpt = Regex.Replace(excerpt, @"^\s*\p{L}+\s+\d{1,2},\s*\d{4}\s*[–—\-:]?\s*", "", RegexOptions.IgnoreCase);
+        excerpt = Regex.Replace(excerpt, @"^\s*\d{1,2}\s+\p{L}+\s+\d{4}\s*[–—\-:]?\s*", "", RegexOptions.IgnoreCase);
+        excerpt = Regex.Replace(excerpt, @"^[\-–—:\s]+", "");
+        
+        // Add space between lowercase and uppercase (fix run-together words)
+        excerpt = Regex.Replace(excerpt, @"(\p{Ll})(\p{Lu})", "$1: $2");
+
+        return excerpt.Trim();
     }
 
     // Update - download latest launcher per platform instead of in-place update

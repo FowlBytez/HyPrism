@@ -303,6 +303,12 @@ export const BrowseModFiles = () => callBackend<string[]>('BrowseModFiles');
 export const CheckLatestNeedsUpdate = (branch: string) => callBackend<boolean>('CheckLatestNeedsUpdate', branch);
 
 /**
+ * Forces the latest instance to update by resetting its version info
+ * @param branch - The game branch
+ */
+export const ForceUpdateLatest = (branch: string) => callBackend<boolean>('ForceUpdateLatest', branch);
+
+/**
  * Checks for launcher application updates
  */
 export const CheckUpdate = () => callBackend<updater.Asset>('CheckUpdate');
@@ -764,6 +770,11 @@ export const CheckRosettaStatus = () => callBackend<RosettaStatus | null>('Check
  * Opens the current instance folder
  */
 export const OpenFolder = () => callBackend<void>('OpenFolder');
+
+/**
+ * Opens the current profile's folder
+ */
+export const OpenCurrentProfileFolder = () => callBackend<boolean>('OpenCurrentProfileFolder');
 
 /**
  * Opens the folder for a specific instance

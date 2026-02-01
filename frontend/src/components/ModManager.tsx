@@ -78,6 +78,7 @@ interface ModManagerProps {
   currentBranch: string;
   currentVersion: number;
   initialSearchQuery?: string;
+  currentProfileName?: string;
 }
 
 type DownloadJobStatus = {
@@ -142,7 +143,8 @@ export const ModManager: React.FC<ModManagerProps> = ({
   onClose,
   currentBranch,
   currentVersion,
-  initialSearchQuery = ''
+  initialSearchQuery = '',
+  currentProfileName
 }) => {
   const { t } = useTranslation();
   const { accentColor, accentTextColor } = useAccentColor();
@@ -1116,7 +1118,14 @@ export const ModManager: React.FC<ModManagerProps> = ({
           {/* Left side - Instance info */}
           <div className="flex items-center gap-3">
             <Package size={24} style={{ color: accentColor }} />
-            <h2 className="text-lg font-bold text-white">{t('Mod Manager')} <span className="text-white/50 font-normal">({instanceName})</span></h2>
+            <div>
+              <h2 className="text-lg font-bold text-white">{t('Mod Manager')} <span className="text-white/50 font-normal">({instanceName})</span></h2>
+              {currentProfileName && (
+                <p className="text-xs text-white/40 flex items-center gap-1">
+                  <span style={{ color: accentColor }}>●</span> {t('Profile')}: {currentProfileName}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Right side - Action buttons */}
