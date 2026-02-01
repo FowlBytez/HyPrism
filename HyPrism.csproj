@@ -7,8 +7,7 @@
     <Nullable>enable</Nullable>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!-- Windows-specific settings -->
@@ -32,16 +31,17 @@
   <!-- Avalonia packages -->
   <!-- Avalonia packages -->
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
-    <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.2" />
+    <PackageReference Include="Avalonia" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Svg.Skia" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.0" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="11.3.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.116.1" />
     <PackageReference Include="System.Text.Json" Version="10.0.2" />
   </ItemGroup>
 
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
@@ -54,7 +54,6 @@
   <ItemGroup>
     <Content Include="wwwroot/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
     <Content Include="jre.json">

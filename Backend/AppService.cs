@@ -25,7 +25,12 @@ public class AppService : IDisposable
     private readonly DiscordService _discordService;
     private CancellationTokenSource? _downloadCts;
     private bool _disposed;
-    private MainWindow? _mainWindow;
+    
+    // UI Events
+    public event Action<string, double, string, long, long>? DownloadProgressChanged;
+    public event Action<string, int>? GameStateChanged;
+    public event Action<string, string, string?>? ErrorOccurred;
+    public event Action<object>? LauncherUpdateAvailable;
     
     // Skin protection: Watch for skin file overwrites during gameplay
     private FileSystemWatcher? _skinWatcher;
@@ -3570,7 +3575,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
     }
 
     // Game
-    public async Task<DownloadProgress> DownloadAndLaunchAsync(MainWindow window)
+    public async Task<DownloadProgress> DownloadAndLaunchAsync()
     {
         try
         {
@@ -3684,7 +3689,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                     if (installedVersion > 0 && installedVersion < latestVersion)
                     {
                         Logger.Info("Download", $"Differential update available: {installedVersion} -> {latestVersion}");
-                        SendProgress(window, "update", 0, $"Updating game from v{installedVersion} to v{latestVersion}...", 0, 0);
+                        SendProgress("update", 0, $"Updating game from v{installedVersion} to v{latestVersion}...", 0, 0);
                         
                         try
                         {
@@ -3701,7 +3706,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                                 int baseProgress = (i * 90) / patchesToApply.Count;
                                 int progressPerPatch = 90 / patchesToApply.Count;
                                 
-                                SendProgress(window, "update", baseProgress, $"Downloading patch {i + 1}/{patchesToApply.Count} (v{patchVersion})...", 0, 0);
+                                SendProgress("update", baseProgress, $"Downloading patch {i + 1}/{patchesToApply.Count} (v{patchVersion})...", 0, 0);
                                 
                                 // Ensure Butler is installed
                                 await _butlerService.EnsureButlerInstalledAsync((p, m) => { });
@@ -3748,19 +3753,19 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                                 await DownloadFileAsync(patchUrl, patchPwrPath, (progress, downloaded, total) =>
                                 {
                                     int mappedProgress = baseProgress + (int)(progress * 0.5 * progressPerPatch / 100);
-                                    SendProgress(window, "update", mappedProgress, $"Downloading patch {i + 1}/{patchesToApply.Count}... {progress}%", downloaded, total);
+                                    SendProgress("update", mappedProgress, $"Downloading patch {i + 1}/{patchesToApply.Count}... {progress}%", downloaded, total);
                                 }, _downloadCts.Token);
                                 
                                 ThrowIfCancelled();
                                 
                                 // Apply the patch using Butler (differential update)
                                 int applyBaseProgress = baseProgress + (progressPerPatch / 2);
-                                SendProgress(window, "update", applyBaseProgress, $"Applying patch {i + 1}/{patchesToApply.Count}...", 0, 0);
+                                SendProgress("update", applyBaseProgress, $"Applying patch {i + 1}/{patchesToApply.Count}...", 0, 0);
                                 
                                 await _butlerService.ApplyPwrAsync(patchPwrPath, versionPath, (progress, message) =>
                                 {
                                     int mappedProgress = applyBaseProgress + (int)(progress * 0.5 * progressPerPatch / 100);
-                                    SendProgress(window, "update", mappedProgress, message, 0, 0);
+                                    SendProgress("update", mappedProgress, message, 0, 0);
                                 }, _downloadCts.Token);
                                 
                                 // Clean up patch file
@@ -3799,13 +3804,13 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                 // Ensure VC++ Redistributable is installed on Windows before launching
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    SendProgress(window, "install", 94, "Checking Visual C++ Runtime...", 0, 0);
+                    SendProgress("install", 94, "Checking Visual C++ Runtime...", 0, 0);
                     try
                     {
                         await EnsureVCRedistInstalledAsync((progress, message) =>
                         {
                             int mappedProgress = 94 + (int)(progress * 0.02);
-                            SendProgress(window, "install", mappedProgress, message, 0, 0);
+                            SendProgress("install", mappedProgress, message, 0, 0);
                         });
                     }
                     catch (Exception ex)
@@ -3820,13 +3825,13 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                 if (!File.Exists(jrePath))
                 {
                     Logger.Info("Download", "JRE missing, installing...");
-                    SendProgress(window, "install", 96, "Installing Java Runtime...", 0, 0);
+                    SendProgress("install", 96, "Installing Java Runtime...", 0, 0);
                     try
                     {
                         await EnsureJREInstalledAsync((progress, message) =>
                         {
                             int mappedProgress = 96 + (int)(progress * 0.03);
-                            SendProgress(window, "install", mappedProgress, message, 0, 0);
+                            SendProgress("install", mappedProgress, message, 0, 0);
                         });
                     }
                     catch (Exception ex)
@@ -3836,7 +3841,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                     }
                 }
                 
-                SendProgress(window, "complete", 100, "Launching game...", 0, 0);
+                SendProgress("complete", 100, "Launching game...", 0, 0);
                 try
                 {
                     await LaunchGameAsync(versionPath, branch);
@@ -3853,7 +3858,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
             // Game is NOT installed - need to download
             Logger.Info("Download", "Game not installed, starting download...");
 
-            SendProgress(window, "download", 0, "Preparing download...", 0, 0);
+            SendProgress("download", 0, "Preparing download...", 0, 0);
             
             // First, ensure Butler is installed (0-5% progress)
             try
@@ -3862,7 +3867,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                 {
                     // Map butler install progress to 0-5%
                     int mappedProgress = (int)(progress * 0.05);
-                    SendProgress(window, "download", mappedProgress, message, 0, 0);
+                    SendProgress("download", mappedProgress, message, 0, 0);
                 });
             }
             catch (Exception ex)
@@ -3888,11 +3893,11 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
             {
                 // Map download progress to 5-65%
                 int mappedProgress = 5 + (int)(progress * 0.60);
-                SendProgress(window, "download", mappedProgress, $"Downloading... {progress}%", downloaded, total);
+                SendProgress("download", mappedProgress, $"Downloading... {progress}%", downloaded, total);
             }, _downloadCts.Token);
             
             // Extract PWR file using Butler (65-85% progress)
-            SendProgress(window, "install", 65, "Installing game with Butler...", 0, 0);
+            SendProgress("install", 65, "Installing game with Butler...", 0, 0);
             
             try
             {
@@ -3900,7 +3905,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                 {
                     // Map install progress (0-100) to 65-85%
                     int mappedProgress = 65 + (int)(progress * 0.20);
-                    SendProgress(window, "install", mappedProgress, message, 0, 0);
+                    SendProgress("install", mappedProgress, message, 0, 0);
                 }, _downloadCts.Token);
                 
                 // Clean up PWR file after successful extraction
@@ -3928,18 +3933,18 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                 SaveLatestInfo(branch, targetVersion);
             }
             
-            SendProgress(window, "complete", 95, "Download complete!", 0, 0);
+            SendProgress("complete", 95, "Download complete!", 0, 0);
 
             // Ensure VC++ Redistributable is installed on Windows before launching
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                SendProgress(window, "install", 95, "Checking Visual C++ Runtime...", 0, 0);
+                SendProgress("install", 95, "Checking Visual C++ Runtime...", 0, 0);
                 try
                 {
                     await EnsureVCRedistInstalledAsync((progress, message) =>
                     {
                         int mappedProgress = 95 + (int)(progress * 0.01);
-                        SendProgress(window, "install", mappedProgress, message, 0, 0);
+                        SendProgress("install", mappedProgress, message, 0, 0);
                     });
                 }
                 catch (Exception ex)
@@ -3950,13 +3955,13 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
             }
 
             // Ensure JRE is installed before launching
-            SendProgress(window, "install", 96, "Checking Java Runtime...", 0, 0);
+            SendProgress("install", 96, "Checking Java Runtime...", 0, 0);
             try
             {
                 await EnsureJREInstalledAsync((progress, message) =>
                 {
                     int mappedProgress = 96 + (int)(progress * 0.03); // 96-99%
-                    SendProgress(window, "install", mappedProgress, message, 0, 0);
+                    SendProgress("install", mappedProgress, message, 0, 0);
                 });
             }
             catch (Exception ex)
@@ -3967,7 +3972,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
 
             ThrowIfCancelled();
 
-            SendProgress(window, "complete", 100, "Launching game...", 0, 0);
+            SendProgress("complete", 100, "Launching game...", 0, 0);
 
             // Launch the game
             try
@@ -3987,7 +3992,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
             Logger.Warning("Download", "Download cancelled");
             try
             {
-                SendProgress(window, "cancelled", 0, "Cancelled", 0, 0);
+                SendProgress("cancelled", 0, "Cancelled", 0, 0);
             }
             catch { }
             return new DownloadProgress { Error = "Download cancelled" };
@@ -4025,15 +4030,9 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         }
     }
 
-    private void SendProgress(MainWindow window, string stage, int progress, string message, long downloaded, long total)
+    private void SendProgress(string stage, int progress, string message, long downloaded, long total)
     {
-        var progressInfo = new 
-        { 
-            type = "event",
-            eventName = "progress-update",
-            data = new { stage, progress, message, downloaded, total }
-        };
-        window.SendWebMessage(JsonSerializer.Serialize(progressInfo, JsonOptions));
+        DownloadProgressChanged?.Invoke(stage, progress, message, downloaded, total);
         
         // Don't update Discord during download/install to avoid showing extraction messages
         // Only update on complete or idle
@@ -5517,17 +5516,9 @@ exec env \
 
     private void SendGameStateEvent(string state, int? exitCode = null)
     {
-        if (_mainWindow == null) return;
-        
         try
         {
-            var eventData = new
-            {
-                type = "event",
-                eventName = "game-state",
-                data = new { state, exitCode }
-            };
-            _mainWindow.SendWebMessage(JsonSerializer.Serialize(eventData, JsonOptions));
+            GameStateChanged?.Invoke(state, exitCode ?? 0);
         }
         catch (Exception ex)
         {
@@ -5537,39 +5528,19 @@ exec env \
 
     private void SendErrorEvent(string type, string message, string? technical = null)
     {
-        if (_mainWindow == null) return;
-
         try
         {
-            var eventData = new
-            {
-                type = "event",
-                eventName = "error",
-                data = new
-                {
-                    type,
-                    message,
-                    technical,
-                    timestamp = DateTimeOffset.UtcNow
-                }
-            };
-            _mainWindow.SendWebMessage(JsonSerializer.Serialize(eventData, JsonOptions));
+            ErrorOccurred?.Invoke(type, message, technical);
         }
         catch (Exception ex)
         {
             Logger.Warning("Events", $"Failed to send error event: {ex.Message}");
         }
     }
-    
-    public void SetMainWindow(MainWindow window)
-    {
-        _mainWindow = window;
-    }
 
     // Check for launcher updates and emit event if available
     public async Task CheckForLauncherUpdatesAsync()
     {
-        if (_mainWindow == null) return;
 
         try
         {
@@ -5655,21 +5626,17 @@ exec env \
                     }
                 }
 
-                var eventData = new
+                var updateInfo = new
                 {
-                    type = "event",
-                    eventName = "update:available",
-                    data = new
-                    {
                         version = bestVersion,
                         currentVersion = currentVersion,
                         downloadUrl = downloadUrl ?? "",
                         assetName = assetName ?? "",
                         releaseUrl = release.GetProperty("html_url").GetString() ?? "",
                         isBeta = launcherBranch == "beta"
-                    }
                 };
-                _mainWindow.SendWebMessage(JsonSerializer.Serialize(eventData, JsonOptions));
+                    
+                LauncherUpdateAvailable?.Invoke(updateInfo);
             }
             else
             {

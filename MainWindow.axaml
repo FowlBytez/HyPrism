@@ -2,17 +2,92 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:HyPrism.ViewModels"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="HyPrism.MainWindow"
+        x:DataType="vm:MainViewModel"
         Title="HyPrism"
         Width="1280" Height="800"
         MinWidth="1024" MinHeight="700"
         WindowStartupLocation="CenterScreen"
         Background="#1E1E1E">
+
+    <Design.DataContext>
+        <vm:MainViewModel/>
+    </Design.DataContext>
     
-    <!-- WebView will be added in code-behind -->
-    <Grid Name="RootGrid">
-        <!-- WebView control will be inserted here from code-behind -->
+    <Grid>
+        <!-- Background -->
+        <Image Source="/Assets/bg_1.jpg" Stretch="UniformToFill"/>
+        <Rectangle Fill="#CC090909"/> 
+        
+        <!-- Main Layout -->
+        <Grid RowDefinitions="Auto, *, Auto" Margin="20">
+            
+            <!-- Header -->
+            <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <!-- Profile Picture Placeholder -->
+                    <Border Width="40" Height="40" CornerRadius="20" Background="{StaticResource HytaleOrangeBrush}" ClipToBounds="True">
+                         <TextBlock Text=":)" 
+                                    HorizontalAlignment="Center" VerticalAlignment="Center" 
+                                    FontWeight="Bold"/>
+                    </Border>
+                    <TextBlock Text="{Binding Nick}" VerticalAlignment="Center" FontSize="18" FontWeight="Bold" Foreground="White" Effect="drop-shadow(0 0 2 black)"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
+                    <Button Content="Settings" Command="{Binding OpenSettingsCommand}" Background="#33FFFFFF" Foreground="White"/>
+                </StackPanel>
+            </Grid>
+            
+            <!-- Central Content (Logo) -->
+            <Grid Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Image Source="/Assets/logo.png" Width="400" Height="150" Stretch="Uniform"/>
+            </Grid>
+            
+            <!-- Footer Controls -->
+            <StackPanel Grid.Row="2" Spacing="15" HorizontalAlignment="Center" Width="600">
+                
+                <!-- Status Info -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" IsVisible="{Binding IsDownloading}">
+                    <TextBlock Text="{Binding ProgressText}" Foreground="White"/>
+                    <TextBlock Text="{Binding DownloadSpeedText}" Foreground="Gray"/>
+                </StackPanel>
+                
+                <!-- Progress Bar -->
+                <ProgressBar Value="{Binding ProgressValue}" 
+                             Maximum="100" 
+                             Height="10" 
+                             IsVisible="{Binding IsDownloading}"
+                             Foreground="{StaticResource HytaleOrangeBrush}"
+                             Background="{StaticResource HytaleDarkLightBrush}"/>
+                
+                <!-- Action Buttons -->
+                <Grid ColumnDefinitions="*, Auto, Auto">
+                    <Button Grid.Column="0" Command="{Binding LaunchCommand}" 
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Height="50" FontSize="18" FontWeight="Bold"
+                            Background="{StaticResource HytaleOrangeBrush}" Foreground="{StaticResource HytaleDarkBrush}"
+                            CornerRadius="8">
+                        <Panel>
+                            <TextBlock Text="PLAY" IsVisible="{Binding !IsDownloading}"/>
+                            <TextBlock Text="INSTALLING..." IsVisible="{Binding IsDownloading}"/>
+                        </Panel>
+                    </Button>
+                    
+                    <ComboBox Grid.Column="1" Margin="10,0,0,0" 
+                              ItemsSource="{Binding Branches}" 
+                              SelectedItem="{Binding SelectedBranch}"
+                              VerticalAlignment="Stretch"/>
+                              
+                    <Button Grid.Column="2" Margin="10,0,0,0"
+                            Content="📂" 
+                            Command="{Binding OpenFolderCommand}"
+                            VerticalAlignment="Stretch"/>
+                </Grid>
+            </StackPanel>
+        </Grid>
     </Grid>
     
 </Window>
