@@ -4,7 +4,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HyPrism.Backend.Services;
+namespace HyPrism.Backend.Services.Game;
 
 /// <summary>
 /// Service for handling file downloads with progress tracking.

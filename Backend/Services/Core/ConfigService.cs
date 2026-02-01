@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 
-namespace HyPrism.Backend.Services;
+namespace HyPrism.Backend.Services.Core;
 
 /// <summary>
 /// Manages launcher configuration (loading, saving, settings)

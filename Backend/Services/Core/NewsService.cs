@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using System.Web;
 using HyPrism.Backend.Models;
 
-namespace HyPrism.Backend.Services;
+namespace HyPrism.Backend.Services.Core;
 
 /// <summary>
 /// Fetches news from Hytale API

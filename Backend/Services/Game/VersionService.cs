@@ -7,8 +7,9 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using HyPrism.Backend.Models;
+using HyPrism.Backend.Services.Core;
 
-namespace HyPrism.Backend.Services;
+namespace HyPrism.Backend.Services.Game;
 
 /// <summary>
 /// Service for managing game versions, checking updates, and version caching.

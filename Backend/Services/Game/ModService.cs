@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HyPrism.Backend.Models;
 
-namespace HyPrism.Backend.Services;
+namespace HyPrism.Backend.Services.Game;
 
 /// <summary>
 /// Service for managing mods - searching, installing, updating, and managing mod lists.

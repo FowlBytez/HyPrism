@@ -4,8 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using HyPrism.Backend.Models;
+using HyPrism.Backend.Services.Core;
 
-namespace HyPrism.Backend.Services;
+namespace HyPrism.Backend.Services.User;
 
 /// <summary>
 /// Manages user profiles, avatars, nicknames, and UUIDs

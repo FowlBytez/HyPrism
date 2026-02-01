@@ -12,7 +12,9 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
-using HyPrism.Backend.Services;
+using HyPrism.Backend.Services.Core;
+using HyPrism.Backend.Services.Game;
+using HyPrism.Backend.Services.User;
 using HyPrism.Backend.Models;
 
 namespace HyPrism.Backend;
@@ -35,6 +37,13 @@ public class AppService : IDisposable
     private readonly VersionService _versionService;
     private readonly DownloadService _downloadService;
     private readonly ModService _modService;
+    private readonly LaunchService _launchService;
+    private readonly GameUtilityService _gameUtilityService;
+    private readonly UpdateService _updateService;
+    private readonly SkinService _skinService;
+    private readonly InstanceService _instanceService;
+    private readonly UserIdentityService _userIdentityService;
+    private readonly ProfileManagementService _profileManagementService;
     
     // Exposed for ViewModel access
     public Config Configuration => _config;
@@ -48,13 +57,6 @@ public class AppService : IDisposable
     public event Action<string, int>? GameStateChanged;
     public event Action<string, string, string?>? ErrorOccurred;
     public event Action<object>? LauncherUpdateAvailable;
-    
-    // Skin protection: Watch for skin file overwrites during gameplay
-    private FileSystemWatcher? _skinWatcher;
-    private string? _protectedSkinPath;
-    private string? _protectedSkinContent;
-    private bool _skinProtectionEnabled;
-    private readonly object _skinProtectionLock = new object();
     
     // Lock for mod manifest operations to prevent concurrent writes
     private static readonly SemaphoreSlim _modManifestLock = new(1, 1);
@@ -124,6 +126,60 @@ public class AppService : IDisposable
         _versionService = new VersionService(_appDir, HttpClient, _configService);
         _downloadService = new DownloadService(HttpClient);
         _modService = new ModService(HttpClient, _appDir);
+        _launchService = new LaunchService(_appDir, HttpClient);
+        _gameUtilityService = new GameUtilityService(
+            _appDir,
+            _config,
+            NormalizeVersionType,
+            ResolveInstancePath,
+            branch => _instanceService.GetLatestInfoPath(branch),
+            GetInstancePath,
+            GetProfilesFolder,
+            SanitizeFileName,
+            () => _gameProcess,
+            p => _gameProcess = p);
+        _instanceService = new InstanceService(
+            _appDir,
+            () => _config,
+            SaveConfigInternal,
+            GetLegacyRoots,
+            LoadConfigFromPath,
+            LoadConfigFromToml,
+            IsClientPresent);
+        
+        _updateService = new UpdateService(
+            HttpClient,
+            _config,
+            _versionService,
+            obj => LauncherUpdateAvailable?.Invoke(obj),
+            BrowserOpenURL,
+            NormalizeVersionType,
+            branch => _instanceService.LoadLatestInfo(branch),
+            (branch, version) => _instanceService.SaveLatestInfo(branch, version));
+        _skinService = new SkinService(
+            NormalizeVersionType,
+            ResolveInstancePath,
+            path => _instanceService.GetInstanceUserDataPath(path),
+            () => _config,
+            SaveConfig,
+            GetProfilesFolder,
+            SanitizeFileName);
+        _userIdentityService = new UserIdentityService(
+            () => _config,
+            SaveConfig,
+            _skinService,
+            NormalizeVersionType,
+            ResolveInstancePath,
+            path => _instanceService.GetInstanceUserDataPath(path));
+        _profileManagementService = new ProfileManagementService(
+            _appDir,
+            () => _config,
+            SaveConfig,
+            _skinService,
+            NormalizeVersionType,
+            ResolveInstancePath,
+            path => _instanceService.GetInstanceUserDataPath(path),
+            GetCurrentUuid);
         
         // Update placeholder names to random ones immediately
         if (_config.Nick == "Hyprism" || _config.Nick == "HyPrism" || _config.Nick == "Player")
@@ -135,15 +191,15 @@ public class AppService : IDisposable
         
         // IMPORTANT: Attempt to recover orphaned skin data after config is loaded.
         // This handles the case where config was reset but old skin files still exist.
-        TryRecoverOrphanedSkinOnStartup();
+        _skinService.TryRecoverOrphanedSkinOnStartup();
         
-        MigrateLegacyData();
+        _instanceService.MigrateLegacyData();
         _butlerService = new ButlerService(_appDir);
         _discordService = new DiscordService();
         _discordService.Initialize();
         
         // Initialize profile mods symlink if an active profile exists
-        InitializeProfileModsSymlink();
+        _profileManagementService.InitializeProfileModsSymlink();
     }
 
     /// <summary>
@@ -182,7 +238,7 @@ public class AppService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        StopSkinProtection();
+        _skinService?.StopSkinProtection();
         _discordService?.Dispose();
     }
     
@@ -211,11 +267,6 @@ public class AppService : IDisposable
     /// <summary>
     /// Gets the UserData path for an instance. The game stores skins, settings, etc. here.
     /// </summary>
-    private string GetInstanceUserDataPath(string versionPath)
-    {
-        return Path.Combine(versionPath, "UserData");
-    }
-
     private static string GetOS()
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return "windows";
@@ -239,11 +290,11 @@ public class AppService : IDisposable
         if (version > 0) return version;
         if (_config.SelectedVersion > 0) return _config.SelectedVersion;
 
-        var info = LoadLatestInfo(branch);
+        var info = _instanceService.LoadLatestInfo(branch);
         if (info?.Version > 0) return info.Version;
 
         string resolvedBranch = string.IsNullOrWhiteSpace(branch) ? _config.VersionType : branch;
-        string branchDir = GetBranchPath(resolvedBranch);
+        string branchDir = _instanceService.GetBranchPath(resolvedBranch);
         if (Directory.Exists(branchDir))
         {
             var latest = Directory.GetDirectories(branchDir)
@@ -268,74 +319,6 @@ public class AppService : IDisposable
         if (versionType == "latest")
             return "release";
         return versionType;
-    }
-
-    private sealed class LatestInstanceInfo
-    {
-        public int Version { get; set; }
-        public DateTime UpdatedAt { get; set; }
-    }
-
-    private string GetInstanceRoot()
-    {
-        var root = string.IsNullOrWhiteSpace(_config.InstanceDirectory)
-            ? Path.Combine(_appDir, "instances")
-            : _config.InstanceDirectory;
-
-        root = Environment.ExpandEnvironmentVariables(root);
-
-        if (!Path.IsPathRooted(root))
-        {
-            root = Path.GetFullPath(Path.Combine(_appDir, root));
-        }
-
-        try
-        {
-            Directory.CreateDirectory(root);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Config", $"Failed to create instance root at {root}: {ex.Message}");
-        }
-
-        return root;
-    }
-
-    private string GetBranchPath(string branch)
-    {
-        string normalizedBranch = NormalizeVersionType(branch);
-        return Path.Combine(GetInstanceRoot(), normalizedBranch);
-    }
-
-    private static void SafeCopyDirectory(string sourceDir, string destDir)
-    {
-        // CRITICAL: Prevent copying into itself (causes infinite loop)
-        var normalizedSource = Path.GetFullPath(sourceDir).TrimEnd(Path.DirectorySeparatorChar);
-        var normalizedDest = Path.GetFullPath(destDir).TrimEnd(Path.DirectorySeparatorChar);
-        
-        if (normalizedSource.Equals(normalizedDest, StringComparison.OrdinalIgnoreCase))
-            return;
-        if (normalizedDest.StartsWith(normalizedSource + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            return;
-        if (normalizedSource.StartsWith(normalizedDest + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            return;
-            
-        Directory.CreateDirectory(destDir);
-
-        foreach (var file in Directory.GetFiles(sourceDir))
-        {
-            var destFile = Path.Combine(destDir, Path.GetFileName(file));
-            if (!File.Exists(destFile))
-            {
-                File.Copy(file, destFile, overwrite: false);
-            }
-        }
-
-        foreach (var dir in Directory.GetDirectories(sourceDir))
-        {
-            var destSubDir = Path.Combine(destDir, Path.GetFileName(dir));
-            SafeCopyDirectory(dir, destSubDir);
-        }
     }
 
     private Config? LoadConfigFromPath(string path)
@@ -463,576 +446,6 @@ public class AppService : IDisposable
         return roots;
     }
 
-    private IEnumerable<string> GetInstanceRootsIncludingLegacy()
-    {
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        IEnumerable<string> YieldIfExists(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path)) yield break;
-            if (!Directory.Exists(path)) yield break;
-
-            var full = Path.GetFullPath(path);
-            if (seen.Add(full))
-            {
-                yield return full;
-            }
-        }
-
-        foreach (var root in YieldIfExists(GetInstanceRoot()))
-        {
-            yield return root;
-        }
-
-        foreach (var legacy in GetLegacyRoots())
-        {
-            // Check legacy naming: 'instance' (singular) and 'instances' (plural)
-            foreach (var r in YieldIfExists(Path.Combine(legacy, "instance")))
-            {
-                yield return r;
-            }
-
-            foreach (var r in YieldIfExists(Path.Combine(legacy, "instances")))
-            {
-                yield return r;
-            }
-        }
-
-        // Also check old 'instance' folder in current app dir (singular -> plural migration)
-        var oldInstanceDir = Path.Combine(_appDir, "instance");
-        foreach (var r in YieldIfExists(oldInstanceDir))
-        {
-            yield return r;
-        }
-    }
-
-    private string? FindExistingInstancePath(string branch, int version)
-    {
-        string normalizedBranch = NormalizeVersionType(branch);
-        string versionSegment = version == 0 ? "latest" : version.ToString();
-
-        foreach (var root in GetInstanceRootsIncludingLegacy())
-        {
-            // New layout: branch/version
-            var candidate1 = Path.Combine(root, normalizedBranch, versionSegment);
-            if (Directory.Exists(candidate1))
-            {
-                return candidate1;
-            }
-
-            // Legacy dash layout: release-5
-            var candidate2 = Path.Combine(root, $"{normalizedBranch}-{versionSegment}");
-            if (Directory.Exists(candidate2))
-            {
-                return candidate2;
-            }
-
-            // Legacy dash layout with v prefix: release-v5
-            var candidate3 = Path.Combine(root, $"{normalizedBranch}-v{versionSegment}");
-            if (Directory.Exists(candidate3))
-            {
-                return candidate3;
-            }
-        }
-
-        return null;
-    }
-
-    private string? LoadLegacyUuid(string legacyRoot)
-    {
-        var candidates = new[] { "uuid.txt", "uuid", "uuid.dat" };
-        foreach (var name in candidates)
-        {
-            var path = Path.Combine(legacyRoot, name);
-            if (!File.Exists(path)) continue;
-
-            try
-            {
-                var content = File.ReadAllText(path).Trim();
-                if (!string.IsNullOrWhiteSpace(content) && Guid.TryParse(content, out var guid))
-                {
-                    return guid.ToString();
-                }
-            }
-            catch
-            {
-                // ignore malformed legacy uuid files
-            }
-        }
-
-        return null;
-    }
-
-    private void MigrateLegacyData()
-    {
-        try
-        {
-            foreach (var legacyRoot in GetLegacyRoots())
-            {
-                if (!Directory.Exists(legacyRoot)) continue;
-
-                Logger.Info("Migrate", $"Found legacy data at {legacyRoot}");
-
-                var legacyConfigPath = Path.Combine(legacyRoot, "config.json");
-                var legacyTomlPath = Path.Combine(legacyRoot, "config.toml");
-                
-                // Load both JSON and TOML configs
-                var jsonConfig = LoadConfigFromPath(legacyConfigPath);
-                var tomlConfig = LoadConfigFromToml(legacyTomlPath);
-                
-                // Prefer TOML if it has a custom nick (not default), or prefer whichever has custom data
-                Config? legacyConfig = null;
-                bool tomlHasCustomNick = tomlConfig != null && !string.IsNullOrWhiteSpace(tomlConfig.Nick) 
-                    && !string.Equals(tomlConfig.Nick, "Hyprism", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(tomlConfig.Nick, "Player", StringComparison.OrdinalIgnoreCase);
-                bool jsonHasCustomNick = jsonConfig != null && !string.IsNullOrWhiteSpace(jsonConfig.Nick)
-                    && !string.Equals(jsonConfig.Nick, "Hyprism", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(jsonConfig.Nick, "Player", StringComparison.OrdinalIgnoreCase);
-                    
-                if (tomlHasCustomNick)
-                {
-                    legacyConfig = tomlConfig;
-                    Logger.Info("Migrate", $"Using legacy config.toml (has custom nick): nick={legacyConfig?.Nick}, uuid={legacyConfig?.UUID}");
-                }
-                else if (jsonHasCustomNick)
-                {
-                    legacyConfig = jsonConfig;
-                    Logger.Info("Migrate", $"Using legacy config.json (has custom nick): nick={legacyConfig?.Nick}, uuid={legacyConfig?.UUID}");
-                }
-                else if (tomlConfig != null)
-                {
-                    legacyConfig = tomlConfig;
-                    Logger.Info("Migrate", $"Using legacy config.toml: nick={legacyConfig?.Nick}, uuid={legacyConfig?.UUID}");
-                }
-                else if (jsonConfig != null)
-                {
-                    legacyConfig = jsonConfig;
-                    Logger.Info("Migrate", $"Using legacy config.json: nick={legacyConfig?.Nick}, uuid={legacyConfig?.UUID}");
-                }
-                else
-                {
-                    Logger.Warning("Migrate", $"No valid config found in {legacyRoot}");
-                }
-
-                // Only merge legacy config when current user name is still a default/placeholder
-                bool allowMerge = string.IsNullOrWhiteSpace(_config.Nick)
-                                  || string.Equals(_config.Nick, "Hyprism", StringComparison.OrdinalIgnoreCase)
-                                  || string.Equals(_config.Nick, "Player", StringComparison.OrdinalIgnoreCase);
-
-                if (!allowMerge)
-                {
-                    Logger.Info("Migrate", "Skipping legacy config merge because current nickname is custom.");
-                }
-
-                var updated = false;
-
-                if (legacyConfig != null && allowMerge)
-                {
-                    Logger.Info("Migrate", $"Merging legacy config: nick={legacyConfig.Nick}");
-                    if (!string.IsNullOrWhiteSpace(legacyConfig.Nick))
-                    {
-                        _config.Nick = legacyConfig.Nick;
-                        updated = true;
-                        Logger.Success("Migrate", $"Migrated nickname: {legacyConfig.Nick}");
-                    }
-
-                    if (string.IsNullOrWhiteSpace(_config.UUID) && !string.IsNullOrWhiteSpace(legacyConfig.UUID))
-                    {
-                        _config.UUID = legacyConfig.UUID;
-                        updated = true;
-                    }
-
-                    if (string.IsNullOrWhiteSpace(_config.InstanceDirectory) && !string.IsNullOrWhiteSpace(legacyConfig.InstanceDirectory))
-                    {
-                        _config.InstanceDirectory = legacyConfig.InstanceDirectory;
-                        updated = true;
-                    }
-
-                    if (_config.SelectedVersion == 0 && legacyConfig.SelectedVersion > 0)
-                    {
-                        _config.SelectedVersion = legacyConfig.SelectedVersion;
-                        updated = true;
-                    }
-
-                    if (string.IsNullOrWhiteSpace(_config.VersionType) && !string.IsNullOrWhiteSpace(legacyConfig.VersionType))
-                    {
-                        _config.VersionType = NormalizeVersionType(legacyConfig.VersionType);
-                        updated = true;
-                    }
-                }
-
-                // Fallback: pick up a legacy uuid file if config lacked one
-                if (string.IsNullOrWhiteSpace(_config.UUID))
-                {
-                    var legacyUuid = LoadLegacyUuid(legacyRoot);
-                    if (!string.IsNullOrWhiteSpace(legacyUuid))
-                    {
-                        _config.UUID = legacyUuid;
-                        updated = true;
-                        Logger.Info("Migrate", "Recovered legacy UUID from legacy folder.");
-                    }
-                }
-
-                if (updated)
-                {
-                    SaveConfigInternal(_config);
-                    
-                    // Delete old config.toml after successful migration
-                    if (File.Exists(legacyTomlPath))
-                    {
-                        try
-                        {
-                            File.Delete(legacyTomlPath);
-                            Logger.Success("Migrate", $"Deleted legacy config.toml at {legacyTomlPath}");
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Warning("Migrate", $"Failed to delete legacy config.toml: {ex.Message}");
-                        }
-                    }
-                }
-
-                // Detect legacy instance folders and copy to new structure
-                var legacyInstanceRoot = Path.Combine(legacyRoot, "instance");
-                var legacyInstancesRoot = Path.Combine(legacyRoot, "instances"); // v1 naming
-                if (!Directory.Exists(legacyInstanceRoot) && Directory.Exists(legacyInstancesRoot))
-                {
-                    legacyInstanceRoot = legacyInstancesRoot;
-                }
-
-                if (Directory.Exists(legacyInstanceRoot))
-                {
-                    Logger.Info("Migrate", $"Legacy instances detected at {legacyInstanceRoot}");
-                    MigrateLegacyInstances(legacyInstanceRoot);
-                }
-            }
-
-            // Also migrate old 'instance' folder in current app dir (singular -> plural)
-            var oldInstanceDir = Path.Combine(_appDir, "instance");
-            if (Directory.Exists(oldInstanceDir))
-            {
-                Logger.Info("Migrate", $"Old 'instance' folder detected at {oldInstanceDir}");
-                MigrateLegacyInstances(oldInstanceDir);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Migrate", $"Legacy migration skipped: {ex.Message}");
-        }
-    }
-
-    private void MigrateLegacyInstances(string legacyInstanceRoot)
-    {
-        try
-        {
-            var newInstanceRoot = GetInstanceRoot();
-            
-            // Check if source is the same as destination (case-insensitive for macOS)
-            var normalizedSource = Path.GetFullPath(legacyInstanceRoot).TrimEnd(Path.DirectorySeparatorChar);
-            var normalizedDest = Path.GetFullPath(newInstanceRoot).TrimEnd(Path.DirectorySeparatorChar);
-            var isSameDirectory = normalizedSource.Equals(normalizedDest, StringComparison.OrdinalIgnoreCase);
-            
-            // If same directory, we'll restructure in-place (rename release-v5 to release/5)
-            // If different directories, we'll copy as before
-            if (isSameDirectory)
-            {
-                Logger.Info("Migrate", "Source equals destination - will restructure legacy folders in-place");
-                RestructureLegacyFoldersInPlace(legacyInstanceRoot);
-                return;
-            }
-            
-            // CRITICAL: Prevent migration if source is inside destination (would cause infinite loop)
-            if (normalizedSource.StartsWith(normalizedDest + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            {
-                Logger.Info("Migrate", "Skipping migration - source is inside destination");
-                return;
-            }
-            
-            Logger.Info("Migrate", $"Copying legacy instances from {legacyInstanceRoot} to {newInstanceRoot}");
-
-            foreach (var legacyDir in Directory.GetDirectories(legacyInstanceRoot))
-            {
-                var folderName = Path.GetFileName(legacyDir);
-                if (string.IsNullOrEmpty(folderName)) continue;
-                
-                // CRITICAL: Skip folders that are already branch names (new structure)
-                // These indicate we're looking at already-migrated data
-                var normalizedFolderName = folderName.ToLowerInvariant();
-                if (normalizedFolderName == "release" || normalizedFolderName == "pre-release" || 
-                    normalizedFolderName == "prerelease" || normalizedFolderName == "latest")
-                {
-                    Logger.Info("Migrate", $"Skipping {folderName} - already in new structure format");
-                    continue;
-                }
-
-                // Parse legacy naming: "release-v5" or "release-5" or "release/5"
-                string branch;
-                string versionSegment;
-
-                if (folderName.Contains("/"))
-                {
-                    // Already new format: release/5
-                    var parts = folderName.Split('/');
-                    branch = parts[0];
-                    versionSegment = parts.Length > 1 ? parts[1] : "latest";
-                }
-                else if (folderName.Contains("-"))
-                {
-                    // Legacy dash format: release-v5 or release-5
-                    var parts = folderName.Split('-', 2);
-                    branch = parts[0];
-                    versionSegment = parts.Length > 1 ? parts[1] : "latest";
-                    
-                    // Strip 'v' prefix if present
-                    if (versionSegment.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-                    {
-                        versionSegment = versionSegment.Substring(1);
-                    }
-                }
-                else
-                {
-                    // Unknown format - skip to be safe (could be new structure subfolder)
-                    Logger.Info("Migrate", $"Skipping {folderName} - unknown format, may be new structure");
-                    continue;
-                }
-
-                // Normalize branch name
-                branch = NormalizeVersionType(branch);
-
-                // Create target path in new structure: instance/release/5
-                var targetBranch = Path.Combine(newInstanceRoot, branch);
-                var targetVersion = Path.Combine(targetBranch, versionSegment);
-                
-                // CRITICAL: Ensure we're not copying a folder into itself
-                var normalizedLegacy = Path.GetFullPath(legacyDir).TrimEnd(Path.DirectorySeparatorChar);
-                var normalizedTarget = Path.GetFullPath(targetVersion).TrimEnd(Path.DirectorySeparatorChar);
-                if (normalizedLegacy.Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase) ||
-                    normalizedTarget.StartsWith(normalizedLegacy + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                    normalizedLegacy.StartsWith(normalizedTarget + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                {
-                    Logger.Info("Migrate", $"Skipping {folderName} - would cause recursive copy");
-                    continue;
-                }
-
-                // Skip if already exists in new location
-                if (Directory.Exists(targetVersion) && IsClientPresent(targetVersion))
-                {
-                    Logger.Info("Migrate", $"Skipping {folderName} - already exists at {targetVersion}");
-                    continue;
-                }
-
-                Logger.Info("Migrate", $"Copying {folderName} -> {branch}/{versionSegment}");
-                Directory.CreateDirectory(targetVersion);
-
-                // Check if legacy has game/ subfolder or direct Client/ folder
-                var legacyGameDir = Path.Combine(legacyDir, "game");
-                var legacyClientDir = Path.Combine(legacyDir, "Client");
-                
-                if (Directory.Exists(legacyGameDir))
-                {
-                    // Legacy structure: release-v5/game/Client -> release/5/Client
-                    foreach (var item in Directory.GetFileSystemEntries(legacyGameDir))
-                    {
-                        var name = Path.GetFileName(item);
-                        var dest = Path.Combine(targetVersion, name);
-                        
-                        if (Directory.Exists(item))
-                        {
-                            SafeCopyDirectory(item, dest);
-                        }
-                        else if (File.Exists(item))
-                        {
-                            File.Copy(item, dest, overwrite: false);
-                        }
-                    }
-                    Logger.Success("Migrate", $"Migrated {folderName} (from game/ subfolder)");
-                }
-                else if (Directory.Exists(legacyClientDir))
-                {
-                    // Direct Client/ folder structure
-                    foreach (var item in Directory.GetFileSystemEntries(legacyDir))
-                    {
-                        var name = Path.GetFileName(item);
-                        var dest = Path.Combine(targetVersion, name);
-                        
-                        if (Directory.Exists(item))
-                        {
-                            SafeCopyDirectory(item, dest);
-                        }
-                        else if (File.Exists(item))
-                        {
-                            File.Copy(item, dest, overwrite: false);
-                        }
-                    }
-                    Logger.Success("Migrate", $"Migrated {folderName} (direct structure)");
-                }
-                else
-                {
-                    // Copy everything as-is
-                    SafeCopyDirectory(legacyDir, targetVersion);
-                    Logger.Success("Migrate", $"Migrated {folderName} (full copy)");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Migrate", $"Failed to migrate legacy instances: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Restructure legacy folder format (release-v5) to new format (release/5) in-place.
-    /// This is used when the instances folder is already in the correct location but has old naming.
-    /// </summary>
-    private void RestructureLegacyFoldersInPlace(string instanceRoot)
-    {
-        try
-        {
-            foreach (var legacyDir in Directory.GetDirectories(instanceRoot))
-            {
-                var folderName = Path.GetFileName(legacyDir);
-                if (string.IsNullOrEmpty(folderName)) continue;
-                
-                // Skip folders that are already branch names (new structure)
-                var normalizedFolderName = folderName.ToLowerInvariant();
-                if (normalizedFolderName == "release" || normalizedFolderName == "pre-release" || 
-                    normalizedFolderName == "prerelease" || normalizedFolderName == "latest")
-                {
-                    // This is already new structure, skip
-                    continue;
-                }
-                
-                // Only process legacy dash format: release-v5 or release-5
-                if (!folderName.Contains("-"))
-                {
-                    continue;
-                }
-                
-                var parts = folderName.Split('-', 2);
-                var branch = parts[0];
-                var versionSegment = parts.Length > 1 ? parts[1] : "latest";
-                
-                // Strip 'v' prefix if present
-                if (versionSegment.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-                {
-                    versionSegment = versionSegment.Substring(1);
-                }
-                
-                // Normalize branch name
-                branch = NormalizeVersionType(branch);
-                
-                // Create target path in new structure: instances/release/5
-                var targetBranch = Path.Combine(instanceRoot, branch);
-                var targetVersion = Path.Combine(targetBranch, versionSegment);
-                
-                // Skip if target already exists
-                if (Directory.Exists(targetVersion))
-                {
-                    Logger.Info("Migrate", $"Skipping {folderName} - target {branch}/{versionSegment} already exists");
-                    continue;
-                }
-                
-                Logger.Info("Migrate", $"Restructuring {folderName} -> {branch}/{versionSegment}");
-                
-                // Create the branch directory
-                Directory.CreateDirectory(targetBranch);
-                
-                // Check if legacy has game/ subfolder - if so, move contents up
-                var legacyGameDir = Path.Combine(legacyDir, "game");
-                
-                if (Directory.Exists(legacyGameDir))
-                {
-                    // Legacy structure: release-v5/game/Client -> release/5/Client
-                    // Move the contents of game/ to the new version folder
-                    Directory.CreateDirectory(targetVersion);
-                    
-                    foreach (var item in Directory.GetFileSystemEntries(legacyGameDir))
-                    {
-                        var name = Path.GetFileName(item);
-                        var dest = Path.Combine(targetVersion, name);
-                        
-                        if (Directory.Exists(item))
-                        {
-                            Directory.Move(item, dest);
-                        }
-                        else if (File.Exists(item))
-                        {
-                            File.Move(item, dest);
-                        }
-                    }
-                    
-                    // Clean up old structure
-                    try
-                    {
-                        Directory.Delete(legacyDir, recursive: true);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warning("Migrate", $"Could not delete old folder {legacyDir}: {ex.Message}");
-                    }
-                    
-                    Logger.Success("Migrate", $"Restructured {folderName} (from game/ subfolder)");
-                }
-                else
-                {
-                    // Direct structure - just rename the folder
-                    try
-                    {
-                        Directory.Move(legacyDir, targetVersion);
-                        Logger.Success("Migrate", $"Restructured {folderName} (direct rename)");
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Error("Migrate", $"Failed to rename {folderName}: {ex.Message}");
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Migrate", $"Failed to restructure legacy folders: {ex.Message}");
-        }
-    }
-
-    private string GetLatestInstancePath(string branch)
-    {
-        return Path.Combine(GetBranchPath(branch), "latest");
-    }
-
-    private string GetLatestInfoPath(string branch)
-    {
-        return Path.Combine(GetLatestInstancePath(branch), "latest.json");
-    }
-
-    private LatestInstanceInfo? LoadLatestInfo(string branch)
-    {
-        try
-        {
-            var path = GetLatestInfoPath(branch);
-            if (!File.Exists(path)) return null;
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<LatestInstanceInfo>(json, JsonOptions);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private void SaveLatestInfo(string branch, int version)
-    {
-        try
-        {
-            Directory.CreateDirectory(GetBranchPath(branch));
-            var info = new LatestInstanceInfo { Version = version, UpdatedAt = DateTime.UtcNow };
-            var json = JsonSerializer.Serialize(info, new JsonSerializerOptions(JsonOptions) { WriteIndented = true });
-            File.WriteAllText(GetLatestInfoPath(branch), json);
-        }
-        catch
-        {
-            // ignore
-        }
-    }
-
     /// <summary>
     /// Gets the sequence of patch versions to apply for a differential update.
     /// Returns list of versions from (currentVersion + 1) to targetVersion inclusive.
@@ -1047,6 +460,11 @@ public class AppService : IDisposable
         return patches;
     }
 
+    private string GetLatestInstancePath(string branch)
+    {
+        return Path.Combine(_instanceService.GetBranchPath(branch), "latest");
+    }
+
     private string GetInstancePath(string branch, int version)
     {
         if (version == 0)
@@ -1054,14 +472,14 @@ public class AppService : IDisposable
             return GetLatestInstancePath(branch);
         }
         string normalizedBranch = NormalizeVersionType(branch);
-        return Path.Combine(GetInstanceRoot(), normalizedBranch, version.ToString());
+        return Path.Combine(_instanceService.GetInstanceRoot(), normalizedBranch, version.ToString());
     }
 
     private string ResolveInstancePath(string branch, int version, bool preferExisting)
     {
         if (preferExisting)
         {
-            var existing = FindExistingInstancePath(branch, version);
+            var existing = _instanceService.FindExistingInstancePath(branch, version);
             if (!string.IsNullOrWhiteSpace(existing))
             {
                 return existing;
@@ -1195,102 +613,6 @@ public class AppService : IDisposable
     /// - Adopts the orphaned UUID as the current user's UUID, OR
     /// - Copies the skin data from orphaned UUID to current UUID
     /// </summary>
-    private void TryRecoverOrphanedSkinOnStartup()
-    {
-        try
-        {
-            var currentUuid = _config.UUID;
-            if (string.IsNullOrEmpty(currentUuid) || string.IsNullOrEmpty(_config.Nick))
-            {
-                return;
-            }
-            
-            // Get the current instance's UserData path
-            var branch = NormalizeVersionType(_config.VersionType);
-            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
-            var userDataPath = GetInstanceUserDataPath(versionPath);
-            var skinCacheDir = Path.Combine(userDataPath, "CachedPlayerSkins");
-            var avatarCacheDir = Path.Combine(userDataPath, "CachedAvatarPreviews");
-            
-            // Check if current UUID already has skin data
-            var currentSkinPath = Path.Combine(skinCacheDir, $"{currentUuid}.json");
-            if (File.Exists(currentSkinPath))
-            {
-                // Current UUID has skin - no recovery needed
-                return;
-            }
-            
-            // No skin for current UUID - look for orphaned skins
-            if (!Directory.Exists(skinCacheDir))
-            {
-                return;
-            }
-            
-            // Get all existing UUIDs from UserUuids mapping
-            var knownUuids = new HashSet<string>(
-                (_config.UserUuids?.Values ?? Enumerable.Empty<string>())
-                    .Concat(new[] { _config.UUID ?? "" })
-                    .Where(u => !string.IsNullOrEmpty(u)),
-                StringComparer.OrdinalIgnoreCase
-            );
-            
-            // Scan for orphaned skin files
-            var skinFiles = Directory.GetFiles(skinCacheDir, "*.json");
-            string? orphanedUuid = null;
-            DateTime latestTime = DateTime.MinValue;
-            
-            foreach (var file in skinFiles)
-            {
-                var fileName = Path.GetFileNameWithoutExtension(file);
-                if (Guid.TryParse(fileName, out var uuid))
-                {
-                    var uuidStr = uuid.ToString();
-                    if (!knownUuids.Contains(uuidStr))
-                    {
-                        // This is an orphaned skin
-                        var modTime = File.GetLastWriteTime(file);
-                        if (modTime > latestTime)
-                        {
-                            latestTime = modTime;
-                            orphanedUuid = uuidStr;
-                        }
-                    }
-                }
-            }
-            
-            if (orphanedUuid == null)
-            {
-                return; // No orphans found
-            }
-            
-            Logger.Info("Startup", $"Found orphaned skin with UUID {orphanedUuid}");
-            Logger.Info("Startup", $"Current user '{_config.Nick}' has no skin - recovering orphaned skin");
-            
-            // Strategy: Update the current user's UUID to match the orphaned skin
-            // This is better than copying because it preserves the identity across server syncs
-            _config.UserUuids ??= new Dictionary<string, string>();
-            
-            // Remove old mapping for current nick (case-insensitive)
-            var existingKey = _config.UserUuids.Keys
-                .FirstOrDefault(k => k.Equals(_config.Nick, StringComparison.OrdinalIgnoreCase));
-            if (existingKey != null)
-            {
-                _config.UserUuids.Remove(existingKey);
-            }
-            
-            // Set current user to use orphaned UUID
-            _config.UserUuids[_config.Nick] = orphanedUuid;
-            _config.UUID = orphanedUuid;
-            SaveConfig();
-            
-            Logger.Success("Startup", $"Recovered orphaned skin! User '{_config.Nick}' now uses UUID {orphanedUuid}");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Startup", $"Failed to recover orphaned skins: {ex.Message}");
-        }
-    }
-    
     /// <summary>
     /// Generates a random username for new users.
     /// Format: Adjective + Noun + 4-digit number (max 16 chars total)
@@ -1374,7 +696,7 @@ public class AppService : IDisposable
             }
             
             // Clear game cache for all instances
-            var instanceRoot = GetInstanceRoot();
+            var instanceRoot = _instanceService.GetInstanceRoot();
             if (Directory.Exists(instanceRoot))
             {
                 foreach (var branchDir in Directory.GetDirectories(instanceRoot))
@@ -1423,1071 +745,95 @@ public class AppService : IDisposable
     /// Uses case-insensitive lookup but preserves original username casing.
     /// This ensures each username consistently gets the same UUID across sessions.
     /// </summary>
-    public string GetUuidForUser(string username)
-    {
-        if (string.IsNullOrWhiteSpace(username))
-        {
-            return _config.UUID; // Fallback to legacy single UUID
-        }
-        
-        // Initialize UserUuids if null
-        _config.UserUuids ??= new Dictionary<string, string>();
-        
-        // Case-insensitive lookup - find if any existing username matches
-        var existingKey = _config.UserUuids.Keys
-            .FirstOrDefault(k => k.Equals(username, StringComparison.OrdinalIgnoreCase));
-        
-        if (existingKey != null)
-        {
-            return _config.UserUuids[existingKey];
-        }
-        
-        // No existing UUID for this username - before creating a new one,
-        // check if there are orphaned skin files we should adopt.
-        // This handles the case where config was reset but skin data still exists.
-        var orphanedUuid = FindOrphanedSkinUuid();
-        if (!string.IsNullOrEmpty(orphanedUuid))
-        {
-            Logger.Info("UUID", $"Recovered orphaned skin UUID for user '{username}': {orphanedUuid}");
-            _config.UserUuids[username] = orphanedUuid;
-            _config.UUID = orphanedUuid;
-            SaveConfig();
-            return orphanedUuid;
-        }
-        
-        // No orphaned skins found - create a new UUID
-        var newUuid = Guid.NewGuid().ToString();
-        _config.UserUuids[username] = newUuid;
-        
-        // Also update the legacy UUID field for backwards compatibility
-        _config.UUID = newUuid;
-        
-        SaveConfig();
-        Logger.Info("UUID", $"Created new UUID for user '{username}': {newUuid}");
-        
-        return newUuid;
-    }
-    
-    /// <summary>
-    /// Finds an orphaned skin UUID from existing skin files in the game's UserData.
-    /// Returns the UUID if exactly one orphaned skin is found, null otherwise.
-    /// An "orphaned" skin is one whose UUID is not in the UserUuids mapping.
-    /// </summary>
-    private string? FindOrphanedSkinUuid()
-    {
-        try
-        {
-            // Get the current instance's UserData path
-            var branch = NormalizeVersionType(_config.VersionType);
-            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
-            var userDataPath = GetInstanceUserDataPath(versionPath);
-            var skinCacheDir = Path.Combine(userDataPath, "CachedPlayerSkins");
-            
-            if (!Directory.Exists(skinCacheDir))
-            {
-                return null;
-            }
-            
-            // Get all existing UUIDs from UserUuids mapping
-            var knownUuids = new HashSet<string>(
-                (_config.UserUuids?.Values ?? Enumerable.Empty<string>())
-                    .Concat(new[] { _config.UUID ?? "" })
-                    .Where(u => !string.IsNullOrEmpty(u)),
-                StringComparer.OrdinalIgnoreCase
-            );
-            
-            // Scan skin files for orphaned UUIDs
-            var skinFiles = Directory.GetFiles(skinCacheDir, "*.json");
-            var orphanedUuids = new List<string>();
-            
-            foreach (var file in skinFiles)
-            {
-                var fileName = Path.GetFileNameWithoutExtension(file);
-                // Check if it looks like a UUID
-                if (Guid.TryParse(fileName, out var uuid))
-                {
-                    var uuidStr = uuid.ToString();
-                    // If this UUID is not in our known UUIDs, it's orphaned
-                    if (!knownUuids.Contains(uuidStr))
-                    {
-                        orphanedUuids.Add(uuidStr);
-                        Logger.Info("UUID", $"Found orphaned skin file: {fileName}.json");
-                    }
-                }
-            }
-            
-            // If exactly one orphaned UUID found, we can safely adopt it
-            // If multiple are found, we can't determine which is correct
-            if (orphanedUuids.Count == 1)
-            {
-                return orphanedUuids[0];
-            }
-            else if (orphanedUuids.Count > 1)
-            {
-                // Multiple orphans - pick the most recently modified one
-                string? mostRecent = null;
-                DateTime latestTime = DateTime.MinValue;
-                
-                foreach (var orphanUuid in orphanedUuids)
-                {
-                    var skinPath = Path.Combine(skinCacheDir, $"{orphanUuid}.json");
-                    if (File.Exists(skinPath))
-                    {
-                        var modTime = File.GetLastWriteTime(skinPath);
-                        if (modTime > latestTime)
-                        {
-                            latestTime = modTime;
-                            mostRecent = orphanUuid;
-                        }
-                    }
-                }
-                
-                if (mostRecent != null)
-                {
-                    Logger.Info("UUID", $"Multiple orphaned skins found, using most recent: {mostRecent}");
-                    return mostRecent;
-                }
-            }
-            
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("UUID", $"Error scanning for orphaned skins: {ex.Message}");
-            return null;
-        }
-    }
+    public string GetUuidForUser(string username) => _userIdentityService.GetUuidForUser(username);
     
     /// <summary>
     /// Gets the UUID for the current user (based on Nick).
     /// </summary>
-    public string GetCurrentUuid()
-    {
-        return GetUuidForUser(_config.Nick);
-    }
+    public string GetCurrentUuid() => _userIdentityService.GetCurrentUuid();
     
     /// <summary>
     /// Gets all username->UUID mappings.
     /// Returns a list of objects with username, uuid, and isCurrent properties.
     /// </summary>
-    public List<UuidMapping> GetAllUuidMappings()
-    {
-        _config.UserUuids ??= new Dictionary<string, string>();
-        
-        var currentNick = _config.Nick;
-        return _config.UserUuids.Select(kvp => new UuidMapping
-        {
-            Username = kvp.Key,
-            Uuid = kvp.Value,
-            IsCurrent = kvp.Key.Equals(currentNick, StringComparison.OrdinalIgnoreCase)
-        }).ToList();
-    }
+    public List<UuidMapping> GetAllUuidMappings() => _userIdentityService.GetAllUuidMappings();
     
     /// <summary>
     /// Sets a custom UUID for a specific username.
     /// </summary>
-    public bool SetUuidForUser(string username, string uuid)
-    {
-        if (string.IsNullOrWhiteSpace(username)) return false;
-        if (string.IsNullOrWhiteSpace(uuid)) return false;
-        if (!Guid.TryParse(uuid.Trim(), out var parsed)) return false;
-        
-        _config.UserUuids ??= new Dictionary<string, string>();
-        
-        // Remove any existing entry with same username (case-insensitive)
-        var existingKey = _config.UserUuids.Keys
-            .FirstOrDefault(k => k.Equals(username, StringComparison.OrdinalIgnoreCase));
-        if (existingKey != null)
-        {
-            _config.UserUuids.Remove(existingKey);
-        }
-        
-        _config.UserUuids[username] = parsed.ToString();
-        
-        // Update legacy UUID if this is the current user
-        if (username.Equals(_config.Nick, StringComparison.OrdinalIgnoreCase))
-        {
-            _config.UUID = parsed.ToString();
-        }
-        
-        SaveConfig();
-        Logger.Info("UUID", $"Set custom UUID for user '{username}': {parsed}");
-        return true;
-    }
+    public bool SetUuidForUser(string username, string uuid) => _userIdentityService.SetUuidForUser(username, uuid);
     
     /// <summary>
     /// Deletes the UUID mapping for a specific username.
     /// Cannot delete the UUID for the current user.
     /// </summary>
-    public bool DeleteUuidForUser(string username)
-    {
-        if (string.IsNullOrWhiteSpace(username)) return false;
-        
-        // Don't allow deleting current user's UUID
-        if (username.Equals(_config.Nick, StringComparison.OrdinalIgnoreCase))
-        {
-            Logger.Warning("UUID", $"Cannot delete UUID for current user '{username}'");
-            return false;
-        }
-        
-        _config.UserUuids ??= new Dictionary<string, string>();
-        
-        var existingKey = _config.UserUuids.Keys
-            .FirstOrDefault(k => k.Equals(username, StringComparison.OrdinalIgnoreCase));
-        
-        if (existingKey != null)
-        {
-            _config.UserUuids.Remove(existingKey);
-            SaveConfig();
-            Logger.Info("UUID", $"Deleted UUID for user '{username}'");
-            return true;
-        }
-        
-        return false;
-    }
+    public bool DeleteUuidForUser(string username) => _userIdentityService.DeleteUuidForUser(username);
     
     /// <summary>
     /// Generates a new random UUID for the current user.
     /// Warning: This will change the player's identity and they will lose their skin!
     /// </summary>
-    public string ResetCurrentUserUuid()
-    {
-        var newUuid = Guid.NewGuid().ToString();
-        _config.UserUuids ??= new Dictionary<string, string>();
-        
-        // Remove old entry (case-insensitive)
-        var existingKey = _config.UserUuids.Keys
-            .FirstOrDefault(k => k.Equals(_config.Nick, StringComparison.OrdinalIgnoreCase));
-        if (existingKey != null)
-        {
-            _config.UserUuids.Remove(existingKey);
-        }
-        
-        _config.UserUuids[_config.Nick] = newUuid;
-        _config.UUID = newUuid;
-        
-        SaveConfig();
-        Logger.Info("UUID", $"Reset UUID for current user '{_config.Nick}': {newUuid}");
-        return newUuid;
-    }
+    public string ResetCurrentUserUuid() => _userIdentityService.ResetCurrentUserUuid();
     
     /// <summary>
     /// Switches to an existing username (and its UUID).
     /// Returns the UUID for the username.
     /// </summary>
-    public string? SwitchToUsername(string username)
-    {
-        if (string.IsNullOrWhiteSpace(username)) return null;
-        
-        _config.UserUuids ??= new Dictionary<string, string>();
-        
-        // Find the username (case-insensitive)
-        var existingKey = _config.UserUuids.Keys
-            .FirstOrDefault(k => k.Equals(username, StringComparison.OrdinalIgnoreCase));
-        
-        if (existingKey != null)
-        {
-            // Switch to existing username with its UUID
-            _config.Nick = existingKey; // Use original casing
-            _config.UUID = _config.UserUuids[existingKey];
-            SaveConfig();
-            Logger.Info("UUID", $"Switched to existing user '{existingKey}' with UUID {_config.UUID}");
-            return _config.UUID;
-        }
-        
-        // Username doesn't exist in mappings - create new entry
-        var newUuid = Guid.NewGuid().ToString();
-        _config.Nick = username;
-        _config.UUID = newUuid;
-        _config.UserUuids[username] = newUuid;
-        SaveConfig();
-        Logger.Info("UUID", $"Created new user '{username}' with UUID {newUuid}");
-        return newUuid;
-    }
+    public string? SwitchToUsername(string username) => _userIdentityService.SwitchToUsername(username);
     
     /// <summary>
     /// Attempts to recover orphaned skin data and associate it with the current user.
     /// This is useful when a user's config was reset but their skin data still exists.
     /// Returns true if skin data was recovered, false otherwise.
     /// </summary>
-    public bool RecoverOrphanedSkinData()
-    {
-        try
-        {
-            var currentUuid = GetCurrentUuid();
-            var orphanedUuid = FindOrphanedSkinUuid();
-            
-            if (string.IsNullOrEmpty(orphanedUuid))
-            {
-                Logger.Info("UUID", "No orphaned skin data found to recover");
-                return false;
-            }
-            
-            // If the current UUID already has a skin, don't overwrite
-            var branch = NormalizeVersionType(_config.VersionType);
-            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
-            var userDataPath = GetInstanceUserDataPath(versionPath);
-            var skinCacheDir = Path.Combine(userDataPath, "CachedPlayerSkins");
-            var avatarCacheDir = Path.Combine(userDataPath, "CachedAvatarPreviews");
-            
-            var currentSkinPath = Path.Combine(skinCacheDir, $"{currentUuid}.json");
-            
-            // If current user already has a skin, ask them to use "switch to orphan" instead
-            if (File.Exists(currentSkinPath))
-            {
-                Logger.Info("UUID", $"Current user already has skin data. Use SetUuidForUser to switch to the orphaned UUID: {orphanedUuid}");
-                return false;
-            }
-            
-            // Copy orphaned skin to current UUID
-            var orphanSkinPath = Path.Combine(skinCacheDir, $"{orphanedUuid}.json");
-            if (File.Exists(orphanSkinPath))
-            {
-                Directory.CreateDirectory(skinCacheDir);
-                File.Copy(orphanSkinPath, currentSkinPath, true);
-                Logger.Success("UUID", $"Copied orphaned skin from {orphanedUuid} to {currentUuid}");
-            }
-            
-            // Copy orphaned avatar to current UUID
-            var orphanAvatarPath = Path.Combine(avatarCacheDir, $"{orphanedUuid}.png");
-            var currentAvatarPath = Path.Combine(avatarCacheDir, $"{currentUuid}.png");
-            if (File.Exists(orphanAvatarPath))
-            {
-                Directory.CreateDirectory(avatarCacheDir);
-                File.Copy(orphanAvatarPath, currentAvatarPath, true);
-                Logger.Success("UUID", $"Copied orphaned avatar from {orphanedUuid} to {currentUuid}");
-            }
-            
-            // Also update the profile if one exists
-            var profile = _config.Profiles?.FirstOrDefault(p => p.UUID == currentUuid);
-            if (profile != null)
-            {
-                BackupProfileSkinData(currentUuid);
-            }
-            
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("UUID", $"Failed to recover orphaned skin data: {ex.Message}");
-            return false;
-        }
-    }
+    public bool RecoverOrphanedSkinData() => _userIdentityService.RecoverOrphanedSkinData();
     
     /// <summary>
     /// Gets the UUID of any orphaned skin found in the game cache.
     /// Returns null if no orphaned skins are found.
     /// </summary>
-    public string? GetOrphanedSkinUuid()
-    {
-        return FindOrphanedSkinUuid();
-    }
+    public string? GetOrphanedSkinUuid() => _userIdentityService.GetOrphanedSkinUuid();
     
     // ========== Profile Management ==========
     
     /// <summary>
     /// Gets all saved profiles, filtering out any with null/empty names.
     /// </summary>
-    public List<Profile> GetProfiles()
-    {
-        // Clean up any null/empty profiles first
-        if (_config.Profiles != null)
-        {
-            var validProfiles = _config.Profiles
-                .Where(p => !string.IsNullOrWhiteSpace(p.Name) && !string.IsNullOrWhiteSpace(p.UUID))
-                .ToList();
-            
-            if (validProfiles.Count != _config.Profiles.Count)
-            {
-                Logger.Info("Profile", $"Cleaned up {_config.Profiles.Count - validProfiles.Count} invalid profiles");
-                _config.Profiles = validProfiles;
-                SaveConfig();
-            }
-        }
-        
-        var profiles = _config.Profiles ?? new List<Profile>();
-        Logger.Info("Profile", $"GetProfiles returning {profiles.Count} profiles");
-        return profiles;
-    }
+    public List<Profile> GetProfiles() => _profileManagementService.GetProfiles();
     
     /// <summary>
     /// Gets the currently active profile index. -1 means no profile selected.
     /// </summary>
-    public int GetActiveProfileIndex()
-    {
-        return _config.ActiveProfileIndex;
-    }
+    public int GetActiveProfileIndex() => _profileManagementService.GetActiveProfileIndex();
     
     /// <summary>
     /// Creates a new profile with the given name and UUID.
     /// Returns the created profile.
     /// </summary>
-    public Profile? CreateProfile(string name, string uuid)
-    {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(uuid))
-            {
-                Logger.Warning("Profile", $"Cannot create profile with empty name or UUID");
-                return null;
-            }
-            
-            // Validate name length (1-16 characters)
-            var trimmedName = name.Trim();
-            if (trimmedName.Length < 1 || trimmedName.Length > 16)
-            {
-                Logger.Warning("Profile", $"Invalid name length: {trimmedName.Length} (must be 1-16 chars)");
-                return null;
-            }
-            
-            // Validate UUID format
-            if (!Guid.TryParse(uuid.Trim(), out var parsedUuid))
-            {
-                Logger.Warning("Profile", $"Invalid UUID format: {uuid}");
-                return null;
-            }
-            
-            var profile = new Profile
-            {
-                Id = Guid.NewGuid().ToString(),
-                UUID = parsedUuid.ToString(),
-                Name = trimmedName,
-                CreatedAt = DateTime.UtcNow
-            };
-            
-            _config.Profiles ??= new List<Profile>();
-            _config.Profiles.Add(profile);
-            Logger.Info("Profile", $"Profile added to list. Total profiles: {_config.Profiles.Count}");
-            SaveConfig();
-            Logger.Info("Profile", $"Config saved to disk");
-            
-            // Save profile to disk folder
-            SaveProfileToDisk(profile);
-            
-            Logger.Success("Profile", $"Created profile '{trimmedName}' with UUID {parsedUuid}");
-            return profile;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Profile", $"Failed to create profile: {ex.Message}");
-            return null;
-        }
-    }
+    public Profile? CreateProfile(string name, string uuid) => _profileManagementService.CreateProfile(name, uuid);
     
     /// <summary>
     /// Deletes a profile by its ID.
     /// Returns true if successful.
     /// </summary>
-    public bool DeleteProfile(string profileId)
-    {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(profileId))
-            {
-                return false;
-            }
-            
-            var index = _config.Profiles?.FindIndex(p => p.Id == profileId) ?? -1;
-            if (index < 0)
-            {
-                return false;
-            }
-            
-            var profile = _config.Profiles![index];
-            _config.Profiles.RemoveAt(index);
-            
-            // Adjust active profile index if needed
-            if (_config.ActiveProfileIndex == index)
-            {
-                _config.ActiveProfileIndex = -1;
-            }
-            else if (_config.ActiveProfileIndex > index)
-            {
-                _config.ActiveProfileIndex--;
-            }
-            
-            SaveConfig();
-            
-            // Delete profile folder from disk (pass name for name-based folder)
-            DeleteProfileFromDisk(profileId, profile.Name);
-            
-            Logger.Success("Profile", $"Deleted profile '{profile.Name}'");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Profile", $"Failed to delete profile: {ex.Message}");
-            return false;
-        }
-    }
+    public bool DeleteProfile(string profileId) => _profileManagementService.DeleteProfile(profileId);
     
     /// <summary>
     /// Switches to a profile by its index.
     /// Returns true if successful.
     /// </summary>
-    public bool SwitchProfile(int index)
-    {
-        try
-        {
-            if (_config.Profiles == null || index < 0 || index >= _config.Profiles.Count)
-            {
-                return false;
-            }
-            
-            // First, backup current profile's skin data before switching
-            var currentUuid = GetCurrentUuid();
-            if (!string.IsNullOrWhiteSpace(currentUuid))
-            {
-                BackupProfileSkinData(currentUuid);
-            }
-            
-            var profile = _config.Profiles[index];
-            
-            // Restore the new profile's skin data
-            RestoreProfileSkinData(profile);
-            
-            // Update current UUID and Nick - also update UserUuids mapping
-            _config.UUID = profile.UUID;
-            _config.Nick = profile.Name;
-            _config.ActiveProfileIndex = index;
-            
-            // Ensure the profile's UUID is in the UserUuids mapping
-            _config.UserUuids ??= new Dictionary<string, string>();
-            _config.UserUuids[profile.Name] = profile.UUID;
-            
-            // Switch mods symlink to the new profile's mods folder
-            SwitchProfileModsSymlink(profile);
-            
-            SaveConfig();
-            
-            Logger.Success("Profile", $"Switched to profile '{profile.Name}'");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Profile", $"Failed to switch profile: {ex.Message}");
-            return false;
-        }
-    }
-    
-    /// <summary>
-    /// Gets the path to a profile's mods folder.
-    /// </summary>
-    private string GetProfileModsFolder(Profile profile)
-    {
-        var profilesDir = GetProfilesFolder();
-        var safeName = SanitizeFileName(profile.Name);
-        var profileDir = Path.Combine(profilesDir, safeName);
-        var modsDir = Path.Combine(profileDir, "Mods");
-        Directory.CreateDirectory(modsDir);
-        return modsDir;
-    }
-    
-    /// <summary>
-    /// Gets the path to a profile's mods folder by name.
-    /// </summary>
-    private string GetProfileModsFolderByName(string profileName)
-    {
-        var profilesDir = GetProfilesFolder();
-        var safeName = SanitizeFileName(profileName);
-        var profileDir = Path.Combine(profilesDir, safeName);
-        var modsDir = Path.Combine(profileDir, "Mods");
-        Directory.CreateDirectory(modsDir);
-        return modsDir;
-    }
-    
-    /// <summary>
-    /// Switches the mods symlink to point to the new profile's mods folder.
-    /// On Windows, creates a directory junction. On Unix, creates a symlink.
-    /// </summary>
-    private void SwitchProfileModsSymlink(Profile profile)
-    {
-        try
-        {
-            // Get the game's UserData/Mods path
-            var branch = NormalizeVersionType(_config.VersionType);
-            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
-            var userDataPath = Path.Combine(versionPath, "UserData");
-            var gameModsPath = Path.Combine(userDataPath, "Mods");
-            
-            // Get the profile's mods folder
-            var profileModsPath = GetProfileModsFolder(profile);
-            
-            // If the game mods path exists and is not a symlink, migrate existing mods
-            if (Directory.Exists(gameModsPath))
-            {
-                var dirInfo = new DirectoryInfo(gameModsPath);
-                bool isSymlink = dirInfo.Attributes.HasFlag(FileAttributes.ReparsePoint);
-                
-                if (!isSymlink)
-                {
-                    // Real directory - migrate mods to profile folder then delete
-                    Logger.Info("Mods", "Migrating existing mods to profile folder...");
-                    
-                    foreach (var file in Directory.GetFiles(gameModsPath))
-                    {
-                        var destFile = Path.Combine(profileModsPath, Path.GetFileName(file));
-                        if (!File.Exists(destFile))
-                        {
-                            File.Copy(file, destFile);
-                        }
-                    }
-                    
-                    // Also copy manifest.json if it exists
-                    var manifestPath = Path.Combine(gameModsPath, "manifest.json");
-                    var destManifest = Path.Combine(profileModsPath, "manifest.json");
-                    if (File.Exists(manifestPath) && !File.Exists(destManifest))
-                    {
-                        File.Copy(manifestPath, destManifest);
-                    }
-                    
-                    // Delete the original directory
-                    Directory.Delete(gameModsPath, true);
-                    Logger.Success("Mods", $"Migrated mods from game folder to profile: {profile.Name}");
-                }
-                else
-                {
-                    // It's already a symlink - just delete it
-                    Directory.Delete(gameModsPath, false);
-                }
-            }
-            
-            // Create the symlink/junction
-            Directory.CreateDirectory(userDataPath);
-            
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                // On Windows, create a directory junction (works without admin rights)
-                var processInfo = new ProcessStartInfo
-                {
-                    FileName = "cmd.exe",
-                    Arguments = $"/c mklink /J \"{gameModsPath}\" \"{profileModsPath}\"",
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                };
-                
-                using var process = Process.Start(processInfo);
-                process?.WaitForExit(5000);
-                
-                if (process?.ExitCode != 0)
-                {
-                    Logger.Warning("Mods", "Failed to create junction, falling back to directory copy");
-                    // Fallback: just create the directory
-                    Directory.CreateDirectory(gameModsPath);
-                }
-                else
-                {
-                    Logger.Success("Mods", $"Created junction: {gameModsPath} -> {profileModsPath}");
-                }
-            }
-            else
-            {
-                // On Unix (macOS/Linux), create a symbolic link
-                var processInfo = new ProcessStartInfo
-                {
-                    FileName = "ln",
-                    Arguments = $"-s \"{profileModsPath}\" \"{gameModsPath}\"",
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                };
-                
-                using var process = Process.Start(processInfo);
-                process?.WaitForExit(5000);
-                
-                if (process?.ExitCode != 0)
-                {
-                    Logger.Warning("Mods", "Failed to create symlink, falling back to directory copy");
-                    Directory.CreateDirectory(gameModsPath);
-                }
-                else
-                {
-                    Logger.Success("Mods", $"Created symlink: {gameModsPath} -> {profileModsPath}");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Mods", $"Failed to switch profile mods symlink: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
-    /// Initializes the profile mods symlink on startup if an active profile exists.
-    /// </summary>
-    private void InitializeProfileModsSymlink()
-    {
-        try
-        {
-            if (_config.ActiveProfileIndex < 0 || _config.Profiles == null || 
-                _config.ActiveProfileIndex >= _config.Profiles.Count)
-            {
-                Logger.Info("Mods", "No active profile, skipping symlink initialization");
-                return;
-            }
-            
-            var profile = _config.Profiles[_config.ActiveProfileIndex];
-            
-            // Check if the game instance folder exists
-            var branch = NormalizeVersionType(_config.VersionType);
-            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
-            var userDataPath = Path.Combine(versionPath, "UserData");
-            var gameModsPath = Path.Combine(userDataPath, "Mods");
-            
-            // Check if symlink already exists and points to correct profile
-            if (Directory.Exists(gameModsPath))
-            {
-                var dirInfo = new DirectoryInfo(gameModsPath);
-                bool isSymlink = dirInfo.Attributes.HasFlag(FileAttributes.ReparsePoint);
-                
-                if (isSymlink)
-                {
-                    // Symlink exists, verify it points to correct profile
-                    var profileModsPath = GetProfileModsFolder(profile);
-                    
-                    // Get symlink target
-                    string? targetPath = null;
-                    try
-                    {
-                        targetPath = dirInfo.ResolveLinkTarget(true)?.FullName;
-                    }
-                    catch { /* Ignore errors getting target */ }
-                    
-                    if (targetPath != null && Path.GetFullPath(targetPath) == Path.GetFullPath(profileModsPath))
-                    {
-                        Logger.Info("Mods", $"Mods symlink already points to active profile: {profile.Name}");
-                        return;
-                    }
-                    
-                    // Wrong target, recreate
-                    Logger.Info("Mods", "Mods symlink points to wrong profile, updating...");
-                }
-            }
-            
-            // Create/update symlink
-            SwitchProfileModsSymlink(profile);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Mods", $"Failed to initialize profile mods symlink: {ex.Message}");
-        }
-    }
+    public bool SwitchProfile(int index) => _profileManagementService.SwitchProfile(index);
     
     /// <summary>
     /// Updates an existing profile.
     /// </summary>
-    public bool UpdateProfile(string profileId, string? newName, string? newUuid)
-    {
-        try
-        {
-            var profile = _config.Profiles?.FirstOrDefault(p => p.Id == profileId);
-            if (profile == null)
-            {
-                return false;
-            }
-            
-            if (!string.IsNullOrWhiteSpace(newName))
-            {
-                profile.Name = newName.Trim();
-            }
-            
-            if (!string.IsNullOrWhiteSpace(newUuid) && Guid.TryParse(newUuid.Trim(), out var parsedUuid))
-            {
-                profile.UUID = parsedUuid.ToString();
-            }
-            
-            // If this is the active profile, also update current UUID/Nick
-            var index = _config.Profiles!.FindIndex(p => p.Id == profileId);
-            if (index == _config.ActiveProfileIndex)
-            {
-                _config.UUID = profile.UUID;
-                _config.Nick = profile.Name;
-            }
-            
-            SaveConfig();
-            
-            // Update profile on disk
-            UpdateProfileOnDisk(profile);
-            
-            Logger.Success("Profile", $"Updated profile '{profile.Name}'");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Profile", $"Failed to update profile: {ex.Message}");
-            return false;
-        }
-    }
+    public bool UpdateProfile(string profileId, string? newName, string? newUuid) => 
+        _profileManagementService.UpdateProfile(profileId, newName, newUuid);
     
     /// <summary>
     /// Gets the path to the Profiles folder.
     /// </summary>
-    private string GetProfilesFolder()
-    {
-        var profilesDir = Path.Combine(_appDir, "Profiles");
-        Directory.CreateDirectory(profilesDir);
-        return profilesDir;
-    }
-    
-    /// <summary>
-    /// Opens the current profile's folder in the file manager.
-    /// </summary>
-    public bool OpenCurrentProfileFolder()
-    {
-        try
-        {
-            if (_config.ActiveProfileIndex < 0 || _config.Profiles == null || 
-                _config.ActiveProfileIndex >= _config.Profiles.Count)
-            {
-                Logger.Warning("Profile", "No active profile to open folder for");
-                return false;
-            }
-            
-            var profile = _config.Profiles[_config.ActiveProfileIndex];
-            var safeName = SanitizeFileName(profile.Name);
-            var profileDir = Path.Combine(GetProfilesFolder(), safeName);
-            
-            if (!Directory.Exists(profileDir))
-            {
-                Directory.CreateDirectory(profileDir);
-            }
-            
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                Process.Start("explorer.exe", $"\"{profileDir}\"");
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                Process.Start(new ProcessStartInfo("open", $"\"{profileDir}\"") { UseShellExecute = false });
-            }
-            else
-            {
-                Process.Start("xdg-open", $"\"{profileDir}\"");
-            }
-            
-            Logger.Success("Profile", $"Opened profile folder: {profileDir}");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Profile", $"Failed to open profile folder: {ex.Message}");
-            return false;
-        }
-    }
-    
-    /// <summary>
-    /// Saves a profile to disk as a .sh file with name and UUID, plus avatar if available.
-    /// </summary>
-    private void SaveProfileToDisk(Profile profile)
-    {
-        try
-        {
-            var profilesDir = GetProfilesFolder();
-            // Use profile name as folder name (sanitize for filesystem)
-            var safeName = SanitizeFileName(profile.Name);
-            var profileDir = Path.Combine(profilesDir, safeName);
-            Directory.CreateDirectory(profileDir);
-            
-            // Create the Mods folder for this profile
-            var modsDir = Path.Combine(profileDir, "Mods");
-            Directory.CreateDirectory(modsDir);
-            
-            // Create the shell script with profile info
-            var shPath = Path.Combine(profileDir, $"{profile.Name}.sh");
-            var shContent = $@"#!/bin/bash
-# HyPrism Profile - {profile.Name}
-# Created: {profile.CreatedAt:yyyy-MM-dd HH:mm:ss}
-
-export HYPRISM_PROFILE_NAME=""{profile.Name}""
-export HYPRISM_PROFILE_UUID=""{profile.UUID}""
-export HYPRISM_PROFILE_ID=""{profile.Id}""
-
-# This file is auto-generated by HyPrism launcher
-# You can source this file to use this profile's settings
-";
-            File.WriteAllText(shPath, shContent);
-            
-            // Copy skin and avatar from game cache to profile folder
-            CopyProfileSkinData(profile.UUID, profileDir);
-            
-            Logger.Info("Profile", $"Saved profile to disk: {profileDir}");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Profile", $"Failed to save profile to disk: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
-    /// Copies skin and avatar data from game cache to a profile folder.
-    /// </summary>
-    private void CopyProfileSkinData(string uuid, string profileDir)
-    {
-        try
-        {
-            // Get game UserData path
-            var branch = NormalizeVersionType(_config.VersionType);
-            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
-            var userDataPath = GetInstanceUserDataPath(versionPath);
-            
-            // Copy skin JSON
-            var skinCacheDir = Path.Combine(userDataPath, "CachedPlayerSkins");
-            var skinPath = Path.Combine(skinCacheDir, $"{uuid}.json");
-            if (File.Exists(skinPath))
-            {
-                var destPath = Path.Combine(profileDir, "skin.json");
-                File.Copy(skinPath, destPath, true);
-                Logger.Info("Profile", $"Copied skin for UUID {uuid}");
-            }
-            
-            // Copy avatar PNG
-            var avatarCacheDir = Path.Combine(userDataPath, "CachedAvatarPreviews");
-            var avatarPath = Path.Combine(avatarCacheDir, $"{uuid}.png");
-            if (File.Exists(avatarPath))
-            {
-                var destPath = Path.Combine(profileDir, "avatar.png");
-                File.Copy(avatarPath, destPath, true);
-                Logger.Info("Profile", $"Copied avatar for UUID {uuid}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Profile", $"Failed to copy skin data: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
-    /// Copies the avatar for a given UUID to a profile folder (legacy, now uses CopyProfileSkinData).
-    /// </summary>
-    private void CopyProfileAvatar(string uuid, string profileDir)
-    {
-        try
-        {
-            // Check persistent backup first
-            var persistentPath = Path.Combine(_appDir, "AvatarBackups", $"{uuid}.png");
-            if (File.Exists(persistentPath))
-            {
-                var destPath = Path.Combine(profileDir, "avatar.png");
-                File.Copy(persistentPath, destPath, true);
-                Logger.Info("Profile", $"Copied avatar from backup for {uuid}");
-                return;
-            }
-            
-            // Check game cache
-            var branch = NormalizeVersionType(_config.VersionType);
-            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
-            var userDataPath = GetInstanceUserDataPath(versionPath);
-            var cacheDir = Path.Combine(userDataPath, "CachedAvatarPreviews");
-            var avatarPath = Path.Combine(cacheDir, $"{uuid}.png");
-            
-            if (File.Exists(avatarPath))
-            {
-                var destPath = Path.Combine(profileDir, "avatar.png");
-                File.Copy(avatarPath, destPath, true);
-                Logger.Info("Profile", $"Copied avatar from cache for {uuid}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Profile", $"Failed to copy avatar: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
-    /// Updates a profile's disk files when it's modified.
-    /// </summary>
-    private void UpdateProfileOnDisk(Profile profile)
-    {
-        try
-        {
-            var profilesDir = GetProfilesFolder();
-            var safeName = SanitizeFileName(profile.Name);
-            var profileDir = Path.Combine(profilesDir, safeName);
-            
-            // Also check for old folder with ID and rename it
-            var oldProfileDir = Path.Combine(profilesDir, profile.Id);
-            if (Directory.Exists(oldProfileDir) && !Directory.Exists(profileDir))
-            {
-                Directory.Move(oldProfileDir, profileDir);
-            }
-            
-            if (!Directory.Exists(profileDir))
-            {
-                SaveProfileToDisk(profile);
-                return;
-            }
-            
-            // Remove old .sh files
-            foreach (var oldSh in Directory.GetFiles(profileDir, "*.sh"))
-            {
-                File.Delete(oldSh);
-            }
-            
-            // Create new .sh file
-            var shPath = Path.Combine(profileDir, $"{profile.Name}.sh");
-            var shContent = $@"#!/bin/bash
-# HyPrism Profile - {profile.Name}
-# Created: {profile.CreatedAt:yyyy-MM-dd HH:mm:ss}
-# Updated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}
-
-export HYPRISM_PROFILE_NAME=""{profile.Name}""
-export HYPRISM_PROFILE_UUID=""{profile.UUID}""
-export HYPRISM_PROFILE_ID=""{profile.Id}""
-
-# This file is auto-generated by HyPrism launcher
-# You can source this file to use this profile's settings
-";
-            File.WriteAllText(shPath, shContent);
-            
-            // Update avatar
-            CopyProfileAvatar(profile.UUID, profileDir);
-            
-            Logger.Info("Profile", $"Updated profile on disk: {profileDir}");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Profile", $"Failed to update profile on disk: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
-    /// Deletes a profile's disk folder.
-    /// </summary>
-    private void DeleteProfileFromDisk(string profileId, string? profileName = null)
-    {
-        try
-        {
-            var profilesDir = GetProfilesFolder();
-            
-            // Try to delete by name first if provided
-            if (!string.IsNullOrEmpty(profileName))
-            {
-                var safeName = SanitizeFileName(profileName);
-                var profileDirByName = Path.Combine(profilesDir, safeName);
-                if (Directory.Exists(profileDirByName))
-                {
-                    Directory.Delete(profileDirByName, true);
-                    Logger.Info("Profile", $"Deleted profile from disk: {profileDirByName}");
-                    return;
-                }
-            }
-            
-            // Fallback to ID-based folder (for migration)
-            var profileDir = Path.Combine(profilesDir, profileId);
-            if (Directory.Exists(profileDir))
-            {
-                Directory.Delete(profileDir, true);
-                Logger.Info("Profile", $"Deleted profile from disk: {profileDir}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Profile", $"Failed to delete profile from disk: {ex.Message}");
-        }
-    }
+    private string GetProfilesFolder() => _profileManagementService.GetProfilesFolder();
     
     /// <summary>
     /// Sanitizes a string to be safe for use as a filename.
@@ -2500,333 +846,10 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
     }
     
     /// <summary>
-    /// Backs up the skin data for a profile (from game cache to profile folder).
-    /// </summary>
-    private void BackupProfileSkinData(string uuid)
-    {
-        try
-        {
-            // Find the profile by UUID
-            var profile = _config.Profiles?.FirstOrDefault(p => p.UUID == uuid);
-            if (profile == null)
-            {
-                return;
-            }
-            
-            var profilesDir = GetProfilesFolder();
-            var safeName = SanitizeFileName(profile.Name);
-            var profileDir = Path.Combine(profilesDir, safeName);
-            Directory.CreateDirectory(profileDir);
-            
-            // Get game UserData path
-            var branch = NormalizeVersionType(_config.VersionType);
-            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
-            var userDataPath = GetInstanceUserDataPath(versionPath);
-            
-            // Backup skin JSON
-            var skinCacheDir = Path.Combine(userDataPath, "CachedPlayerSkins");
-            var skinPath = Path.Combine(skinCacheDir, $"{uuid}.json");
-            if (File.Exists(skinPath))
-            {
-                var destPath = Path.Combine(profileDir, "skin.json");
-                var skinJson = File.ReadAllText(skinPath);
-                File.Copy(skinPath, destPath, true);
-                Logger.Info("Profile", $"Backed up skin for {profile.Name} ({skinJson.Length} bytes)");
-            }
-            else
-            {
-                Logger.Warning("Profile", $"No skin file found to backup for {profile.Name} at {skinPath}");
-            }
-            
-            // Backup avatar preview
-            var avatarCacheDir = Path.Combine(userDataPath, "CachedAvatarPreviews");
-            var avatarPath = Path.Combine(avatarCacheDir, $"{uuid}.png");
-            if (File.Exists(avatarPath))
-            {
-                var destPath = Path.Combine(profileDir, "avatar.png");
-                File.Copy(avatarPath, destPath, true);
-                Logger.Info("Profile", $"Backed up avatar for {profile.Name}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Profile", $"Failed to backup skin data: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
-    /// Restores the skin data for a profile (from profile folder to game cache).
-    /// </summary>
-    private void RestoreProfileSkinData(Profile profile)
-    {
-        try
-        {
-            var profilesDir = GetProfilesFolder();
-            var safeName = SanitizeFileName(profile.Name);
-            var profileDir = Path.Combine(profilesDir, safeName);
-            
-            if (!Directory.Exists(profileDir))
-            {
-                Logger.Info("Profile", $"No profile folder to restore from for {profile.Name}");
-                return;
-            }
-            
-            // Get game UserData path
-            var branch = NormalizeVersionType(_config.VersionType);
-            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
-            var userDataPath = GetInstanceUserDataPath(versionPath);
-            
-            // Restore skin JSON
-            var skinBackupPath = Path.Combine(profileDir, "skin.json");
-            if (File.Exists(skinBackupPath))
-            {
-                var skinCacheDir = Path.Combine(userDataPath, "CachedPlayerSkins");
-                Directory.CreateDirectory(skinCacheDir);
-                var destPath = Path.Combine(skinCacheDir, $"{profile.UUID}.json");
-                File.Copy(skinBackupPath, destPath, true);
-                Logger.Success("Profile", $"Restored skin for {profile.Name}");
-                
-                // Also push the complete skin data to the auth server to ensure it's in sync
-                // This is crucial because the auth server MERGES updates, so if it has stale data,
-                // it will corrupt the skin. By sending the full skin.json, we ensure a fresh start.
-                // Note: This happens in the background and doesn't block profile switching
-                if (_config.OnlineMode && !string.IsNullOrWhiteSpace(_config.AuthDomain))
-                {
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            // Read the complete skin JSON from the backup
-                            var skinJson = await File.ReadAllTextAsync(skinBackupPath);
-                            
-                            using var httpClient = new HttpClient();
-                            httpClient.Timeout = TimeSpan.FromSeconds(10);
-                            
-                            var content = new StringContent(skinJson, System.Text.Encoding.UTF8, "application/json");
-                            
-                            // Use the account-data endpoint which accepts skin updates
-                            // The UUID in the path tells the server which profile to update
-                            // AuthDomain is typically sessions.X.ws, we need account-data.X.ws
-                            var baseDomain = _config.AuthDomain.Replace("sessions.", "");
-                            var accountDataUrl = $"https://account-data.{baseDomain}/account-data/skin/{profile.UUID}";
-                            Logger.Info("Profile", $"Syncing skin to: {accountDataUrl}");
-                            
-                            var response = await httpClient.PutAsync(accountDataUrl, content);
-                            
-                            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NoContent)
-                            {
-                                Logger.Success("Profile", $"Synced complete skin to auth server for {profile.Name}");
-                            }
-                            else
-                            {
-                                Logger.Warning("Profile", $"Failed to sync skin to auth server: {response.StatusCode}");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Warning("Profile", $"Failed to sync skin to auth server: {ex.Message}");
-                        }
-                    });
-                }
-            }
-            
-            // Restore avatar preview
-            var avatarBackupPath = Path.Combine(profileDir, "avatar.png");
-            if (File.Exists(avatarBackupPath))
-            {
-                var avatarCacheDir = Path.Combine(userDataPath, "CachedAvatarPreviews");
-                Directory.CreateDirectory(avatarCacheDir);
-                var destPath = Path.Combine(avatarCacheDir, $"{profile.UUID}.png");
-                File.Copy(avatarBackupPath, destPath, true);
-                Logger.Success("Profile", $"Restored avatar for {profile.Name}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Profile", $"Failed to restore skin data: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
-    /// Starts monitoring the skin file for the given profile to prevent overwrites during gameplay.
-    /// If the game tries to overwrite the skin with data from the server, we restore it immediately.
-    /// </summary>
-    private void StartSkinProtection(Profile profile, string skinCachePath)
-    {
-        try
-        {
-            StopSkinProtection(); // Clean up any existing watcher
-            
-            if (!File.Exists(skinCachePath))
-            {
-                Logger.Warning("SkinProtection", $"Skin file doesn't exist, cannot protect: {skinCachePath}");
-                return;
-            }
-            
-            // Store the original skin content
-            lock (_skinProtectionLock)
-            {
-                _protectedSkinPath = skinCachePath;
-                _protectedSkinContent = File.ReadAllText(skinCachePath);
-                _skinProtectionEnabled = true;
-            }
-            
-            // Set file to READ-ONLY to prevent game from overwriting it
-            // This is more reliable than FileSystemWatcher because the game will fail to write
-            try
-            {
-                var fileInfo = new FileInfo(skinCachePath);
-                fileInfo.IsReadOnly = true;
-                Logger.Success("SkinProtection", $"Set skin file to READ-ONLY to prevent overwrites");
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning("SkinProtection", $"Failed to set read-only: {ex.Message}");
-            }
-            
-            var directory = Path.GetDirectoryName(skinCachePath);
-            var filename = Path.GetFileName(skinCachePath);
-            
-            if (string.IsNullOrEmpty(directory))
-            {
-                Logger.Warning("SkinProtection", "Invalid skin path");
-                return;
-            }
-            
-            _skinWatcher = new FileSystemWatcher(directory, filename)
-            {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
-                EnableRaisingEvents = true
-            };
-            
-            _skinWatcher.Changed += OnSkinFileChanged;
-            _skinWatcher.Created += OnSkinFileChanged;
-            
-            Logger.Success("SkinProtection", $"Started protecting skin file for {profile.Name}");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("SkinProtection", $"Failed to start skin protection: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
-    /// Handles skin file changes - restores the protected content if it was overwritten.
-    /// </summary>
-    private void OnSkinFileChanged(object sender, FileSystemEventArgs e)
-    {
-        lock (_skinProtectionLock)
-        {
-            if (!_skinProtectionEnabled || string.IsNullOrEmpty(_protectedSkinPath) || string.IsNullOrEmpty(_protectedSkinContent))
-                return;
-            
-            try
-            {
-                // Small delay to let the file write complete
-                Thread.Sleep(100);
-                
-                // Read current content
-                var currentContent = File.ReadAllText(_protectedSkinPath);
-                
-                // Compare - if different, the game overwrote our skin
-                if (currentContent != _protectedSkinContent)
-                {
-                    Logger.Warning("SkinProtection", "Detected skin overwrite - restoring protected skin!");
-                    
-                    // Temporarily disable watcher to avoid triggering ourselves
-                    _skinProtectionEnabled = false;
-                    
-                    // Restore the protected content
-                    File.WriteAllText(_protectedSkinPath, _protectedSkinContent);
-                    
-                    // Re-enable protection
-                    _skinProtectionEnabled = true;
-                    
-                    Logger.Success("SkinProtection", "Skin restored successfully");
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning("SkinProtection", $"Failed to check/restore skin: {ex.Message}");
-            }
-        }
-    }
-    
-    /// <summary>
-    /// Stops the skin file watcher.
-    /// </summary>
-    private void StopSkinProtection()
-    {
-        try
-        {
-            string? pathToUnprotect = null;
-            lock (_skinProtectionLock)
-            {
-                pathToUnprotect = _protectedSkinPath;
-                _skinProtectionEnabled = false;
-                _protectedSkinPath = null;
-                _protectedSkinContent = null;
-            }
-            
-            // Remove READ-ONLY flag so file can be modified again
-            if (!string.IsNullOrEmpty(pathToUnprotect) && File.Exists(pathToUnprotect))
-            {
-                try
-                {
-                    var fileInfo = new FileInfo(pathToUnprotect);
-                    fileInfo.IsReadOnly = false;
-                    Logger.Info("SkinProtection", "Removed READ-ONLY flag from skin file");
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warning("SkinProtection", $"Failed to remove read-only: {ex.Message}");
-                }
-            }
-            
-            if (_skinWatcher != null)
-            {
-                _skinWatcher.EnableRaisingEvents = false;
-                _skinWatcher.Changed -= OnSkinFileChanged;
-                _skinWatcher.Created -= OnSkinFileChanged;
-                _skinWatcher.Dispose();
-                _skinWatcher = null;
-                Logger.Info("SkinProtection", "Stopped skin protection");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("SkinProtection", $"Failed to stop skin protection: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
     /// Saves the current UUID/Nick as a new profile.
     /// Returns the created profile.
     /// </summary>
-    public Profile? SaveCurrentAsProfile()
-    {
-        var uuid = GetCurrentUuid();
-        var name = _config.Nick;
-        
-        if (string.IsNullOrWhiteSpace(uuid) || string.IsNullOrWhiteSpace(name))
-        {
-            return null;
-        }
-        
-        // Check if a profile with this UUID already exists
-        var existing = _config.Profiles?.FirstOrDefault(p => p.UUID == uuid);
-        if (existing != null)
-        {
-            // Update existing profile
-            existing.Name = name;
-            SaveConfig();
-            UpdateProfileOnDisk(existing);
-            return existing;
-        }
-        
-        // Create new profile
-        return CreateProfile(name, uuid);
-    }
+    public Profile? SaveCurrentAsProfile() => _profileManagementService.SaveCurrentAsProfile();
 
     public Task<string?> SetInstanceDirectoryAsync(string path)
     {
@@ -2863,11 +886,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         }
     }
 
-    public string GetLauncherVersion()
-    {
-        // Unified launcher version for all branches
-        return "2.0.3";
-    }
+    public string GetLauncherVersion() => _updateService.GetLauncherVersion();
 
     /// <summary>
     /// Check if Rosetta 2 is installed on macOS Apple Silicon.
@@ -2978,7 +997,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         if (!IsClientPresent(versionPath))
         {
             // Last chance: try legacy dash naming in legacy roots
-            var legacy = FindExistingInstancePath(normalizedBranch, versionNumber);
+            var legacy = _instanceService.FindExistingInstancePath(normalizedBranch, versionNumber);
             if (!string.IsNullOrWhiteSpace(legacy))
             {
                 Logger.Info("Version", $"IsVersionInstalled: found legacy layout at {legacy}");
@@ -3176,7 +1195,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         var normalizedBranch = NormalizeVersionType(branch);
         var result = new HashSet<int>();
 
-        foreach (var root in GetInstanceRootsIncludingLegacy())
+        foreach (var root in _instanceService.GetInstanceRootsIncludingLegacy())
         {
             // New layout: branch/version
             string branchPath = Path.Combine(root, normalizedBranch);
@@ -3254,7 +1273,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
 
         var latest = versions[0];
         var latestPath = GetLatestInstancePath(normalizedBranch);
-        var info = LoadLatestInfo(normalizedBranch);
+        var info = _instanceService.LoadLatestInfo(normalizedBranch);
         var baseOk = IsClientPresent(latestPath);
         if (!baseOk) return true;
         if (info == null)
@@ -3271,47 +1290,8 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
     /// Forces the latest instance to update by resetting its version info.
     /// This will trigger a differential update on next launch.
     /// </summary>
-    public async Task<bool> ForceUpdateLatestAsync(string branch)
-    {
-        try
-        {
-            var normalizedBranch = NormalizeVersionType(branch);
-            var versions = await GetVersionListAsync(normalizedBranch);
-            if (versions.Count == 0) return false;
-
-            var latestPath = GetLatestInstancePath(normalizedBranch);
-            var info = LoadLatestInfo(normalizedBranch);
-            
-            if (info == null)
-            {
-                // No version info, assume version 1 to force full update path
-                SaveLatestInfo(normalizedBranch, 1);
-                Logger.Info("Update", $"No version info found, set to v1 to force update");
-            }
-            else
-            {
-                // Set installed version to one less than latest to trigger update
-                int latestVersion = versions[0];
-                if (info.Version < latestVersion)
-                {
-                    // Already behind, just return true
-                    Logger.Info("Update", $"Already needs update: v{info.Version} -> v{latestVersion}");
-                    return true;
-                }
-                // If somehow at or ahead of latest, force update by going back one version
-                int forcedVersion = Math.Max(1, latestVersion - 1);
-                SaveLatestInfo(normalizedBranch, forcedVersion);
-                Logger.Info("Update", $"Forced version to v{forcedVersion} to trigger update to v{latestVersion}");
-            }
-            
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Update", $"Failed to force update: {ex.Message}");
-            return false;
-        }
-    }
+    public async Task<bool> ForceUpdateLatestAsync(string branch) => 
+        await _updateService.ForceUpdateLatestAsync(branch);
 
     /// <summary>
     /// Get information about the pending update, including old version details.
@@ -3327,7 +1307,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
 
             var latestVersion = versions[0];
             var latestPath = GetLatestInstancePath(normalizedBranch);
-            var info = LoadLatestInfo(normalizedBranch);
+            var info = _instanceService.LoadLatestInfo(normalizedBranch);
             
             // Check if update is needed
             if (info == null || info.Version == latestVersion) return null;
@@ -3470,7 +1450,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                 // Check if we need a differential update (only for latest instance)
                 if (isLatestInstance)
                 {
-                    var info = LoadLatestInfo(branch);
+                    var info = _instanceService.LoadLatestInfo(branch);
                     int installedVersion = info?.Version ?? 0;
                     int latestVersion = versions[0];
                     
@@ -3513,7 +1493,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                                     installedVersion = pwrFiles[0];
                                     Logger.Info("Download", $"Detected installed version from cache: v{installedVersion}");
                                     // Save the detected version
-                                    SaveLatestInfo(branch, installedVersion);
+                                    _instanceService.SaveLatestInfo(branch, installedVersion);
                                 }
                             }
                             
@@ -3629,7 +1609,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                                 }
                                 
                                 // Save progress after each patch
-                                SaveLatestInfo(branch, patchVersion);
+                                _instanceService.SaveLatestInfo(branch, patchVersion);
                                 Logger.Success("Download", $"Patch {patchVersion} applied successfully");
                             }
                             
@@ -3651,7 +1631,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                     {
                         Logger.Info("Download", "Already at latest version, no update needed");
                         // Ensure latest.json is correct
-                        SaveLatestInfo(branch, latestVersion);
+                        _instanceService.SaveLatestInfo(branch, latestVersion);
                     }
                 }
                 
@@ -3661,7 +1641,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                     SendProgress("install", 94, "Checking Visual C++ Runtime...", 0, 0);
                     try
                     {
-                        await EnsureVCRedistInstalledAsync((progress, message) =>
+                        await _launchService.EnsureVCRedistInstalledAsync((progress, message) =>
                         {
                             int mappedProgress = 94 + (int)(progress * 0.02);
                             SendProgress("install", mappedProgress, message, 0, 0);
@@ -3675,14 +1655,14 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                 }
                 
                 // Just ensure JRE is available (download if needed, but don't touch the game)
-                string jrePath = GetJavaPath();
+                string jrePath = _launchService.GetJavaPath();
                 if (!File.Exists(jrePath))
                 {
                     Logger.Info("Download", "JRE missing, installing...");
                     SendProgress("install", 96, "Installing Java Runtime...", 0, 0);
                     try
                     {
-                        await EnsureJREInstalledAsync((progress, message) =>
+                        await _launchService.EnsureJREInstalledAsync((progress, message) =>
                         {
                             int mappedProgress = 96 + (int)(progress * 0.03);
                             SendProgress("install", mappedProgress, message, 0, 0);
@@ -3784,7 +1764,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
 
             if (isLatestInstance)
             {
-                SaveLatestInfo(branch, targetVersion);
+                _instanceService.SaveLatestInfo(branch, targetVersion);
             }
             
             SendProgress("complete", 95, "Download complete!", 0, 0);
@@ -3795,7 +1775,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
                 SendProgress("install", 95, "Checking Visual C++ Runtime...", 0, 0);
                 try
                 {
-                    await EnsureVCRedistInstalledAsync((progress, message) =>
+                    await _launchService.EnsureVCRedistInstalledAsync((progress, message) =>
                     {
                         int mappedProgress = 95 + (int)(progress * 0.01);
                         SendProgress("install", mappedProgress, message, 0, 0);
@@ -3812,7 +1792,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
             SendProgress("install", 96, "Checking Java Runtime...", 0, 0);
             try
             {
-                await EnsureJREInstalledAsync((progress, message) =>
+                await _launchService.EnsureJREInstalledAsync((progress, message) =>
                 {
                     int mappedProgress = 96 + (int)(progress * 0.03); // 96-99%
                     SendProgress("install", mappedProgress, message, 0, 0);
@@ -4083,797 +2063,6 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         }
     }
 
-    // JRE Download - uses official Hytale JRE from launcher.hytale.com
-    private const string RequiredJreVersion = "25.0.1_8";
-    
-    // VC++ Redistributable for Windows
-    private const string VCRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe";
-    
-    /// <summary>
-    /// Checks if Visual C++ Redistributable is installed on Windows.
-    /// Returns true if installed or not on Windows.
-    /// </summary>
-    private bool IsVCRedistInstalled()
-    {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return true;
-        
-        try
-        {
-            // Check for VC++ 2015-2022 Redistributable (x64) in registry
-            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                @"SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64");
-            if (key != null)
-            {
-                var installed = key.GetValue("Installed");
-                if (installed != null && (int)installed == 1)
-                {
-                    Logger.Info("VCRedist", "VC++ Redistributable is already installed");
-                    return true;
-                }
-            }
-            
-            // Also check alternative registry path
-            using var key2 = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                @"SOFTWARE\Wow6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\X64");
-            if (key2 != null)
-            {
-                var installed = key2.GetValue("Installed");
-                if (installed != null && (int)installed == 1)
-                {
-                    Logger.Info("VCRedist", "VC++ Redistributable is already installed (WoW64)");
-                    return true;
-                }
-            }
-            
-            Logger.Info("VCRedist", "VC++ Redistributable not found");
-            return false;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("VCRedist", $"Failed to check VC++ Redistributable: {ex.Message}");
-            return false; // Assume not installed if we can't check
-        }
-    }
-    
-    /// <summary>
-    /// Ensures Visual C++ Redistributable is installed on Windows.
-    /// Downloads and runs the installer if not present.
-    /// </summary>
-    private async Task EnsureVCRedistInstalledAsync(Action<int, string> progressCallback)
-    {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            progressCallback(100, "VC++ not required on this platform");
-            return;
-        }
-        
-        if (IsVCRedistInstalled())
-        {
-            progressCallback(100, "VC++ Redistributable ready");
-            return;
-        }
-        
-        progressCallback(0, "Downloading Visual C++ Redistributable...");
-        Logger.Info("VCRedist", "Downloading VC++ Redistributable...");
-        
-        string cacheDir = Path.Combine(_appDir, "cache");
-        Directory.CreateDirectory(cacheDir);
-        string installerPath = Path.Combine(cacheDir, "vc_redist.x64.exe");
-        
-        try
-        {
-            // Download the installer
-            using var response = await HttpClient.GetAsync(VCRedistUrl, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
-            
-            var totalBytes = response.Content.Headers.ContentLength ?? 0;
-            using var contentStream = await response.Content.ReadAsStreamAsync();
-            using var fileStream = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-            
-            var buffer = new byte[8192];
-            long downloadedBytes = 0;
-            int bytesRead;
-            
-            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-            {
-                await fileStream.WriteAsync(buffer, 0, bytesRead);
-                downloadedBytes += bytesRead;
-                
-                if (totalBytes > 0)
-                {
-                    int percent = (int)((downloadedBytes * 50) / totalBytes); // 0-50%
-                    progressCallback(percent, $"Downloading VC++ Redistributable... {percent * 2}%");
-                }
-            }
-            
-            Logger.Info("VCRedist", "Download complete, running installer...");
-            progressCallback(50, "Installing Visual C++ Redistributable...");
-            
-            // Run the installer silently
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = installerPath,
-                Arguments = "/install /quiet /norestart",
-                UseShellExecute = true,
-                Verb = "runas" // Request elevation
-            };
-            
-            using var process = Process.Start(startInfo);
-            if (process != null)
-            {
-                await process.WaitForExitAsync();
-                
-                if (process.ExitCode == 0 || process.ExitCode == 1638) // 1638 = already installed
-                {
-                    Logger.Success("VCRedist", "VC++ Redistributable installed successfully");
-                    progressCallback(100, "VC++ Redistributable installed");
-                }
-                else if (process.ExitCode == 3010) // Restart required
-                {
-                    Logger.Success("VCRedist", "VC++ Redistributable installed (restart may be required)");
-                    progressCallback(100, "VC++ Redistributable installed");
-                }
-                else
-                {
-                    Logger.Warning("VCRedist", $"VC++ installer exited with code: {process.ExitCode}");
-                    progressCallback(100, "VC++ installation completed");
-                }
-            }
-            
-            // Clean up installer
-            try { File.Delete(installerPath); } catch { }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("VCRedist", $"Failed to install VC++ Redistributable: {ex.Message}");
-            // Don't fail the game launch - the game might work anyway
-            progressCallback(100, "VC++ installation skipped");
-        }
-    }
-    
-    private async Task EnsureJREInstalledAsync(Action<int, string> progressCallback)
-    {
-        string jreDir = Path.Combine(_appDir, "jre");
-        string javaBin;
-        
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            javaBin = Path.Combine(jreDir, "bin", "java.exe");
-        }
-        else
-        {
-            javaBin = Path.Combine(jreDir, "bin", "java");
-        }
-        
-        // Check if correct JRE version is installed by looking for version marker file
-        string versionMarkerPath = Path.Combine(jreDir, ".jre_version");
-        
-        if (File.Exists(javaBin) && File.Exists(versionMarkerPath))
-        {
-            try
-            {
-                string installedVersion = await File.ReadAllTextAsync(versionMarkerPath);
-                if (installedVersion.Trim() == RequiredJreVersion)
-                {
-                    Logger.Info("JRE", $"Java Runtime {RequiredJreVersion} already installed");
-                    EnsureJavaWrapper(javaBin);
-                    progressCallback(100, "Java Runtime ready");
-                    return;
-                }
-                Logger.Warning("JRE", $"Installed JRE version {installedVersion.Trim()} != required {RequiredJreVersion}. Reinstalling...");
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning("JRE", $"Failed to check JRE version: {ex.Message}. Reinstalling...");
-            }
-        }
-        else if (File.Exists(javaBin))
-        {
-            // Old installation without version marker - reinstall
-            Logger.Warning("JRE", "JRE version marker not found. Reinstalling official Hytale JRE...");
-        }
-        
-        // Delete old JRE if exists
-        if (Directory.Exists(jreDir))
-        {
-            try
-            {
-                Directory.Delete(jreDir, true);
-                Logger.Info("JRE", "Removed old JRE installation");
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning("JRE", $"Failed to remove old JRE: {ex.Message}");
-            }
-        }
-        
-        progressCallback(0, "Downloading Java Runtime...");
-        Logger.Info("JRE", "Downloading official Hytale Java Runtime...");
-        
-        // Determine platform - Hytale uses different naming convention
-        string osName = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "darwin" : 
-                        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "windows" : "linux";
-        string arch = RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "arm64" : "amd64";
-        string archiveType = osName == "windows" ? "zip" : "tar.gz";
-        
-        // First try to fetch latest JRE info from Hytale launcher directly
-        string? url = null;
-        string? expectedSha256 = null;
-        
-        try
-        {
-            Logger.Info("JRE", "Fetching JRE info from launcher.hytale.com...");
-            var jreInfoResponse = await HttpClient.GetStringAsync("https://launcher.hytale.com/version/release/jre.json");
-            var jreInfo = JsonSerializer.Deserialize<JsonElement>(jreInfoResponse);
-            
-            if (jreInfo.TryGetProperty("download_url", out var downloadUrls) &&
-                downloadUrls.TryGetProperty(osName, out var osUrls) &&
-                osUrls.TryGetProperty(arch, out var archInfo))
-            {
-                if (archInfo.TryGetProperty("url", out var urlProp))
-                {
-                    url = urlProp.GetString();
-                }
-                if (archInfo.TryGetProperty("sha256", out var sha256Prop))
-                {
-                    expectedSha256 = sha256Prop.GetString();
-                }
-                Logger.Info("JRE", $"Got JRE URL from Hytale launcher: {url}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("JRE", $"Failed to fetch from launcher.hytale.com: {ex.Message}");
-        }
-        
-        // Fallback to local jre.json config
-        if (string.IsNullOrEmpty(url))
-        {
-            try
-            {
-                var jreConfigPath = Path.Combine(AppContext.BaseDirectory, "jre.json");
-                if (File.Exists(jreConfigPath))
-                {
-                    var jreConfigJson = await File.ReadAllTextAsync(jreConfigPath);
-                    var jreConfig = JsonSerializer.Deserialize<JsonElement>(jreConfigJson);
-                    
-                    if (jreConfig.TryGetProperty("download_url", out var downloadUrls) &&
-                        downloadUrls.TryGetProperty(osName, out var osUrls) &&
-                        osUrls.TryGetProperty(arch, out var archInfo))
-                    {
-                        if (archInfo.TryGetProperty("url", out var urlProp))
-                        {
-                            url = urlProp.GetString();
-                        }
-                        if (archInfo.TryGetProperty("sha256", out var sha256Prop))
-                        {
-                            expectedSha256 = sha256Prop.GetString();
-                        }
-                        Logger.Info("JRE", $"Using JRE URL from local config: {url}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning("JRE", $"Failed to load local jre.json: {ex.Message}");
-            }
-        }
-        
-        // Ultimate fallback - hardcoded URLs for official Hytale JRE
-        if (string.IsNullOrEmpty(url))
-        {
-            url = $"https://launcher.hytale.com/redist/jre/{osName}/{arch}/jre-{RequiredJreVersion}.{archiveType}";
-            Logger.Info("JRE", $"Using hardcoded Hytale JRE URL: {url}");
-        }
-        
-        string cacheDir = Path.Combine(_appDir, "cache");
-        Directory.CreateDirectory(cacheDir);
-        string archivePath = Path.Combine(cacheDir, $"jre.{archiveType}");
-        
-        // Download with proper headers for Adoptium API
-        using var jreClient = new HttpClient();
-        jreClient.Timeout = TimeSpan.FromMinutes(10);
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("User-Agent", "HyPrism/1.0");
-        request.Headers.Add("Accept", "*/*");
-        
-        using var response = await jreClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-        response.EnsureSuccessStatusCode();
-        
-        var totalBytes = response.Content.Headers.ContentLength ?? -1;
-        using var stream = await response.Content.ReadAsStreamAsync();
-        using var fileStream = new FileStream(archivePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192);
-        
-        var buffer = new byte[8192];
-        long totalRead = 0;
-        int bytesRead;
-        
-        while ((bytesRead = await stream.ReadAsync(buffer)) > 0)
-        {
-            await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
-            totalRead += bytesRead;
-            
-            if (totalBytes > 0)
-            {
-                var progress = (int)((totalRead * 80) / totalBytes); // 0-80%
-                progressCallback(progress, $"Downloading Java Runtime... {progress}%");
-            }
-        }
-        fileStream.Close();
-        
-        progressCallback(85, "Extracting Java Runtime...");
-        Logger.Info("JRE", "Extracting Java Runtime...");
-        
-        // Create jre directory
-        Directory.CreateDirectory(jreDir);
-        
-        // Extract
-        if (archiveType == "zip")
-        {
-            ZipFile.ExtractToDirectory(archivePath, jreDir, true);
-        }
-        else
-        {
-            // Use tar on Unix systems
-            var tarProcess = new ProcessStartInfo("tar", $"-xzf \"{archivePath}\" -C \"{jreDir}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            var tar = Process.Start(tarProcess);
-            tar?.WaitForExit();
-        }
-        
-        // Normalize JRE structure - move contents up if nested
-        var entries = Directory.GetDirectories(jreDir);
-        if (entries.Length == 1)
-        {
-            var subDir = entries[0];
-            
-            // On macOS, structure is different
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                var contentsDir = Path.Combine(subDir, "Contents", "Home");
-                if (Directory.Exists(contentsDir))
-                {
-                    subDir = contentsDir;
-                }
-            }
-            
-            // Move files from subdirectory to jreDir
-            foreach (var entry in Directory.GetFileSystemEntries(subDir))
-            {
-                var name = Path.GetFileName(entry);
-                var dest = Path.Combine(jreDir, name);
-                if (!File.Exists(dest) && !Directory.Exists(dest))
-                {
-                    Directory.Move(entry, dest);
-                }
-            }
-            
-            // Remove empty subdirectory
-            try { Directory.Delete(entries[0], true); } catch { }
-        }
-        
-        // Make java executable on Unix
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            var chmod = new ProcessStartInfo("chmod", $"+x \"{javaBin}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            Process.Start(chmod)?.WaitForExit();
-        }
-        
-        // Cleanup archive
-        try { File.Delete(archivePath); } catch { }
-        
-        // On macOS, create java symlink structure like old launcher
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            await SetupMacOSJavaSymlinksAsync(jreDir);
-        }
-
-        // Wrap java to strip unsupported flags and point to the freshly installed JRE
-        EnsureJavaWrapper(javaBin);
-        
-        // Write version marker file to track installed version
-        try
-        {
-            await File.WriteAllTextAsync(versionMarkerPath, RequiredJreVersion);
-            Logger.Info("JRE", $"Written version marker: {RequiredJreVersion}");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("JRE", $"Failed to write version marker: {ex.Message}");
-        }
-        
-        progressCallback(100, "Java Runtime installed");
-        Logger.Success("JRE", $"Hytale Java Runtime {RequiredJreVersion} installed successfully");
-    }
-
-    private async Task SetupMacOSJavaSymlinksAsync(string jreDir)
-    {
-        // Create java directory structure like old launcher
-        string javaDir = Path.Combine(_appDir, "java");
-        string javaHomeBin = Path.Combine(javaDir, "Contents", "Home", "bin");
-        
-        if (!Directory.Exists(javaHomeBin))
-        {
-            try
-            {
-                if (Directory.Exists(javaDir))
-                {
-                    Directory.Delete(javaDir, true);
-                }
-                
-                Directory.CreateDirectory(Path.Combine(javaDir, "Contents", "Home"));
-                
-                // Create symlinks
-                var lnBin = new ProcessStartInfo("ln", $"-sf \"{Path.Combine(jreDir, "bin")}\" \"{Path.Combine(javaDir, "Contents", "Home", "bin")}\"")
-                {
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                Process.Start(lnBin)?.WaitForExit();
-                
-                var lnLib = new ProcessStartInfo("ln", $"-sf \"{Path.Combine(jreDir, "lib")}\" \"{Path.Combine(javaDir, "Contents", "Home", "lib")}\"")
-                {
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                Process.Start(lnLib)?.WaitForExit();
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning("JRE", $"Failed to create Java symlinks: {ex.Message}");
-            }
-        }
-        
-        // Sign JRE
-        Logger.Info("JRE", "Signing Java Runtime...");
-        RunSilentProcess("xattr", $"-cr \"{jreDir}\"");
-        RunSilentProcess("codesign", $"--force --deep --sign - \"{jreDir}\"");
-        await Task.CompletedTask;
-    }
-
-    private async Task<int> GetJavaFeatureVersionAsync(string javaBin)
-    {
-        try
-        {
-            var psi = new ProcessStartInfo(javaBin, "-version")
-            {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-
-            var proc = Process.Start(psi);
-            if (proc == null)
-            {
-                return 0;
-            }
-
-            string stderr = await proc.StandardError.ReadToEndAsync();
-            string stdout = await proc.StandardOutput.ReadToEndAsync();
-            await proc.WaitForExitAsync();
-
-            var combined = string.IsNullOrWhiteSpace(stdout) ? stderr : stdout + "\n" + stderr;
-            var match = Regex.Match(combined, "version \"?([0-9][^\"\\s]*)");
-            if (match.Success)
-            {
-                return ParseJavaMajor(match.Groups[1].Value);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("JRE", $"Failed to read Java version: {ex.Message}");
-        }
-
-        return 0;
-    }
-
-    private int ParseJavaMajor(string versionString)
-    {
-        if (string.IsNullOrWhiteSpace(versionString))
-        {
-            return 0;
-        }
-
-        var parts = versionString.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0)
-        {
-            return 0;
-        }
-
-        if (int.TryParse(parts[0], out var major))
-        {
-            if (major == 1 && parts.Length > 1 && int.TryParse(parts[1], out var minor))
-            {
-                return minor;
-            }
-
-            return major;
-        }
-
-        return 0;
-    }
-
-    private async Task<bool> SupportsShenandoahAsync(string javaBin)
-    {
-        try
-        {
-            var psi = new ProcessStartInfo(javaBin, "-XX:+UseShenandoahGC -version")
-            {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-
-            var proc = Process.Start(psi);
-            if (proc == null)
-            {
-                return false;
-            }
-
-            string stderr = await proc.StandardError.ReadToEndAsync();
-            string stdout = await proc.StandardOutput.ReadToEndAsync();
-            await proc.WaitForExitAsync();
-
-            if (proc.ExitCode == 0)
-            {
-                return true;
-            }
-
-            var combined = (stdout + "\n" + stderr).ToLowerInvariant();
-            if (combined.Contains("unrecognized") || combined.Contains("could not create the java virtual machine"))
-            {
-                return false;
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("JRE", $"Shenandoah probe failed: {ex.Message}");
-        }
-
-        return false;
-    }
-
-    private void EnsureJavaWrapper(string javaBin)
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            // Windows already uses java.exe; wrapper not required.
-            return;
-        }
-
-        try
-        {
-            var javaDir = Path.GetDirectoryName(javaBin);
-            if (string.IsNullOrEmpty(javaDir))
-            {
-                return;
-            }
-
-            var realJava = Path.Combine(javaDir, "java.real");
-
-            if (!File.Exists(realJava))
-            {
-                try
-                {
-                    if (File.Exists(javaBin))
-                    {
-                        // If javaBin is already a wrapper script, avoid moving it over realJava
-                        byte[] headBytes = new byte[2];
-                        using (var fs = new FileStream(javaBin, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                        {
-                            _ = fs.Read(headBytes, 0, 2);
-                        }
-
-                        bool looksLikeScript = headBytes[0] == (byte)'#' && headBytes[1] == (byte)'!';
-                        if (looksLikeScript)
-                        {
-                            Logger.Warning("JRE", "Wrapper detected but java.real missing; skipping move to avoid clobbering wrapper");
-                            return;
-                        }
-
-                        File.Move(javaBin, realJava, true);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warning("JRE", $"Failed to move java binary for wrapping: {ex.Message}");
-                    return;
-                }
-            }
-
-            var wrapper = "#!/bin/bash\n" +
-                         "REAL_JAVA=\"$(cd \"$(dirname \"$0\")\" && pwd)/java.real\"\n" +
-                         "ARGS=()\n" +
-                         "for arg in \"$@\"; do\n" +
-                         "  if [[ \"$arg\" == -XX:ShenandoahGCMode=* ]]; then\n" +
-                         "    continue\n" +
-                         "  fi\n" +
-                         "  ARGS+=(\"$arg\")\n" +
-                         "done\n" +
-                         "exec \"$REAL_JAVA\" \"${ARGS[@]}\"\n";
-
-            File.WriteAllText(javaBin, wrapper);
-            var chmod = new ProcessStartInfo("chmod", $"+x \"{javaBin}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            Process.Start(chmod)?.WaitForExit();
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("JRE", $"Failed to create Java wrapper: {ex.Message}");
-        }
-    }
-
-    private void CleanupCorruptedInstall(string versionPath)
-    {
-        string backupRoot = Path.Combine(Path.GetTempPath(), "HyPrismBackup", Guid.NewGuid().ToString());
-        // Preserve UserData and Client/Assets to avoid re-downloading game
-        string[] preserve = { "UserData", "Client" };
-
-        try
-        {
-            Directory.CreateDirectory(backupRoot);
-            foreach (var dirName in preserve)
-            {
-                var src = Path.Combine(versionPath, dirName);
-                if (Directory.Exists(src))
-                {
-                    var dest = Path.Combine(backupRoot, dirName);
-                    Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                    CopyDirectory(src, dest);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Download", $"Failed to backup user data before cleanup: {ex.Message}");
-        }
-
-        try
-        {
-            if (Directory.Exists(versionPath))
-            {
-                Directory.Delete(versionPath, true);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Download", $"Failed to clean corrupted install at {versionPath}: {ex.Message}");
-        }
-
-        try
-        {
-            Directory.CreateDirectory(versionPath);
-            foreach (var dirName in preserve)
-            {
-                var backup = Path.Combine(backupRoot, dirName);
-                var dest = Path.Combine(versionPath, dirName);
-                if (Directory.Exists(backup))
-                {
-                    CopyDirectory(backup, dest);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Download", $"Failed to recreate install directory {versionPath}: {ex.Message}");
-        }
-    }
-
-    private void CopyDirectory(string sourceDir, string destinationDir)
-    {
-        var dir = new DirectoryInfo(sourceDir);
-        if (!dir.Exists) return;
-
-        Directory.CreateDirectory(destinationDir);
-
-        foreach (var file in dir.GetFiles())
-        {
-            string targetFilePath = Path.Combine(destinationDir, file.Name);
-            file.CopyTo(targetFilePath, true);
-        }
-
-        foreach (var subDir in dir.GetDirectories())
-        {
-            string newDestinationDir = Path.Combine(destinationDir, subDir.Name);
-            CopyDirectory(subDir.FullName, newDestinationDir);
-        }
-    }
-
-    private void RunSilentProcess(string fileName, string arguments)
-    {
-        try
-        {
-            var psi = new ProcessStartInfo(fileName, arguments)
-            {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-
-            var proc = Process.Start(psi);
-            proc?.WaitForExit();
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Process", $"Failed to run {fileName} {arguments}: {ex.Message}");
-        }
-    }
-
-    private bool IsMacAppSignatureCurrent(string executablePath, string stampPath)
-    {
-        try
-        {
-            if (!File.Exists(executablePath) || !File.Exists(stampPath))
-            {
-                return false;
-            }
-
-            var stamp = File.ReadAllText(stampPath).Trim();
-            var currentTicks = File.GetLastWriteTimeUtc(executablePath).Ticks.ToString();
-            return string.Equals(stamp, currentTicks, StringComparison.Ordinal);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private void MarkMacAppSigned(string executablePath, string stampPath)
-    {
-        try
-        {
-            var ticks = File.GetLastWriteTimeUtc(executablePath).Ticks.ToString();
-            File.WriteAllText(stampPath, ticks);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Game", $"Failed to record app sign stamp: {ex.Message}");
-        }
-    }
-
-    private void ClearMacQuarantine(string path)
-    {
-        try
-        {
-            RunSilentProcess("xattr", $"-cr \"{path}\"");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Game", $"Failed to clear quarantine on {path}: {ex.Message}");
-        }
-    }
-
-    private string GetJavaPath()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            // Use the symlinked java path on macOS like old launcher
-            return Path.Combine(_appDir, "java", "Contents", "Home", "bin", "java");
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return Path.Combine(_appDir, "jre", "bin", "java.exe");
-        }
-        else
-        {
-            return Path.Combine(_appDir, "jre", "bin", "java");
-        }
-    }
-
     private async Task LaunchGameAsync(string versionPath, string branch)
     {
         Logger.Info("Game", $"Preparing to launch from {versionPath}");
@@ -5089,7 +2278,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         }
 
         // Get Java path
-        string javaPath = GetJavaPath();
+        string javaPath = _launchService.GetJavaPath();
         if (!File.Exists(javaPath))
         {
             Logger.Error("Game", $"Java not found at {javaPath}");
@@ -5127,7 +2316,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         }
 
         // Use per-instance UserData folder - this keeps skins/settings with the game instance
-        string userDataDir = GetInstanceUserDataPath(versionPath);
+        string userDataDir = _instanceService.GetInstanceUserDataPath(versionPath);
         Directory.CreateDirectory(userDataDir);
         
         // Restore current profile's skin data before launching the game
@@ -5136,7 +2325,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         string? skinCachePath = null;
         if (currentProfile != null)
         {
-            RestoreProfileSkinData(currentProfile);
+            _skinService.RestoreProfileSkinData(currentProfile);
             Logger.Info("Game", $"Restored skin data for profile '{currentProfile.Name}'");
             
             // Start skin protection - this watches the skin file and restores it if the game overwrites it
@@ -5144,7 +2333,7 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
             skinCachePath = Path.Combine(userDataDir, "CachedPlayerSkins", $"{currentProfile.UUID}.json");
             if (File.Exists(skinCachePath))
             {
-                StartSkinProtection(currentProfile, skinCachePath);
+                _skinService.StartSkinProtection(currentProfile, skinCachePath);
             }
         }
 
@@ -5326,10 +2515,10 @@ exec env \
             _gameProcess = null;
             
             // Stop skin protection first - allow normal skin file operations now
-            StopSkinProtection();
+            _skinService.StopSkinProtection();
             
             // Backup current profile's skin data after game exits (save any changes made during gameplay)
-            BackupProfileSkinData(GetCurrentUuid());
+            _skinService.BackupProfileSkinData(GetCurrentUuid());
             
             // Set Discord presence back to Idle
             _discordService.SetPresence(DiscordService.PresenceState.Idle);
@@ -5364,253 +2553,28 @@ exec env \
     }
 
     // Check for launcher updates and emit event if available
-    public async Task CheckForLauncherUpdatesAsync()
-    {
+    public async Task CheckForLauncherUpdatesAsync() => 
+        await _updateService.CheckForLauncherUpdatesAsync();
 
-        try
-        {
-            var launcherBranch = GetLauncherBranch();
-            var isBetaChannel = launcherBranch == "beta";
-            
-            // Get all releases (not just latest) to support beta channel
-            var apiUrl = "https://api.github.com/repos/yyyumeniku/HyPrism/releases?per_page=50";
-            var json = await HttpClient.GetStringAsync(apiUrl);
-            using var doc = JsonDocument.Parse(json);
-
-            var currentVersion = GetLauncherVersion();
-            string? bestVersion = null;
-            JsonElement? bestRelease = null;
-
-            foreach (var release in doc.RootElement.EnumerateArray())
-            {
-                var tagName = release.GetProperty("tag_name").GetString();
-                if (string.IsNullOrWhiteSpace(tagName)) continue;
-                
-                // Check GitHub's native prerelease flag
-                var isPrerelease = release.TryGetProperty("prerelease", out var prereleaseVal) && prereleaseVal.GetBoolean();
-                
-                // Match channel: beta channel gets prereleases, stable gets stable releases
-                if (isBetaChannel && !isPrerelease)
-                {
-                    // User wants beta, skip stable releases
-                    continue;
-                }
-                else if (!isBetaChannel && isPrerelease)
-                {
-                    // User wants stable, skip prereleases
-                    continue;
-                }
-                
-                // Parse version from tag
-                // Formats: "v2.0.1", "2.0.1", "beta3-3.0.0", "beta-3.0.0"
-                var version = ParseVersionFromTag(tagName);
-                if (string.IsNullOrWhiteSpace(version)) continue;
-                
-                // Compare with current version
-                if (IsNewerVersion(version, currentVersion))
-                {
-                    // Check if this is better than our current best
-                    if (bestVersion == null || IsNewerVersion(version, bestVersion))
-                    {
-                        bestVersion = version;
-                        bestRelease = release;
-                    }
-                }
-            }
-
-            if (bestRelease.HasValue && !string.IsNullOrWhiteSpace(bestVersion))
-            {
-                var release = bestRelease.Value;
-                Logger.Info("Update", $"Update available: {currentVersion} -> {bestVersion} (channel: {launcherBranch})");
-                
-                // Pick the right asset for this platform
-                string? downloadUrl = null;
-                string? assetName = null;
-                var assets = release.GetProperty("assets");
-                var arch = RuntimeInformation.ProcessArchitecture;
-
-                string? targetAsset = null;
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                    targetAsset = "macos-arm64.dmg";
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                    targetAsset = "windows-x64.exe";
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                    targetAsset = arch == Architecture.Arm64 ? "linux-arm64.tar.gz" : "linux-x64.AppImage";
-
-                if (!string.IsNullOrWhiteSpace(targetAsset))
-                {
-                    foreach (var asset in assets.EnumerateArray())
-                    {
-                        var name = asset.GetProperty("name").GetString();
-                        if (!string.IsNullOrWhiteSpace(name) && name.Contains(targetAsset, StringComparison.OrdinalIgnoreCase))
-                        {
-                            downloadUrl = asset.GetProperty("browser_download_url").GetString();
-                            assetName = name;
-                            break;
-                        }
-                    }
-                }
-
-                var updateInfo = new
-                {
-                        version = bestVersion,
-                        currentVersion = currentVersion,
-                        downloadUrl = downloadUrl ?? "",
-                        assetName = assetName ?? "",
-                        releaseUrl = release.GetProperty("html_url").GetString() ?? "",
-                        isBeta = launcherBranch == "beta"
-                };
-                    
-                LauncherUpdateAvailable?.Invoke(updateInfo);
-            }
-            else
-            {
-                Logger.Info("Update", $"Launcher is up to date: {currentVersion} (channel: {launcherBranch})");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning("Update", $"Failed to check for updates: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Parse version string from various tag formats.
-    /// Supports: "v2.0.1", "2.0.1", "beta3-3.0.0", "beta-3.0.0", "beta3-v3.0.0"
-    /// </summary>
-    private static string? ParseVersionFromTag(string tag)
-    {
-        if (string.IsNullOrWhiteSpace(tag)) return null;
-        
-        var tagLower = tag.ToLowerInvariant();
-        
-        // Handle beta format: "beta3-3.0.0" or "beta-3.0.0"
-        if (tagLower.StartsWith("beta"))
-        {
-            var dashIndex = tag.IndexOf('-');
-            if (dashIndex >= 0 && dashIndex < tag.Length - 1)
-            {
-                var versionPart = tag.Substring(dashIndex + 1).TrimStart('v', 'V');
-                return versionPart;
-            }
-            // beta without dash, try to extract version after "beta" text
-            var afterBeta = tag.Substring(4).TrimStart('0', '1', '2', '3', '4', '5', '6', '7', '8', '9').TrimStart('-', '_').TrimStart('v', 'V');
-            return string.IsNullOrWhiteSpace(afterBeta) ? null : afterBeta;
-        }
-        
-        // Handle standard format: "v2.0.1" or "2.0.1"
-        return tag.TrimStart('v', 'V');
-    }
-
-    private static bool IsNewerVersion(string remote, string current)
-    {
-        // Parse versions like "2.0.1" into comparable parts
-        var remoteParts = remote.Split('.').Select(p => int.TryParse(p, out var n) ? n : 0).ToArray();
-        var currentParts = current.Split('.').Select(p => int.TryParse(p, out var n) ? n : 0).ToArray();
-
-        for (int i = 0; i < Math.Max(remoteParts.Length, currentParts.Length); i++)
-        {
-            var r = i < remoteParts.Length ? remoteParts[i] : 0;
-            var c = i < currentParts.Length ? currentParts[i] : 0;
-            if (r > c) return true;
-            if (r < c) return false;
-        }
-        return false;
-    }
-
-    private string GenerateOfflineUUID(string playerName)
-    {
-        // Generate UUID v3 from player name (same as old launcher)
-        using var md5 = System.Security.Cryptography.MD5.Create();
-        var inputBytes = System.Text.Encoding.UTF8.GetBytes("OfflinePlayer:" + playerName);
-        var hashBytes = md5.ComputeHash(inputBytes);
-        
-        // Set version to 3 (MD5 based)
-        hashBytes[6] = (byte)((hashBytes[6] & 0x0F) | 0x30);
-        // Set variant
-        hashBytes[8] = (byte)((hashBytes[8] & 0x3F) | 0x80);
-        
-        return new Guid(hashBytes).ToString();
-    }
-
-    public bool IsGameRunning()
-    {
-        return _gameProcess != null && !_gameProcess.HasExited;
-    }
+    public bool IsGameRunning() => _gameUtilityService.IsGameRunning();
 
     public List<string> GetRecentLogs(int count = 10)
     {
         return Logger.GetRecentLogs(count);
     }
 
-    public bool ExitGame()
-    {
-        if (_gameProcess != null && !_gameProcess.HasExited)
-        {
-            _gameProcess.Kill();
-            _gameProcess = null;
-            return true;
-        }
-        return false;
-    }
+    public bool ExitGame() => _gameUtilityService.ExitGame();
 
-    public bool DeleteGame(string branch, int versionNumber)
-    {
-        try
-        {
-            string normalizedBranch = NormalizeVersionType(branch);
-            string versionPath = ResolveInstancePath(normalizedBranch, versionNumber, preferExisting: true);
-            if (Directory.Exists(versionPath))
-            {
-                Directory.Delete(versionPath, true);
-            }
-            if (versionNumber == 0)
-            {
-                var infoPath = GetLatestInfoPath(normalizedBranch);
-                if (File.Exists(infoPath))
-                {
-                    File.Delete(infoPath);
-                }
-            }
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Game", $"Error deleting game: {ex.Message}");
-            return false;
-        }
-    }
+    public bool DeleteGame(string branch, int versionNumber) => _gameUtilityService.DeleteGame(branch, versionNumber);
 
     // Folder
-    public bool OpenFolder()
-    {
-        try
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                Process.Start("explorer.exe", $"\"{_appDir}\"");
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                Process.Start(new ProcessStartInfo("open", $"\"{_appDir}\"") { UseShellExecute = false });
-            }
-            else
-            {
-                Process.Start("xdg-open", $"\"{_appDir}\"");
-            }
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    public bool OpenFolder() => _gameUtilityService.OpenFolder();
 
     public Task<string?> SelectInstanceDirectoryAsync()
     {
         // Folder picker is not available in Photino. Return the current/active
         // instance root so the frontend can show it and collect user input manually.
-        return Task.FromResult<string?>(GetInstanceRoot());
+        return Task.FromResult<string?>(_instanceService.GetInstanceRoot());
     }
     
     /// <summary>
@@ -5752,339 +2716,8 @@ exec env \
     }
 
     // Update - download latest launcher per platform instead of in-place update
-    public async Task<bool> UpdateAsync(JsonElement[]? args)
-    {
-        // TESTING: Using TEST repo instead of HyPrism
-        const string releasesPage = "https://github.com/yyyumeniku/HyPrism/releases/latest";
-
-        try
-        {
-            var launcherBranch = GetLauncherBranch();
-            var isBetaChannel = launcherBranch == "beta";
-            var currentVersion = GetLauncherVersion();
-            
-            // Get all releases to find the best match for user's channel
-            var apiUrl = "https://api.github.com/repos/yyyumeniku/HyPrism/releases?per_page=50";
-            var json = await HttpClient.GetStringAsync(apiUrl);
-            using var doc = JsonDocument.Parse(json);
-            
-            // Find the best release for the user's channel
-            JsonElement? targetRelease = null;
-            string? targetVersion = null;
-            
-            foreach (var release in doc.RootElement.EnumerateArray())
-            {
-                var isPrerelease = release.TryGetProperty("prerelease", out var prereleaseVal) && prereleaseVal.GetBoolean();
-                
-                // Match channel
-                if (isBetaChannel && !isPrerelease) continue; // Beta wants prereleases
-                if (!isBetaChannel && isPrerelease) continue; // Stable wants releases
-                
-                var tagName = release.GetProperty("tag_name").GetString();
-                if (string.IsNullOrWhiteSpace(tagName)) continue;
-                
-                var version = ParseVersionFromTag(tagName);
-                if (string.IsNullOrWhiteSpace(version)) continue;
-                
-                // Take the first matching release (they're sorted newest first)
-                if (targetRelease == null)
-                {
-                    targetRelease = release;
-                    targetVersion = version;
-                    break;
-                }
-            }
-            
-            if (!targetRelease.HasValue || string.IsNullOrWhiteSpace(targetVersion))
-            {
-                Logger.Error("Update", $"No suitable {(isBetaChannel ? "pre-release" : "release")} found");
-                BrowserOpenURL(releasesPage);
-                return false;
-            }
-            
-            Logger.Info("Update", $"Downloading {(isBetaChannel ? "pre-release" : "release")} {targetVersion} (current: {currentVersion})");
-            
-            var assets = targetRelease.Value.GetProperty("assets");
-
-            // Pick asset by platform/arch
-            string? targetAsset = null;
-            var arch = RuntimeInformation.ProcessArchitecture;
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                targetAsset = "macos-arm64.dmg"; // Apple Silicon only
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                targetAsset = "windows-x64.exe";
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                targetAsset = arch == Architecture.Arm64 ? "linux-arm64.tar.gz" : "linux-x64.AppImage";
-            }
-
-            if (string.IsNullOrWhiteSpace(targetAsset))
-            {
-                Logger.Warning("Update", "Unsupported OS for auto-download, opening releases page");
-                BrowserOpenURL(releasesPage);
-                return false;
-            }
-
-            string? downloadUrl = null;
-            string? assetName = null;
-            foreach (var asset in assets.EnumerateArray())
-            {
-                var name = asset.GetProperty("name").GetString();
-                if (!string.IsNullOrWhiteSpace(name) && name.Contains(targetAsset, StringComparison.OrdinalIgnoreCase))
-                {
-                    downloadUrl = asset.GetProperty("browser_download_url").GetString();
-                    assetName = name;
-                    break;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(downloadUrl) || string.IsNullOrWhiteSpace(assetName))
-            {
-                Logger.Error("Update", "Could not find matching asset in latest release; opening releases page");
-                BrowserOpenURL(releasesPage);
-                return false;
-            }
-
-            var downloadsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-            Directory.CreateDirectory(downloadsDir);
-            var targetPath = Path.Combine(downloadsDir, assetName);
-
-            Logger.Info("Update", $"Downloading latest launcher to {targetPath}");
-            using (var response = await HttpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
-            {
-                response.EnsureSuccessStatusCode();
-                await using var stream = await response.Content.ReadAsStreamAsync();
-                await using var file = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                var buffer = new byte[8192];
-                int read;
-                while ((read = await stream.ReadAsync(buffer)) > 0)
-                {
-                    await file.WriteAsync(buffer.AsMemory(0, read));
-                }
-            }
-
-            // Platform-specific installation
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                try
-                {
-                    Logger.Info("Update", "Mounting DMG and installing...");
-                    
-                    // Mount the DMG
-                    var mountProcess = Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "hdiutil",
-                        Arguments = $"attach \"{targetPath}\" -nobrowse -readonly",
-                        RedirectStandardOutput = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
-                    
-                    if (mountProcess == null)
-                    {
-                        throw new Exception("Failed to mount DMG");
-                    }
-                    
-                    await mountProcess.WaitForExitAsync();
-                    var mountOutput = await mountProcess.StandardOutput.ReadToEndAsync();
-                    
-                    // Parse mount point from hdiutil output (last line, last column)
-                    var mountPoint = mountOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                        .LastOrDefault()?
-                        .Split('\t', StringSplitOptions.RemoveEmptyEntries)
-                        .LastOrDefault()?
-                        .Trim();
-                    
-                    if (string.IsNullOrWhiteSpace(mountPoint) || !Directory.Exists(mountPoint))
-                    {
-                        throw new Exception($"Could not find mount point. Output: {mountOutput}");
-                    }
-                    
-                    Logger.Info("Update", $"DMG mounted at: {mountPoint}");
-                    
-                    // Find the .app in the mounted DMG
-                    var appInDmg = Directory.GetDirectories(mountPoint, "*.app").FirstOrDefault();
-                    if (string.IsNullOrWhiteSpace(appInDmg) || !Directory.Exists(appInDmg))
-                    {
-                        Process.Start("hdiutil", $"detach \"{mountPoint}\" -force");
-                        throw new Exception("No .app found in DMG");
-                    }
-                    
-                    // Get current app path
-                    var currentExe = Environment.ProcessPath;
-                    if (string.IsNullOrEmpty(currentExe))
-                    {
-                        Process.Start("hdiutil", $"detach \"{mountPoint}\" -force");
-                        throw new Exception("Could not determine current executable path");
-                    }
-                    
-                    // Navigate up to get the .app bundle path
-                    // currentExe is likely: /Applications/HyPrism.app/Contents/MacOS/HyPrism
-                    var currentAppPath = currentExe;
-                    for (int i = 0; i < 3; i++) // Go up 3 levels to get to .app
-                    {
-                        currentAppPath = Path.GetDirectoryName(currentAppPath);
-                        if (string.IsNullOrEmpty(currentAppPath)) break;
-                    }
-                    
-                    if (string.IsNullOrEmpty(currentAppPath) || !currentAppPath.EndsWith(".app"))
-                    {
-                        Process.Start("hdiutil", $"detach \"{mountPoint}\" -force");
-                        throw new Exception($"Could not determine .app path from: {currentExe}");
-                    }
-                    
-                    Logger.Info("Update", $"Current app: {currentAppPath}");
-                    Logger.Info("Update", $"New app: {appInDmg}");
-                    
-                    // Create update script to replace app and restart
-                    var updateScript = Path.Combine(Path.GetTempPath(), "hyprism_update.sh");
-                    var scriptContent = $@"#!/bin/bash
-sleep 2
-rm -rf ""{currentAppPath}""
-cp -R ""{appInDmg}"" ""{currentAppPath}""
-hdiutil detach ""{mountPoint}"" -force
-rm -f ""{targetPath}""
-open ""{currentAppPath}""
-rm -f ""$0""
-";
-                    
-                    File.WriteAllText(updateScript, scriptContent);
-                    Process.Start("chmod", $"+x \"{updateScript}\"")?.WaitForExit();
-                    
-                    // Start the update script and exit
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "/bin/bash",
-                        Arguments = $"\"{updateScript}\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
-                    
-                    Logger.Info("Update", "Update script started, exiting launcher...");
-                    Environment.Exit(0);
-                }
-                catch (Exception macEx)
-                {
-                    Logger.Error("Update", $"Auto-update failed: {macEx.Message}");
-                    // Fallback: open the DMG manually
-                    try { Process.Start("open", targetPath); } catch { }
-                    throw new Exception($"Please install the update manually from Downloads. {macEx.Message}");
-                }
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                try
-                {
-                    // Get current executable path
-                    var currentExe = Environment.ProcessPath;
-                    if (string.IsNullOrEmpty(currentExe))
-                    {
-                        Logger.Error("Update", "Could not determine current executable path");
-                        Process.Start("explorer.exe", $"/select,\"{targetPath}\"");
-                        return true;
-                    }
-
-                    // Create a batch script to replace the exe and restart
-                    var batchPath = Path.Combine(Path.GetTempPath(), "hyprism_update.bat");
-                    var batchContent = $@"@echo off
-timeout /t 2 /nobreak >nul
-del ""{currentExe}"" 2>nul
-move /y ""{targetPath}"" ""{currentExe}""
-start """" ""{currentExe}""
-del ""%~f0""
-";
-                    File.WriteAllText(batchPath, batchContent);
-
-                    // Start the batch script and exit
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = batchPath,
-                        UseShellExecute = true,
-                        CreateNoWindow = true,
-                        WindowStyle = ProcessWindowStyle.Hidden
-                    };
-                    Process.Start(psi);
-
-                    // Exit this application so the batch can replace the exe
-                    Logger.Info("Update", "Starting update script and exiting...");
-                    Environment.Exit(0);
-                }
-                catch (Exception updateEx)
-                {
-                    Logger.Warning("Update", $"Auto-update failed, opening Explorer: {updateEx.Message}");
-                    Process.Start("explorer.exe", $"/select,\"{targetPath}\"");
-                }
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                try
-                {
-                    var currentExe = Environment.ProcessPath;
-                    if (string.IsNullOrEmpty(currentExe))
-                    {
-                        throw new Exception("Could not determine current executable path");
-                    }
-                    
-                    // For AppImage, just replace the file
-                    if (targetPath.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Make the new AppImage executable
-                        Process.Start("chmod", $"+x \"{targetPath}\"")?.WaitForExit();
-                        
-                        // Create update script
-                        var updateScript = Path.Combine(Path.GetTempPath(), "hyprism_update.sh");
-                        var scriptContent = $@"#!/bin/bash
-sleep 2
-rm -f ""{currentExe}""
-mv ""{targetPath}"" ""{currentExe}""
-chmod +x ""{currentExe}""
-""{currentExe}"" &
-rm -f ""$0""
-";
-                        File.WriteAllText(updateScript, scriptContent);
-                        Process.Start("chmod", $"+x \"{updateScript}\"")?.WaitForExit();
-                        
-                        // Start the update script and exit
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "/bin/bash",
-                            Arguments = $"\"{updateScript}\"",
-                            UseShellExecute = false,
-                            CreateNoWindow = true
-                        });
-                        
-                        Logger.Info("Update", "Update script started, exiting launcher...");
-                        Environment.Exit(0);
-                    }
-                    else
-                    {
-                        // For other formats, just open the file manager
-                        try { Process.Start("xdg-open", Path.GetDirectoryName(targetPath) ?? ""); } catch { }
-                        throw new Exception("Please install the update manually from Downloads.");
-                    }
-                }
-                catch (Exception linuxEx)
-                {
-                    Logger.Error("Update", $"Auto-update failed: {linuxEx.Message}");
-                    try { Process.Start("xdg-open", targetPath); } catch { }
-                    throw new Exception($"Please install the update manually from Downloads. {linuxEx.Message}");
-                }
-            }
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Update", $"Update failed: {ex.Message}");
-            BrowserOpenURL(releasesPage);
-            return false;
-        }
-    }
+    public async Task<bool> UpdateAsync(JsonElement[]? args) => 
+        await _updateService.UpdateAsync(args);
 
     // Browser
     public bool BrowserOpenURL(string url)
@@ -6124,7 +2757,7 @@ rm -f ""$0""
     }
 
     // Launcher Branch (release/beta update channel)
-    public string GetLauncherBranch() => string.IsNullOrWhiteSpace(_config.LauncherBranch) ? "release" : _config.LauncherBranch;
+    public string GetLauncherBranch() => _updateService.GetLauncherBranch();
     
     public bool SetLauncherBranch(string branch)
     {
@@ -6333,39 +2966,7 @@ rm -f ""$0""
     /// <summary>
     /// Opens the instance folder in the file manager.
     /// </summary>
-    public bool OpenInstanceFolder(string branch, int version)
-    {
-        try
-        {
-            var instancePath = GetInstancePath(branch, version);
-            if (!Directory.Exists(instancePath))
-            {
-                Logger.Warning("Files", $"Instance folder does not exist: {instancePath}");
-                return false;
-            }
-            
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                Process.Start("explorer.exe", $"\"{instancePath}\"");
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                Process.Start(new ProcessStartInfo("open", $"\"{instancePath}\"") { UseShellExecute = false });
-            }
-            else
-            {
-                Process.Start("xdg-open", $"\"{instancePath}\"");
-            }
-            
-            Logger.Success("Files", $"Opened instance folder: {instancePath}");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Files", $"Failed to open instance folder: {ex.Message}");
-            return false;
-        }
-    }
+    public bool OpenInstanceFolder(string branch, int version) => _gameUtilityService.OpenInstanceFolder(branch, version);
 
     // CurseForge API constants
     private const string CurseForgeBaseUrl = "https://api.curseforge.com/v1";
@@ -6712,4 +3313,149 @@ rm -f ""$0""
         
         return languages;
     }
+
+    #region Utility Methods
+
+    private void RunSilentProcess(string fileName, string arguments)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo(fileName, arguments)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            var proc = Process.Start(psi);
+            proc?.WaitForExit();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Process", $"Failed to run {fileName} {arguments}: {ex.Message}");
+        }
+    }
+
+    private void ClearMacQuarantine(string path)
+    {
+        try
+        {
+            RunSilentProcess("xattr", $"-cr \"{path}\"");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Game", $"Failed to clear quarantine on {path}: {ex.Message}");
+        }
+    }
+
+    private void CopyDirectory(string sourceDir, string destinationDir)
+    {
+        var dir = new DirectoryInfo(sourceDir);
+        if (!dir.Exists) return;
+
+        Directory.CreateDirectory(destinationDir);
+
+        foreach (var file in dir.GetFiles())
+        {
+            string targetFilePath = Path.Combine(destinationDir, file.Name);
+            file.CopyTo(targetFilePath, true);
+        }
+
+        foreach (var subDir in dir.GetDirectories())
+        {
+            string newDestinationDir = Path.Combine(destinationDir, subDir.Name);
+            CopyDirectory(subDir.FullName, newDestinationDir);
+        }
+    }
+
+    private void CleanupCorruptedInstall(string versionPath)
+    {
+        string backupRoot = Path.Combine(Path.GetTempPath(), "HyPrismBackup", Guid.NewGuid().ToString());
+        // Preserve UserData and Client/Assets to avoid re-downloading game
+        string[] preserve = { "UserData", "Client" };
+
+        try
+        {
+            Directory.CreateDirectory(backupRoot);
+            foreach (var dirName in preserve)
+            {
+                var src = Path.Combine(versionPath, dirName);
+                if (Directory.Exists(src))
+                {
+                    var dest = Path.Combine(backupRoot, dirName);
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                    CopyDirectory(src, dest);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Download", $"Failed to backup user data before cleanup: {ex.Message}");
+        }
+
+        try
+        {
+            if (Directory.Exists(versionPath))
+            {
+                Directory.Delete(versionPath, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Download", $"Failed to clean corrupted install at {versionPath}: {ex.Message}");
+        }
+
+        try
+        {
+            Directory.CreateDirectory(versionPath);
+            foreach (var dirName in preserve)
+            {
+                var backup = Path.Combine(backupRoot, dirName);
+                var dest = Path.Combine(versionPath, dirName);
+                if (Directory.Exists(backup))
+                {
+                    CopyDirectory(backup, dest);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Download", $"Failed to recreate install directory {versionPath}: {ex.Message}");
+        }
+    }
+
+    private bool IsMacAppSignatureCurrent(string executablePath, string stampPath)
+    {
+        try
+        {
+            if (!File.Exists(executablePath) || !File.Exists(stampPath))
+            {
+                return false;
+            }
+
+            var stamp = File.ReadAllText(stampPath).Trim();
+            var currentTicks = File.GetLastWriteTimeUtc(executablePath).Ticks.ToString();
+            return string.Equals(stamp, currentTicks, StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void MarkMacAppSigned(string executablePath, string stampPath)
+    {
+        try
+        {
+            var ticks = File.GetLastWriteTimeUtc(executablePath).Ticks.ToString();
+            File.WriteAllText(stampPath, ticks);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Game", $"Failed to record app sign stamp: {ex.Message}");
+        }
+    }
+
+    #endregion
 }
