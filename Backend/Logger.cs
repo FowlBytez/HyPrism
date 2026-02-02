@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
 
 namespace HyPrism.Backend;
 
@@ -19,8 +21,113 @@ public static class Logger
     private static readonly Queue<string> _logBuffer = new();
     private const int MaxLogEntries = 100;
     
+    // File logging
+    private static readonly string _logsFolder;
+    private static readonly string _latestLogPath;
+    private static StreamWriter? _latestLogWriter;
+    private static StreamWriter? _dateLogWriter;
+    private static string? _currentDateLogPath;
+    private static bool _fileLoggingInitialized = false;
+    
     // Default: only show Success, Warning, and Error messages
     public static AppLogLevel MinimumLevel { get; set; } = AppLogLevel.Success;
+    
+    static Logger()
+    {
+        // Get logs folder path based on platform
+        string basePath;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), 
+                "Library", "Application Support", "HyPrism");
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HyPrism");
+        }
+        else
+        {
+            // Linux
+            basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".hyprism");
+        }
+        
+        _logsFolder = Path.Combine(basePath, "logs");
+        _latestLogPath = Path.Combine(_logsFolder, "hyprism-latest.log");
+        
+        InitializeFileLogging();
+    }
+    
+    private static void InitializeFileLogging()
+    {
+        try
+        {
+            // Create logs folder if needed
+            if (!Directory.Exists(_logsFolder))
+            {
+                Directory.CreateDirectory(_logsFolder);
+            }
+            
+            // Clear and open latest log (fresh start on each launch)
+            _latestLogWriter = new StreamWriter(_latestLogPath, append: false) { AutoFlush = true };
+            
+            // Write header to latest log
+            _latestLogWriter.WriteLine($"=== HyPrism Log Started at {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+            _latestLogWriter.WriteLine();
+            
+            // Open date-based log (append mode)
+            OpenDateLog();
+            
+            _fileLoggingInitialized = true;
+        }
+        catch
+        {
+            // If file logging fails, continue with console only
+            _fileLoggingInitialized = false;
+        }
+    }
+    
+    private static void OpenDateLog()
+    {
+        var today = DateTime.Now;
+        var dateLogFileName = $"hyprism-{today.Month}-{today.Day}-{today.Year}.log";
+        var dateLogPath = Path.Combine(_logsFolder, dateLogFileName);
+        
+        // Only open new file if date changed
+        if (_currentDateLogPath != dateLogPath)
+        {
+            _dateLogWriter?.Dispose();
+            _dateLogWriter = new StreamWriter(dateLogPath, append: true) { AutoFlush = true };
+            _currentDateLogPath = dateLogPath;
+            
+            // Write session separator
+            _dateLogWriter.WriteLine();
+            _dateLogWriter.WriteLine($"=== Session Started at {DateTime.Now:HH:mm:ss} ===");
+        }
+    }
+    
+    private static void WriteToFiles(string logEntry)
+    {
+        if (!_fileLoggingInitialized) return;
+        
+        try
+        {
+            // Check if we need to roll to a new date log
+            var today = DateTime.Now;
+            var expectedPath = Path.Combine(_logsFolder, $"hyprism-{today.Month}-{today.Day}-{today.Year}.log");
+            if (_currentDateLogPath != expectedPath)
+            {
+                OpenDateLog();
+            }
+            
+            // Write to both log files
+            _latestLogWriter?.WriteLine(logEntry);
+            _dateLogWriter?.WriteLine(logEntry);
+        }
+        catch
+        {
+            // Silently ignore file write errors
+        }
+    }
     
     public static void Info(string category, string message)
     {
@@ -76,6 +183,9 @@ public static class Logger
             {
                 _logBuffer.Dequeue();
             }
+            
+            // Still write to log files even if not printing to console
+            WriteToFiles(logEntry);
         }
     }
     
@@ -127,6 +237,9 @@ public static class Logger
             {
                 _logBuffer.Dequeue();
             }
+            
+            // Write to log files
+            WriteToFiles(logEntry);
             
             var originalColor = Console.ForegroundColor;
             

@@ -219,7 +219,8 @@ public class AppService : IDisposable
     {
         public int Version { get; set; }
         public DateTime CreatedAt { get; set; }
-        public DateTime UpdatedAt { get; set; }  // When the version was last updated (from latest.json)
+        public DateTime UpdatedAt { get; set; }  // When the game version was last updated
+        public DateTime? LastPlayedAt { get; set; }  // When the game was last played
         public long PlayTimeSeconds { get; set; } = 0;
         public bool IsLatestInstance { get; set; } = false;  // True for "latest" instance, false for specific version instances
         public string Branch { get; set; } = "release";  // The branch name (release, pre-release)
@@ -317,6 +318,7 @@ public class AppService : IDisposable
             PlayTimeSeconds = 0
         };
         info.PlayTimeSeconds += additionalSeconds;
+        info.LastPlayedAt = DateTime.UtcNow;  // Update last played time
         SaveInstanceInfo(branch, version, info);
     }
 
@@ -9277,7 +9279,7 @@ rm -f ""$0""
     /// Exports an instance (UserData folder) as a ZIP file to the Downloads folder.
     /// Returns the path to the exported file.
     /// </summary>
-    public string? ExportInstance(string branch, int version)
+    public string? ExportInstance(string branch, int version, string? exportFolder = null)
     {
         try
         {
@@ -9294,8 +9296,19 @@ rm -f ""$0""
             // Create export filename
             var versionLabel = version == 0 ? "latest" : $"v{version}";
             var exportFileName = $"HyPrism-{resolvedBranch}-{versionLabel}-{DateTime.Now:yyyyMMdd-HHmmss}.zip";
-            var downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-            var exportPath = Path.Combine(downloadsPath, exportFileName);
+            
+            // Use custom export folder or fallback to Downloads
+            string targetFolder;
+            if (!string.IsNullOrWhiteSpace(exportFolder) && Directory.Exists(exportFolder))
+            {
+                targetFolder = exportFolder;
+            }
+            else
+            {
+                targetFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            }
+            
+            var exportPath = Path.Combine(targetFolder, exportFileName);
             
             // Create ZIP file
             Logger.Info("Instance", $"Exporting instance to: {exportPath}");
@@ -9472,6 +9485,7 @@ rm -f ""$0""
                         HasUserData = Directory.Exists(userDataPath),
                         CreatedAt = instanceInfo.CreatedAt,
                         UpdatedAt = instanceInfo.UpdatedAt,
+                        LastPlayedAt = instanceInfo.LastPlayedAt,
                         IsLatestInstance = instanceInfo.IsLatestInstance,
                         PlayTimeSeconds = instanceInfo.PlayTimeSeconds,
                         PlayTimeFormatted = instanceInfo.GetFormattedPlayTime()
@@ -10903,6 +10917,7 @@ public class InstalledVersionInfo
     public bool HasUserData { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public DateTime? LastPlayedAt { get; set; }
     public bool IsLatestInstance { get; set; }
     public long PlayTimeSeconds { get; set; }
     public string PlayTimeFormatted { get; set; } = "";

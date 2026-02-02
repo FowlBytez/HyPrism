@@ -142,8 +142,9 @@ class Program
         
                 // Suppress noisy Photino debug output on stdout/stderr while keeping our own logs
                 // Photino writes lines like: Photino.NET: "HyPrism".Load(...)
-                Console.SetOut(new FilteringTextWriter(Console.Out, new[] { "Photino.NET:" }));
-                Console.SetError(new FilteringTextWriter(Console.Error, new[] { "Photino.NET:" }));
+                // Also suppress macOS NSMapGet warning
+                Console.SetOut(new FilteringTextWriter(Console.Out, new[] { "Photino.NET:", "NSMapGet" }));
+                Console.SetError(new FilteringTextWriter(Console.Error, new[] { "Photino.NET:", "NSMapGet" }));
         
         Logger.Success("HyPrism", "Launcher started");
         
@@ -409,7 +410,8 @@ class Program
                         "GetInstalledVersionsDetailed" => app.GetInstalledVersionsDetailed(),
                         "ExportInstance" => app.ExportInstance(
                             GetArg<string>(request.Args, 0),
-                            GetArg<int>(request.Args, 1)),
+                            GetArg<int>(request.Args, 1),
+                            GetArg<string?>(request.Args, 2)),
                         
                         // Settings
                         "GetLauncherBranch" => app.GetLauncherBranch(),

@@ -22,26 +22,28 @@ export interface UpdateInfo {
  * Detailed information about an installed game version
  */
 export interface InstalledVersionInfo {
-    /** The version ID (e.g. 0 for latest) */
-    Version: number;
+    /** The version ID (e.g. 7 for v7) */
+    version: number;
     /** The branch name */
-    Branch: string;
+    branch: string;
     /** Absolute path to the instance folder */
-    Path: string;
+    path: string;
     /** Size of the UserData folder in bytes */
-    UserDataSize: number;
+    userDataSize: number;
     /** Whether UserData exists */
-    HasUserData: boolean;
+    hasUserData: boolean;
     /** When the instance was created */
-    CreatedAt?: string;
-    /** When the instance was last updated */
-    UpdatedAt?: string;
+    createdAt?: string;
+    /** When the game version was last updated */
+    updatedAt?: string;
+    /** When the game was last played */
+    lastPlayedAt?: string;
     /** Whether this is a "latest" instance that auto-updates */
-    IsLatestInstance: boolean;
+    isLatestInstance: boolean;
     /** Total playtime in seconds */
-    PlayTimeSeconds: number;
+    playTimeSeconds: number;
     /** Formatted playtime string (HH:MM:SS or Dd HH:MM:SS) */
-    PlayTimeFormatted: string;
+    playTimeFormatted: string;
 }
 
 /**
@@ -493,8 +495,9 @@ export const GetAssetsZipPath = (branch: string, version: number) => callBackend
  * Exports an instance to a zip file
  * @param branch - The game branch
  * @param version - The game version
+ * @param exportFolder - Optional custom export folder path
  */
-export const ExportInstance = (branch: string, version: number) => callBackend<string | null>('ExportInstance', branch, version);
+export const ExportInstance = (branch: string, version: number, exportFolder?: string) => callBackend<string | null>('ExportInstance', branch, version, exportFolder);
 
 /**
  * Imports an instance from a ZIP file (base64 encoded)

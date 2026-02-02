@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, User, Edit3, Shuffle, Copy, CheckCircle, FileText, Loader2, HardDrive, Languages, FlaskConical, Box, RotateCcw, Monitor, Zap, Timer, Calendar, RefreshCw } from 'lucide-react';
+import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, Loader2, Languages, FlaskConical, RotateCcw, Monitor, Zap, Download, HardDrive, Package, RefreshCw, Pin, Box } from 'lucide-react';
 import { BrowserOpenURL } from '@/api/bridge';
 import { 
     GetCloseAfterLaunch, 
@@ -33,7 +33,8 @@ import {
     GetShowAlphaMods,
     SetShowAlphaMods,
     ImportInstanceFromZip,
-    InstallOptimizationMods
+    InstallOptimizationMods,
+    GetLastExportPath
 } from '@/api/backend';
 import type { InstalledVersionInfo } from '@/api/backend';
 import { useAccentColor } from '../contexts/AccentColorContext';
@@ -124,12 +125,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [exportingInstance, setExportingInstance] = useState<string | null>(null);
     const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [instanceToDelete, setInstanceToDelete] = useState<InstalledVersionInfo | null>(null);
-    const [instanceBranchFilter, setInstanceBranchFilter] = useState<'all' | 'release' | 'pre-release'>('all');
     const [isImportingInstance, setIsImportingInstance] = useState(false);
     const [isDraggingZip, setIsDraggingZip] = useState(false);
     const [showImportModal, setShowImportModal] = useState<{ zipBase64: string; fileName: string } | null>(null);
     const [importTargetBranch, setImportTargetBranch] = useState<'release' | 'pre-release'>('release');
     const [importTargetVersion, setImportTargetVersion] = useState<number>(0);
+    const [showInstanceExportModal, setShowInstanceExportModal] = useState<InstalledVersionInfo | null>(null);
+    const [instanceExportPath, setInstanceExportPath] = useState<string>('');
 
     // Profile state
     const [profileUsername, setProfileUsername] = useState('');
@@ -234,13 +236,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     };
     
     const handleExportInstance = async (instance: InstalledVersionInfo) => {
-        const key = `${instance.Branch}-${instance.Version}`;
+        const key = `${instance.branch}-${instance.version}`;
         setExportingInstance(key);
         setExportMessage(null);
         try {
-            const exportPath = await ExportInstance(instance.Branch, instance.Version);
+            const exportPath = await ExportInstance(instance.branch, instance.version, instanceExportPath || undefined);
             if (exportPath) {
-                setExportMessage({ type: 'success', text: `${t('Exported to Downloads folder')}: ${exportPath.split('/').pop()}` });
+                setExportMessage({ type: 'success', text: `${t('Exported to')}: ${exportPath.split('/').pop()}` });
                 setTimeout(() => setExportMessage(null), 5000);
             } else {
                 setExportMessage({ type: 'error', text: t('No UserData folder to export') });
@@ -252,14 +254,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             setTimeout(() => setExportMessage(null), 5000);
         }
         setExportingInstance(null);
+        setShowInstanceExportModal(null);
+    };
+    
+    const handleBrowseInstanceExportFolder = async () => {
+        try {
+            const selectedPath = await BrowseFolder(instanceExportPath || '');
+            if (selectedPath) {
+                setInstanceExportPath(selectedPath);
+            }
+        } catch (err) {
+            console.error('Failed to browse folder:', err);
+        }
     };
     
     const handleDeleteInstance = async () => {
         if (!instanceToDelete) return;
         try {
-            // Ensure Version is a number
-            const version = typeof instanceToDelete.Version === 'number' ? instanceToDelete.Version : parseInt(String(instanceToDelete.Version)) || 0;
-            await DeleteGame(instanceToDelete.Branch, version);
+            // Ensure version is a number
+            const version = typeof instanceToDelete.version === 'number' ? instanceToDelete.version : parseInt(String(instanceToDelete.version)) || 0;
+            await DeleteGame(instanceToDelete.branch, version);
             await loadInstances();
             // Notify parent to refresh installed versions in dropdown
             onInstanceDeleted?.();
@@ -1223,53 +1237,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                         </div>
                                     )}
                                     
-                                    {/* Header */}
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-white font-medium">{t('Installed Instances')}</h3>
-                                        <button
-                                            onClick={loadInstances}
-                                            className="text-xs px-3 py-1 rounded-lg bg-white/5 text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-                                        >
-                                            {t('Refresh')}
-                                        </button>
-                                    </div>
-                                    
-                                    {/* Branch Filter Tabs */}
-                                    <div className="flex gap-1 p-1 bg-white/5 rounded-lg">
-                                        <button
-                                            onClick={() => setInstanceBranchFilter('all')}
-                                            className={`flex-1 px-3 py-2 text-xs rounded-md transition-all ${
-                                                instanceBranchFilter === 'all' 
-                                                    ? 'bg-white/15 text-white font-medium' 
-                                                    : 'text-white/50 hover:text-white/70'
-                                            }`}
-                                        >
-                                            {t('All')}
-                                        </button>
-                                        <button
-                                            onClick={() => setInstanceBranchFilter('release')}
-                                            className={`flex-1 px-3 py-2 text-xs rounded-md transition-all flex items-center justify-center gap-1.5 ${
-                                                instanceBranchFilter === 'release' 
-                                                    ? 'bg-green-500/20 text-green-400 font-medium' 
-                                                    : 'text-white/50 hover:text-white/70'
-                                            }`}
-                                        >
-                                            <Box size={12} />
-                                            {t('Release')}
-                                        </button>
-                                        <button
-                                            onClick={() => setInstanceBranchFilter('pre-release')}
-                                            className={`flex-1 px-3 py-2 text-xs rounded-md transition-all flex items-center justify-center gap-1.5 ${
-                                                instanceBranchFilter === 'pre-release' 
-                                                    ? 'bg-yellow-500/20 text-yellow-400 font-medium' 
-                                                    : 'text-white/50 hover:text-white/70'
-                                            }`}
-                                        >
-                                            <FlaskConical size={12} />
-                                            {t('Pre-Release')}
-                                        </button>
-                                    </div>
-                                    
                                     {/* Instance List */}
                                     {isLoadingInstances ? (
                                         <div className="flex items-center justify-center py-12">
@@ -1279,137 +1246,147 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                         <div className="py-12 text-center">
                                             <Box size={40} className="mx-auto mb-3 text-white/20" />
                                             <p className="text-white/40 text-sm">{t('No instances installed')}</p>
+                                            <p className="text-white/30 text-xs mt-1">{t('Install Hytale to create an instance')}</p>
                                         </div>
-                                    ) : (() => {
-                                        const filteredInstances = installedInstances.filter((instance) => {
-                                            if (instanceBranchFilter === 'all') return true;
-                                            return instance.Branch?.toLowerCase() === instanceBranchFilter;
-                                        });
-                                        
-                                        if (filteredInstances.length === 0) {
-                                            return (
-                                                <div className="py-12 text-center">
-                                                    <FlaskConical size={40} className="mx-auto mb-3 text-white/20" />
-                                                    <p className="text-white/40 text-sm">{t('No instances match the filter')}</p>
-                                                </div>
-                                            );
-                                        }
-                                        
-                                        return (
-                                            <div className="space-y-3">
-                                                {filteredInstances.map((instance) => {
-                                                    const key = `${instance.Branch}-${instance.Version}`;
-                                                    const isReleaseBranch = instance.Branch?.toLowerCase() === 'release';
-                                                    const isExporting = exportingInstance === key;
-                                                    
-                                                    // Determine display text - version 0 means "latest"
-                                                    const branchLabel = isReleaseBranch ? t('Release') : t('Pre-Release');
-                                                    const isLatest = instance.IsLatestInstance || instance.Version === 0 || instance.Version === undefined || instance.Version === null;
-                                                    const versionLabel = isLatest ? t('latest') : `v${instance.Version}`;
-                                                    
-                                                    return (
-                                                        <div 
-                                                            key={key} 
-                                                            className="rounded-xl border border-white/10 overflow-hidden transition-all hover:border-white/20"
-                                                            style={{ backgroundColor: '#111' }}
-                                                        >
-                                                            {/* Main Content */}
-                                                            <div className="p-4">
-                                                                <div className="flex items-center gap-4">
-                                                                    {/* Branch Icon */}
-                                                                    <div 
-                                                                        className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
-                                                                        style={{ 
-                                                                            backgroundColor: isReleaseBranch ? 'rgba(34, 197, 94, 0.12)' : 'rgba(234, 179, 8, 0.12)'
-                                                                        }}
-                                                                    >
-                                                                        {isReleaseBranch ? (
-                                                                            <Box size={24} className="text-green-400" />
-                                                                        ) : (
-                                                                            <FlaskConical size={24} className="text-yellow-400" />
-                                                                        )}
-                                                                    </div>
-                                                                    
-                                                                    {/* Instance Details */}
-                                                                    <div className="flex-1 min-w-0">
-                                                                        {/* Title */}
-                                                                        <h3 className="text-white font-semibold mb-1">
-                                                                            {branchLabel} {versionLabel}
-                                                                        </h3>
-                                                                        
-                                                                        {/* Stats Row */}
-                                                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-white/50">
-                                                                            {/* Playtime */}
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                <Timer size={12} className="text-white/30" />
-                                                                                <span>{instance.PlayTimeSeconds > 0 ? instance.PlayTimeFormatted : '00:00:00'}</span>
-                                                                            </div>
-                                                                            
-                                                                            {/* Data Size */}
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                <HardDrive size={12} className="text-white/30" />
-                                                                                <span>{instance.HasUserData ? formatSize(instance.UserDataSize) : t('No data')}</span>
-                                                                            </div>
-                                                                            
-                                                                            {/* Created */}
-                                                                            {instance.CreatedAt && (
-                                                                                <div className="flex items-center gap-1.5">
-                                                                                    <Calendar size={12} className="text-white/30" />
-                                                                                    <span>{new Date(instance.CreatedAt).toLocaleDateString()}</span>
-                                                                                </div>
-                                                                            )}
-                                                                            
-                                                                            {/* Updated */}
-                                                                            {instance.UpdatedAt && (
-                                                                                <div className="flex items-center gap-1.5">
-                                                                                    <RefreshCw size={12} className="text-white/30" />
-                                                                                    <span>{new Date(instance.UpdatedAt).toLocaleDateString()}</span>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                    
-                                                                    {/* Action Buttons */}
-                                                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                                                        <button
-                                                                            onClick={() => OpenInstanceFolder(instance.Branch, instance.Version ?? 0)}
-                                                                            className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"
-                                                                            title={t('Open Folder')}
-                                                                        >
-                                                                            <FolderOpen size={18} />
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => handleExportInstance(instance)}
-                                                                            disabled={isExporting || !instance.HasUserData}
-                                                                            className={`p-2 rounded-lg transition-colors ${
-                                                                                !instance.HasUserData 
-                                                                                    ? 'opacity-30 cursor-not-allowed text-white/40' 
-                                                                                    : 'hover:bg-white/10 text-white/40 hover:text-white'
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {installedInstances.map((instance) => {
+                                                const key = `${instance.branch}-${instance.version}`;
+                                                const isReleaseBranch = instance.branch?.toLowerCase() === 'release';
+                                                const isExporting = exportingInstance === key;
+                                                
+                                                // Display labels
+                                                const isLatest = instance.isLatestInstance;
+                                                const versionLabel = isLatest ? t('latest') : `v${instance.version}`;
+                                                
+                                                // Format playtime
+                                                const playTime = instance.playTimeSeconds > 0 
+                                                    ? instance.playTimeFormatted 
+                                                    : t('Not played');
+                                                
+                                                // Format dates
+                                                const createdDate = instance.createdAt 
+                                                    ? new Date(instance.createdAt).toLocaleDateString() 
+                                                    : '-';
+                                                const lastPlayedDate = instance.lastPlayedAt 
+                                                    ? new Date(instance.lastPlayedAt).toLocaleDateString() 
+                                                    : (instance.updatedAt ? new Date(instance.updatedAt).toLocaleDateString() : t('Never'));
+                                                const updatedDate = instance.updatedAt
+                                                    ? new Date(instance.updatedAt).toLocaleDateString()
+                                                    : '-';
+                                                
+                                                return (
+                                                    <div 
+                                                        key={key} 
+                                                        className="p-4 rounded-xl bg-[#151515] border border-white/10 hover:border-white/20 transition-colors"
+                                                    >
+                                                        {/* Header: Branch Icon + Version + Actions */}
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <div className="flex items-center gap-3">
+                                                                {/* Branch Icon */}
+                                                                <div 
+                                                                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                                                        isReleaseBranch 
+                                                                            ? 'bg-green-500/15' 
+                                                                            : 'bg-yellow-500/15'
+                                                                    }`}
+                                                                >
+                                                                    {isLatest ? (
+                                                                        <RefreshCw size={20} className={isReleaseBranch ? 'text-green-400' : 'text-yellow-400'} />
+                                                                    ) : (
+                                                                        <Pin size={20} className={isReleaseBranch ? 'text-green-400' : 'text-yellow-400'} />
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-white font-medium">{versionLabel}</span>
+                                                                        <span 
+                                                                            className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                                                                                isReleaseBranch 
+                                                                                    ? 'bg-green-500/15 text-green-400' 
+                                                                                    : 'bg-yellow-500/15 text-yellow-400'
                                                                             }`}
-                                                                            title={instance.HasUserData ? t('Export as ZIP') : t('No UserData to export')}
                                                                         >
-                                                                            {isExporting ? (
-                                                                                <Loader2 size={18} className="animate-spin" />
-                                                                            ) : (
-                                                                                <FileText size={18} />
-                                                                            )}
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => setInstanceToDelete(instance)}
-                                                                            className="p-2 rounded-lg hover:bg-red-500/15 text-white/40 hover:text-red-400 transition-colors"
-                                                                            title={t('Delete Instance')}
-                                                                        >
-                                                                            <Trash2 size={18} />
-                                                                        </button>
+                                                                            {isReleaseBranch ? t('Release') : t('Pre-Release')}
+                                                                        </span>
                                                                     </div>
+                                                                    <p className="text-xs text-white/40">v{instance.version}</p>
                                                                 </div>
                                                             </div>
+                                                            
+                                                            {/* Actions */}
+                                                            <div className="flex items-center gap-1">
+                                                                <button
+                                                                    onClick={() => OpenInstanceFolder(instance.branch, isLatest ? 0 : (instance.version ?? 0))}
+                                                                    className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+                                                                    title={t('Open Folder')}
+                                                                >
+                                                                    <FolderOpen size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        setShowInstanceExportModal(instance);
+                                                                        const lastPath = await GetLastExportPath();
+                                                                        setInstanceExportPath(lastPath || '');
+                                                                    }}
+                                                                    disabled={isExporting}
+                                                                    className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+                                                                    title={t('Export Instance')}
+                                                                >
+                                                                    {isExporting ? (
+                                                                        <Loader2 size={16} className="animate-spin" />
+                                                                    ) : (
+                                                                        <Download size={16} />
+                                                                    )}
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setInstanceToDelete(instance)}
+                                                                    className="p-2 rounded-lg hover:bg-red-500/15 text-white/40 hover:text-red-400 transition-colors"
+                                                                    title={t('Delete Instance')}
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
                                                         </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })()}
+                                                        
+                                                        {/* Stats Grid */}
+                                                        <div className="grid grid-cols-5 gap-3">
+                                                            <div>
+                                                                <p className="text-xs text-white/40 mb-1">{t('Playtime')}</p>
+                                                                <p className="text-sm text-white/80">{playTime}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs text-white/40 mb-1">{t('Version')}</p>
+                                                                <p className="text-sm text-white/80">v{instance.version}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs text-white/40 mb-1">{t('Created')}</p>
+                                                                <p className="text-sm text-white/80">{createdDate}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs text-white/40 mb-1">{t('Updated')}</p>
+                                                                <p className="text-sm text-white/80">{updatedDate}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs text-white/40 mb-1">{t('Last Played')}</p>
+                                                                <p className="text-sm text-white/80">{lastPlayedDate}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    
+                                    {/* Refresh hint */}
+                                    {installedInstances.length > 0 && (
+                                        <button
+                                            onClick={loadInstances}
+                                            className="w-full text-center text-xs text-white/30 hover:text-white/50 py-2 transition-colors"
+                                        >
+                                            {t('Click to refresh')}
+                                        </button>
+                                    )}
                                 </div>
                             )}
 
@@ -1661,8 +1638,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                         <p className="text-white/70 text-sm mb-6">
                             {t('This will delete the {{branch}} {{version}} instance and all its data. This action cannot be undone.')
-                                .replace('{{branch}}', instanceToDelete.Branch === 'release' ? t('Release') : t('Pre-Release'))
-                                .replace('{{version}}', instanceToDelete.Version === 0 ? t('latest') : `v${instanceToDelete.Version}`)}
+                                .replace('{{branch}}', instanceToDelete.branch === 'release' ? t('Release') : t('Pre-Release'))
+                                .replace('{{version}}', instanceToDelete.version === 0 ? t('latest') : `v${instanceToDelete.version}`)}
                         </p>
                         <div className="flex gap-3">
                             <button
@@ -1678,6 +1655,79 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 {t('Delete')}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Export Instance Modal */}
+            {showInstanceExportModal && (
+                <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                    <div className="bg-[#1a1a1a] rounded-2xl border border-white/10 p-6 w-full max-w-md mx-4">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-bold text-white">{t('Export Instance')}</h3>
+                            <button
+                                onClick={() => setShowInstanceExportModal(null)}
+                                className="p-2 rounded-xl hover:bg-white/10 text-white/60 hover:text-white"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Export Type - ZIP Only */}
+                        <div className="mb-4">
+                            <label className="block text-white/60 text-sm mb-2">{t('Export Type')}</label>
+                            <div className="flex gap-2">
+                                <div
+                                    className="flex-1 p-3 rounded-xl border-2 transition-colors"
+                                    style={{ borderColor: accentColor, backgroundColor: `${accentColor}20` }}
+                                >
+                                    <Package size={20} className="mx-auto mb-1" style={{ color: accentColor }} />
+                                    <div className="text-sm text-white font-medium text-center">{t('ZIP Archive')}</div>
+                                    <div className="text-xs text-white/40 text-center">{t('All instance data bundled')}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Export Folder */}
+                        <div className="mb-6">
+                            <label className="block text-white/60 text-sm mb-2">{t('Export Folder')}</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={instanceExportPath}
+                                    onChange={(e) => setInstanceExportPath(e.target.value)}
+                                    placeholder={t('Select export folder...')}
+                                    className="flex-1 px-4 py-2 bg-[#252525] border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-white/30"
+                                />
+                                <button
+                                    onClick={handleBrowseInstanceExportFolder}
+                                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+                                >
+                                    <FolderOpen size={20} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Export Button */}
+                        <button
+                            onClick={() => handleExportInstance(showInstanceExportModal)}
+                            disabled={exportingInstance !== null || !instanceExportPath}
+                            className={`w-full py-3 rounded-xl font-bold text-lg transition-all ${
+                                exportingInstance !== null || !instanceExportPath
+                                    ? 'bg-white/10 text-white/40 cursor-not-allowed'
+                                    : 'hover:opacity-90'
+                            }`}
+                            style={exportingInstance === null && instanceExportPath ? { backgroundColor: accentColor, color: accentTextColor } : undefined}
+                        >
+                            {exportingInstance !== null ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <Loader2 size={20} className="animate-spin" />
+                                    {t('Exporting...')}
+                                </span>
+                            ) : (
+                                t('Export')
+                            )}
+                        </button>
                     </div>
                 </div>
             )}
