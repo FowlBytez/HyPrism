@@ -4,10 +4,10 @@
 
 # HyPrism
 
-[![Downloads](https://img.shields.io/github/downloads/yyyumeniku/HyPrism/total?style=for-the-badge&logo=github&label=Downloads&color=207e5c)](https://github.com/yyyumeniku/HyPrism/releases)
-[![Website](https://img.shields.io/badge/Website-hyprism-207e5c?style=for-the-badge&logo=website)](https://yyyumeniku.github.io/hyprism-site/)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/yyyumeniku)
-[![Discord](https://img.shields.io/badge/Website-discord-207e5c?style=for-the-badge&logo=discord)](https://discord.gg/ekZqTtynjp)
+[![Downloads](https://img.shields.io/github/downloads/yyyumeniku/HyPrism/total?style=plastic&logo=github&label=Total%20Downloads&color=0aa06e)](https://github.com/yyyumeniku/HyPrism/releases)
+[![Website](https://img.shields.io/badge/Official%20Site-HyPrism-0aa06e?style=plastic&logo=firefox-browser)](https://yyyumeniku.github.io/hyprism-site/)
+[![Coffee](https://img.shields.io/badge/Donate-Buy%20Me%20a%20Coffee-ffcc00?style=plastic&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/yyyumeniku)
+[![Discord](https://img.shields.io/badge/Community-Discord-7289da?style=plastic&logo=discord&logoColor=white)](https://discord.gg/ekZqTtynjp)
 
 
 A multiplatform Hytale launcher with mod manager and more!
