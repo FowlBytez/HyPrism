@@ -1,0 +1,131 @@
+{
+  "_langName": "Русский",
+  "app": {
+    "title": "HyPrism",
+    "version": "HyPrism {0}"
+  },
+  "main": {
+    "play": "ИГРАТЬ",
+    "release": "Релиз",
+    "preRelease": "Пре-релиз",
+    "latest": "последняя",
+    "educational": "Только для образовательных целей. Нравится?",
+    "buyIt": "КУПИ ЕЁ"
+  },
+  "settings": {
+    "title": "Настройки",
+    "myProfile": "Мой профиль",
+    "general": "Общие",
+    "visuals": "Визуал",
+    "language": "Язык",
+    "data": "Данные",
+    "instances": "Игры",
+    "about": "О нас",
+    "close": "Закрыть",
+    "browse": "Обзор",
+    "profile": {
+      "title": "Мой профиль",
+      "avatar": "Аватар",
+      "displayName": "Никнейм",
+      "displayNameHint": "Имя в игре (1-16 символов).",
+      "uuid": "UUID",
+      "uuidWarning": "Уникальный ID для мультиплеера. Смена сбросит скин!",
+      "randomize": "Случайно",
+      "copy": "Коп."
+    },
+    "generalSettings": {
+      "title": "Общие настройки",
+      "launcherStorage": "Папка лаунчера",
+      "launcherStorageHint": "Где хранятся игры и данные.",
+      "updateChannel": "Канал обновлений",
+      "updateChannelStable": "Стабильный",
+      "updateChannelBeta": "Бета (Опасно)",
+      "updateChannelHint": "Только проверенные версии.",
+      "closeLauncher": "Закрывать лаунчер",
+      "closeLauncherHint": "Закрывать после запуска игры.",
+      "disableNews": "Скрыть новости",
+      "disableNewsHint": "Убрать новости с главного экрана."
+    },
+    "visualSettings": {
+      "title": "Визуальные настройки",
+      "accentColor": "Цвет акцента",
+      "accentColorHint": "Скоро.",
+      "background": "Фон",
+      "backgroundHint": "Скоро."
+    },
+    "languageSettings": {
+      "title": "Настройки языка",
+      "interfaceLanguage": "Язык интерфейса",
+      "interfaceLanguageHint": "Выберите язык лаунчера",
+      "note": ""
+    }
+  },
+  "profileEditor": {
+    "title": "Редактор профиля",
+    "avatar": "Аватар",
+    "dropSkin": "Перетащите скин сюда",
+    "openAvatarFolder": "Папка аватаров",
+    "refreshPreview": "Обновить",
+    "username": "Никнейм",
+    "usernameHint": "1-16 символов",
+    "uuid": "UUID",
+    "uuidHint": "Уникальный ID профиля",
+    "randomize": "Случайно",
+    "copy": "Коп.",
+    "save": "Сохранить",
+    "cancel": "Отмена"
+  },
+  "deleteProfile": {
+    "title": "Удалить профиль?",
+    "message": "Вы уверены, что хотите удалить",
+    "warning": "Это удалит все данные профиля:",
+    "avatarData": "Скины и аватары",
+    "gameData": "Прогресс в игре",
+    "settings": "Настройки профиля",
+    "cannotUndo": "Это нельзя отменить.",
+    "cancel": "Отмена",
+    "delete": "Удалить"
+  },
+  "error": {
+    "title": "Ошибка",
+    "technicalDetails": "Подробности",
+    "copyError": "Скопировать",
+    "ok": "ОК",
+    "dismiss": "Закрыть"
+  },
+  "news": {
+    "title": "Новости",
+    "all": "Все",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
+    "loading": "Загрузка...",
+    "readMore": "Читать на hytale.com",
+    "tryAgain": "Повторить"
+  },
+  "update": {
+    "downloading": "Загрузка...",
+    "extracting": "Распаковка...",
+    "launching": "Запуск...",
+    "pleaseWait": "Подождите, скачиваем файлы игры.",
+    "autoLaunch": "Игра запустится автоматически."
+  },
+  "modManager": {
+    "title": "Моды",
+    "installed": "Установленные",
+    "browse": "Поиск",
+    "search": "Искать моды...",
+    "searchInstalled": "Искать в установленных...",
+    "allCategories": "Все категории",
+    "noModsFound": "Ничего не найдено",
+    "noModsInstalled": "Модов нет",
+    "noMatch": "Нет совпадений",
+    "download": "Скачать",
+    "update": "Обновить",
+    "delete": "Удалить",
+    "checkForUpdates": "Проверить обновления",
+    "allUpToDate": "Всё обновлено!",
+    "updatesAvailable": "Доступно обновлений: {0}",
+    "openModsFolder": "Папка модов",
+    "close": "Закрыть"
+  }
+}

@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HyPrism.UI.ViewModels"
+             xmlns:nav="using:HyPrism.UI.Components.Navigation"
              xmlns:cv="using:HyPrism.UI.Converters"
              xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Avalonia.Svg.Skia"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
@@ -42,53 +43,75 @@
             <!-- Sidebar -->
             <Border Grid.Column="0" Background="#111111">
                 <Grid RowDefinitions="Auto, *">
-                    <TextBlock Text="{Binding Localization[settings.title]}" Grid.Row="0" Margin="25,30,0,30" FontSize="20" FontWeight="Bold" Foreground="White" FontFamily="{StaticResource Poppins}"/>
+                    <TextBlock Text="{Binding SettingsTitle^}" Grid.Row="0" Margin="25,30,0,30" FontSize="20" FontWeight="Bold" Foreground="White" FontFamily="{StaticResource Poppins}"/>
                     
                     <ScrollViewer Grid.Row="1">
                         <StackPanel Spacing="4" Margin="10,0">
-                            <!-- Debug: Explicitly use SvgIcon to test -->
-                            <Button Classes="TabButton" Command="{Binding SwitchTabCommand}" CommandParameter="profile">
-                                <StackPanel Orientation="Horizontal" Spacing="12">
-                                     <svg:Svg Path="/Assets/Icons/user.svg" Width="18" Height="18"/>
-                                     <TextBlock Text="{Binding Localization[settings.myProfile]}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Classes="TabButton" Command="{Binding SwitchTabCommand}" CommandParameter="general">
-                                <StackPanel Orientation="Horizontal" Spacing="12">
-                                     <svg:Svg Path="/Assets/Icons/settings.svg" Width="18" Height="18"/>
-                                     <TextBlock Text="{Binding Localization[settings.general]}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Classes="TabButton" Command="{Binding SwitchTabCommand}" CommandParameter="visual">
-                                 <StackPanel Orientation="Horizontal" Spacing="12">
-                                     <svg:Svg Path="/Assets/Icons/image.svg" Width="18" Height="18"/>
-                                     <TextBlock Text="{Binding Localization[settings.visuals]}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Classes="TabButton" Command="{Binding SwitchTabCommand}" CommandParameter="language">
-                                 <StackPanel Orientation="Horizontal" Spacing="12">
-                                     <svg:Svg Path="/Assets/Icons/globe.svg" Width="18" Height="18"/>
-                                     <TextBlock Text="{Binding Localization[settings.language]}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Classes="TabButton" Command="{Binding SwitchTabCommand}" CommandParameter="data" IsEnabled="False">
-                                 <StackPanel Orientation="Horizontal" Spacing="12">
-                                     <svg:Svg Path="/Assets/Icons/database.svg" Width="18" Height="18"/>
-                                     <TextBlock Text="{Binding Localization[settings.data]}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Classes="TabButton" Command="{Binding SwitchTabCommand}" CommandParameter="instances" IsEnabled="False">
-                                 <StackPanel Orientation="Horizontal" Spacing="12">
-                                     <svg:Svg Path="/Assets/Icons/hard-drive.svg" Width="18" Height="18"/>
-                                     <TextBlock Text="{Binding Localization[settings.instances]}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Classes="TabButton" Command="{Binding SwitchTabCommand}" CommandParameter="about">
-                                 <StackPanel Orientation="Horizontal" Spacing="12">
-                                     <svg:Svg Path="/Assets/Icons/info.svg" Width="18" Height="18"/>
-                                     <TextBlock Text="{Binding Localization[settings.about]}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
+                            
+                            <nav:SidebarItem Text="{Binding MyProfile^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="profile"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='profile'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/user.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+                            
+                            <nav:SidebarItem Text="{Binding General^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="general"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='general'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/settings.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+
+                            <nav:SidebarItem Text="{Binding Visuals^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="visual"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='visual'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/image.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+
+                            <nav:SidebarItem Text="{Binding Language^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="language"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='language'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/globe.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+
+                            <nav:SidebarItem Text="{Binding Data^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="data"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='data'}"
+                                             IsEnabled="False">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/database.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+
+                            <nav:SidebarItem Text="{Binding Instances^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="instances"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='instances'}"
+                                             IsEnabled="False">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/hard-drive.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+
+                            <nav:SidebarItem Text="{Binding About^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="about"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='about'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/info.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
@@ -121,7 +144,7 @@
                             <!-- Avatar Section -->
                             <Border Background="#252525" CornerRadius="12" Padding="20">
                                 <StackPanel Orientation="Horizontal" Spacing="20">
-                                    <Border Width="80" Height="80" CornerRadius="40" Background="{StaticResource HytaleOrangeBrush}" ClipToBounds="True">
+                                    <Border Width="80" Height="80" CornerRadius="40" Background="{DynamicResource SystemAccentBrush}" ClipToBounds="True">
                                         <TextBlock Text=":)" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="30" FontWeight="Bold"/>
                                     </Border>
                                     <StackPanel VerticalAlignment="Center" Spacing="5">

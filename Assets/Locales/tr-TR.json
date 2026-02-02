@@ -1,0 +1,131 @@
+{
+  "_langName": "Türkçe",
+  "app": {
+    "title": "HyPrism",
+    "version": "HyPrism {0}"
+  },
+  "main": {
+    "play": "OYNA",
+    "release": "Sürüm",
+    "preRelease": "Ön Sürüm",
+    "latest": "son",
+    "educational": "Sadece eğitim amaçlıdır. Beğendin mi?",
+    "buyIt": "SATIN AL"
+  },
+  "settings": {
+    "title": "Ayarlar",
+    "myProfile": "Profilim",
+    "general": "Genel",
+    "visuals": "Görünüm",
+    "language": "Dil",
+    "data": "Veri",
+    "instances": "Oyunlar",
+    "about": "Hakkında",
+    "close": "Kapat",
+    "browse": "Gözat",
+    "profile": {
+      "title": "Profilim",
+      "avatar": "Avatar",
+      "displayName": "Görünen Ad",
+      "displayNameHint": "Oyundaki adınız (1-16 karakter).",
+      "uuid": "UUID",
+      "uuidWarning": "Benzersiz ID. Değiştirmek skininizi sıfırlar!",
+      "randomize": "Rastgele",
+      "copy": "Kopyala"
+    },
+    "generalSettings": {
+      "title": "Genel Ayarlar",
+      "launcherStorage": "Depolama",
+      "launcherStorageHint": "Dosyaların tutulduğu yer.",
+      "updateChannel": "Güncelleme Kanalı",
+      "updateChannelStable": "Kararlı (Önerilen)",
+      "updateChannelBeta": "Beta (Deneysel)",
+      "updateChannelHint": "Sadece kararlı sürümler.",
+      "closeLauncher": "Başlatıcıyı Kapat",
+      "closeLauncherHint": "Oyun başlayınca kapat.",
+      "disableNews": "Haberleri Kapat",
+      "disableNewsHint": "Ana menüden haberleri gizle."
+    },
+    "visualSettings": {
+      "title": "Görsel Ayarlar",
+      "accentColor": "Vurgu Rengi",
+      "accentColorHint": "Yakında.",
+      "background": "Arkaplan",
+      "backgroundHint": "Yakında."
+    },
+    "languageSettings": {
+      "title": "Dil Ayarları",
+      "interfaceLanguage": "Arayüz Dili",
+      "interfaceLanguageHint": "Dil seçin",
+      "note": ""
+    }
+  },
+  "profileEditor": {
+    "title": "Profili Düzenle",
+    "avatar": "Avatar",
+    "dropSkin": "Skini buraya bırak",
+    "openAvatarFolder": "Avatar Klasörü",
+    "refreshPreview": "Yenile",
+    "username": "Kullanıcı Adı",
+    "usernameHint": "1-16 karakter",
+    "uuid": "UUID",
+    "uuidHint": "Benzersiz ID",
+    "randomize": "Rastgele",
+    "copy": "Kopyala",
+    "save": "Kaydet",
+    "cancel": "İptal"
+  },
+  "deleteProfile": {
+    "title": "Profili Sil?",
+    "message": "Silmek istediğinize emin misiniz:",
+    "warning": "Bu işlem şunları kalıcı olarak siler:",
+    "avatarData": "Skin ve avatarlar",
+    "gameData": "Oyun ilerlemesi",
+    "settings": "Ayarlar",
+    "cannotUndo": "Geri alınamaz.",
+    "cancel": "İptal",
+    "delete": "Sil"
+  },
+  "error": {
+    "title": "Hata",
+    "technicalDetails": "Detaylar",
+    "copyError": "Kopyala",
+    "ok": "Tamam",
+    "dismiss": "Kapat"
+  },
+  "news": {
+    "title": "Haberler",
+    "all": "Tümü",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
+    "loading": "Yükleniyor...",
+    "readMore": "hytale.com'da oku",
+    "tryAgain": "Tekrar Dene"
+  },
+  "update": {
+    "downloading": "İndiriliyor...",
+    "extracting": "Çıkartılıyor...",
+    "launching": "Başlatılıyor...",
+    "pleaseWait": "Lütfen bekleyin.",
+    "autoLaunch": "Oyun otomatik başlayacak."
+  },
+  "modManager": {
+    "title": "Mod Yöneticisi",
+    "installed": "Yüklü",
+    "browse": "Gözat",
+    "search": "Mod ara...",
+    "searchInstalled": "Yüklülerde ara...",
+    "allCategories": "Tüm Kategoriler",
+    "noModsFound": "Mod bulunamadı",
+    "noModsInstalled": "Yüklü mod yok",
+    "noMatch": "Eşleşme yok",
+    "download": "İndir",
+    "update": "Güncelle",
+    "delete": "Sil",
+    "checkForUpdates": "Güncellemeleri Denetle",
+    "allUpToDate": "Hepsi güncel!",
+    "updatesAvailable": "{0} güncelleme mevcut:",
+    "openModsFolder": "Mod Klasörü",
+    "close": "Kapat"
+  }
+}

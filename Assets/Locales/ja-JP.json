@@ -1,0 +1,131 @@
+{
+  "_langName": "日本語",
+  "app": {
+    "title": "HyPrism",
+    "version": "HyPrism {0}"
+  },
+  "main": {
+    "play": "プレイ",
+    "release": "リリース",
+    "preRelease": "プレリリース",
+    "latest": "最新",
+    "educational": "教育目的のみ。気に入りましたか？",
+    "buyIt": "購入する"
+  },
+  "settings": {
+    "title": "設定",
+    "myProfile": "プロフィール",
+    "general": "一般",
+    "visuals": "外観",
+    "language": "言語",
+    "data": "データ",
+    "instances": "インスタンス",
+    "about": "情報",
+    "close": "閉じる",
+    "browse": "参照",
+    "profile": {
+      "title": "プロフィール",
+      "avatar": "アバター",
+      "displayName": "表示名",
+      "displayNameHint": "ゲーム内での名前 (1-16文字)。",
+      "uuid": "UUID",
+      "uuidWarning": "固有IDです。変更するとスキンがリセットされます！",
+      "randomize": "ランダム",
+      "copy": "コピー"
+    },
+    "generalSettings": {
+      "title": "一般設定",
+      "launcherStorage": "保存場所",
+      "launcherStorageHint": "データが保存される場所。",
+      "updateChannel": "更新チャンネル",
+      "updateChannelStable": "安定版 (推奨)",
+      "updateChannelBeta": "ベータ (実験的)",
+      "updateChannelHint": "安定版のみ受信します。",
+      "closeLauncher": "ランチャーを閉じる",
+      "closeLauncherHint": "ゲーム起動時に閉じます。",
+      "disableNews": "ニュースを無効化",
+      "disableNewsHint": "メニューからニュースを隠す。"
+    },
+    "visualSettings": {
+      "title": "外観設定",
+      "accentColor": "アクセント色",
+      "accentColorHint": "近日公開。",
+      "background": "背景",
+      "backgroundHint": "近日公開。"
+    },
+    "languageSettings": {
+      "title": "言語設定",
+      "interfaceLanguage": "インターフェース言語",
+      "interfaceLanguageHint": "言語を選択",
+      "note": ""
+    }
+  },
+  "profileEditor": {
+    "title": "プロフィール編集",
+    "avatar": "アバター",
+    "dropSkin": "スキンをドロップ",
+    "openAvatarFolder": "フォルダを開く",
+    "refreshPreview": "更新",
+    "username": "ユーザー名",
+    "usernameHint": "1-16文字",
+    "uuid": "UUID",
+    "uuidHint": "固有ID",
+    "randomize": "ランダム",
+    "copy": "コピー",
+    "save": "保存",
+    "cancel": "キャンセル"
+  },
+  "deleteProfile": {
+    "title": "削除しますか？",
+    "message": "本当に削除しますか：",
+    "warning": "以下が完全に削除されます：",
+    "avatarData": "スキンとアバター",
+    "gameData": "ゲーム進行データ",
+    "settings": "設定",
+    "cannotUndo": "元に戻せません。",
+    "cancel": "キャンセル",
+    "delete": "削除"
+  },
+  "error": {
+    "title": "エラー",
+    "technicalDetails": "詳細",
+    "copyError": "コピー",
+    "ok": "OK",
+    "dismiss": "閉じる"
+  },
+  "news": {
+    "title": "ニュース",
+    "all": "すべて",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
+    "loading": "読み込み中...",
+    "readMore": "hytale.comで読む",
+    "tryAgain": "再試行"
+  },
+  "update": {
+    "downloading": "ダウンロード中...",
+    "extracting": "展開中...",
+    "launching": "起動中...",
+    "pleaseWait": "お待ちください。",
+    "autoLaunch": "自動的に起動します。"
+  },
+  "modManager": {
+    "title": "Modマネージャー",
+    "installed": "インストール済み",
+    "browse": "探す",
+    "search": "Mod検索...",
+    "searchInstalled": "インストール済み検索...",
+    "allCategories": "全カテゴリ",
+    "noModsFound": "見つかりません",
+    "noModsInstalled": "Modなし",
+    "noMatch": "一致なし",
+    "download": "入手",
+    "update": "更新",
+    "delete": "削除",
+    "checkForUpdates": "更新を確認",
+    "allUpToDate": "最新です！",
+    "updatesAvailable": "{0} 個の更新があります:",
+    "openModsFolder": "Modフォルダ",
+    "close": "閉じる"
+  }
+}

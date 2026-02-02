@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:HyPrism.UI.ViewModels"
         xmlns:views="using:HyPrism.UI.Views"
+        xmlns:btn="using:HyPrism.UI.Components.Buttons"
         xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Avalonia.Svg.Skia"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="HyPrism.UI.MainWindow"
@@ -79,7 +80,7 @@
                     <StackPanel Orientation="Horizontal" Spacing="12">
                         <!-- Avatar -->
                         <Border Width="48" Height="48" CornerRadius="24" 
-                                Background="{StaticResource HytaleOrangeBrush}" 
+                                Background="{DynamicResource SystemAccentBrush}" 
                                 ClipToBounds="True">
                             <TextBlock Text=":)" 
                                        HorizontalAlignment="Center" 
@@ -108,7 +109,7 @@
                     </StackPanel>
                     
                     <!-- Version -->
-                    <TextBlock Text="{Binding Localization[app.version], StringFormat='{}{0}'}" 
+                    <TextBlock Text="{Binding AppVersion^, StringFormat='{}{0}'}" 
                                FontSize="11" 
                                Foreground="#999"
                                Margin="4,0,0,0"/>
@@ -209,9 +210,9 @@
                 <TextBlock VerticalAlignment="Bottom" 
                            HorizontalAlignment="Center"
                            Margin="0,0,0,8">
-                    <Run Text="{Binding Localization[main.educational]}" Foreground="#999" FontSize="12"/>
+                    <Run Text="{Binding MainEducational^}" Foreground="#999" FontSize="12"/>
                     <Run Text=" "/>
-                    <Run Text="{Binding Localization[main.buyIt]}" Foreground="{StaticResource HytaleOrangeBrush}" FontSize="12" FontWeight="Bold"/>
+                    <Run Text="{Binding MainBuyIt^}" Foreground="{DynamicResource SystemAccentBrush}" FontSize="12" FontWeight="Bold"/>
                 </TextBlock>
                 
                 <!-- BOTTOM RIGHT: Version Selector + Play Button -->
@@ -241,21 +242,16 @@
                     </Border>
                     
                     <!-- Play Button -->
-                    <Button Command="{Binding LaunchCommand}" 
-                            Background="{StaticResource HytaleOrangeBrush}" 
-                            Foreground="#111"
-                            Padding="40,0"
-                            Height="50"
-                            CornerRadius="8"
-                            FontSize="18"
-                            FontWeight="Bold">
+                    <btn:PrimaryButton Command="{Binding LaunchCommand}" 
+                                       Height="50"
+                                       FontSize="18">
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <svg:Svg Path="/Assets/Icons/play.svg" Width="20" Height="20">
                                 <svg:Svg.Css>* { stroke: #111 !important; fill: #111 !important; }</svg:Svg.Css>
                             </svg:Svg>
-                            <TextBlock Text="{Binding Localization[main.play]}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding MainPlay^}" VerticalAlignment="Center"/>
                         </StackPanel>
-                    </Button>
+                    </btn:PrimaryButton>
                 </StackPanel>
             </Grid>
         </Grid>

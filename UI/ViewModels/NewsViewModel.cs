@@ -8,14 +8,21 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using HyPrism.Backend;
 using HyPrism.Backend.Services.Core;
-using HyPrism.UI.Models;
+using HyPrism.Backend.Models;
 
 namespace HyPrism.UI.ViewModels;
 
 public class NewsViewModel : ReactiveObject
 {
     private readonly AppService _appService;
-    private readonly List<NewsItem> _allNews = new();
+    private readonly List<NewsItemResponse> _allNews = new();
+    
+    // Reactive Localization Properties
+    public IObservable<string> NewsTitle { get; }
+    public IObservable<string> NewsAll { get; }
+    public IObservable<string> NewsHytale { get; }
+    public IObservable<string> NewsHyPrism { get; }
+    public IObservable<string> NewsLoading { get; }
     
     private string _activeFilter = "all"; // "all", "hytale", "hyprism"
     public string ActiveFilter
@@ -54,7 +61,7 @@ public class NewsViewModel : ReactiveObject
     }
     
     // News collection
-    public ObservableCollection<NewsItem> News { get; } = new();
+    public ObservableCollection<NewsItemResponse> News { get; } = new();
     
     // Loading state
     private bool _isLoading;
@@ -79,6 +86,14 @@ public class NewsViewModel : ReactiveObject
     public NewsViewModel(AppService appService)
     {
         _appService = appService;
+        
+        // Initialize reactive localization properties
+        var loc = LocalizationService.Instance;
+        NewsTitle = loc.GetObservable("news.title");
+        NewsAll = loc.GetObservable("news.all");
+        NewsHytale = loc.GetObservable("news.hytale");
+        NewsHyPrism = loc.GetObservable("news.hyprism");
+        NewsLoading = loc.GetObservable("news.loading");
         
         RefreshCommand = ReactiveCommand.CreateFromTask(LoadNewsAsync);
         SetFilterCommand = ReactiveCommand.Create<string>(
@@ -105,19 +120,7 @@ public class NewsViewModel : ReactiveObject
             var allNewsItems = await _appService.NewsService.GetNewsAsync(30, NewsSource.All);
             
             _allNews.Clear();
-            foreach (var item in allNewsItems)
-            {
-                _allNews.Add(new NewsItem
-                {
-                    Title = item.Title,
-                    Excerpt = item.Excerpt,
-                    Url = item.Url,
-                    Date = FormatDate(item.Date),
-                    Author = item.Author,
-                    ImageUrl = item.ImageUrl ?? "",
-                    Source = item.Source
-                });
-            }
+            _allNews.AddRange(allNewsItems);
             
             // Apply initial filter
             FilterNews();

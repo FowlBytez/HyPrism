@@ -11,6 +11,10 @@
             <Color x:Key="HytaleDark">#090909</Color>
             <Color x:Key="HytaleDarkLight">#0d0d0d</Color>
             
+            <!-- Dynamic Theme System -->
+            <Color x:Key="SystemAccentColor">#FFA845</Color>
+            <SolidColorBrush x:Key="SystemAccentBrush" Color="{StaticResource SystemAccentColor}" />
+
             <SolidColorBrush x:Key="HytaleOrangeBrush" Color="{StaticResource HytaleOrange}"/>
             <SolidColorBrush x:Key="HytaleOrangeDarkBrush" Color="{StaticResource HytaleOrangeDark}"/>
             <SolidColorBrush x:Key="HytaleDarkBrush" Color="{StaticResource HytaleDark}"/>

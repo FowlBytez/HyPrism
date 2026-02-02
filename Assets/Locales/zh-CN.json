@@ -1,0 +1,131 @@
+{
+  "_langName": "简体中文",
+  "app": {
+    "title": "HyPrism",
+    "version": "HyPrism {0}"
+  },
+  "main": {
+    "play": "开始游戏",
+    "release": "正式版",
+    "preRelease": "预览版",
+    "latest": "最新",
+    "educational": "仅供教育用途。喜欢吗？",
+    "buyIt": "购买"
+  },
+  "settings": {
+    "title": "设置",
+    "myProfile": "我的资料",
+    "general": "常规",
+    "visuals": "外观",
+    "language": "语言",
+    "data": "数据",
+    "instances": "实例",
+    "about": "关于",
+    "close": "关闭",
+    "browse": "浏览",
+    "profile": {
+      "title": "我的资料",
+      "avatar": "头像",
+      "displayName": "显示名称",
+      "displayNameHint": "游戏内显示的名称 (1-16字符)。",
+      "uuid": "UUID",
+      "uuidWarning": "唯一ID。更改将重置皮肤！",
+      "randomize": "随机",
+      "copy": "复制"
+    },
+    "generalSettings": {
+      "title": "常规设置",
+      "launcherStorage": "存储位置",
+      "launcherStorageHint": "游戏数据存储位置。",
+      "updateChannel": "更新通道",
+      "updateChannelStable": "稳定版 (推荐)",
+      "updateChannelBeta": "测试版 (实验性)",
+      "updateChannelHint": "仅接收稳定版本。",
+      "closeLauncher": "关闭启动器",
+      "closeLauncherHint": "游戏启动时自动关闭。",
+      "disableNews": "禁用新闻",
+      "disableNewsHint": "隐藏主菜单新闻。"
+    },
+    "visualSettings": {
+      "title": "外观设置",
+      "accentColor": "强调色",
+      "accentColorHint": "即将推出。",
+      "background": "背景",
+      "backgroundHint": "即将推出。"
+    },
+    "languageSettings": {
+      "title": "语言设置",
+      "interfaceLanguage": "界面语言",
+      "interfaceLanguageHint": "选择语言",
+      "note": ""
+    }
+  },
+  "profileEditor": {
+    "title": "编辑资料",
+    "avatar": "头像",
+    "dropSkin": "拖放皮肤文件到这里",
+    "openAvatarFolder": "打开文件夹",
+    "refreshPreview": "刷新预览",
+    "username": "用户名",
+    "usernameHint": "1-16字符",
+    "uuid": "UUID",
+    "uuidHint": "唯一ID",
+    "randomize": "随机",
+    "copy": "复制",
+    "save": "保存",
+    "cancel": "取消"
+  },
+  "deleteProfile": {
+    "title": "删除资料？",
+    "message": "确定要删除吗：",
+    "warning": "这将永久删除：",
+    "avatarData": "皮肤和头像",
+    "gameData": "游戏进度",
+    "settings": "设置",
+    "cannotUndo": "此操作无法撤销。",
+    "cancel": "取消",
+    "delete": "删除"
+  },
+  "error": {
+    "title": "错误",
+    "technicalDetails": "详细信息",
+    "copyError": "复制错误",
+    "ok": "确定",
+    "dismiss": "关闭"
+  },
+  "news": {
+    "title": "新闻",
+    "all": "全部",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
+    "loading": "加载中...",
+    "readMore": "阅读全文",
+    "tryAgain": "重试"
+  },
+  "update": {
+    "downloading": "下载中...",
+    "extracting": "解压中...",
+    "launching": "启动中...",
+    "pleaseWait": "请稍候，正在下载文件。",
+    "autoLaunch": "准备就绪后自动启动。"
+  },
+  "modManager": {
+    "title": "模组管理",
+    "installed": "已安装",
+    "browse": "浏览",
+    "search": "搜索模组...",
+    "searchInstalled": "搜索已安装...",
+    "allCategories": "所有分类",
+    "noModsFound": "未找到",
+    "noModsInstalled": "未安装模组",
+    "noMatch": "无匹配项",
+    "download": "下载",
+    "update": "更新",
+    "delete": "删除",
+    "checkForUpdates": "检查更新",
+    "allUpToDate": "已是最新！",
+    "updatesAvailable": "有 {0} 个更新可用:",
+    "openModsFolder": "模组文件夹",
+    "close": "关闭"
+  }
+}

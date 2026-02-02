@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HyPrism.UI.ViewModels"
+             xmlns:cards="using:HyPrism.UI.Components.Cards"
              xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Avalonia.Svg.Skia"
              xmlns:asyncImageLoader="clr-namespace:AsyncImageLoader;assembly=AsyncImageLoader.Avalonia"
              mc:Ignorable="d" d:DesignWidth="380" d:DesignHeight="700"
@@ -107,7 +108,7 @@
                          Width="20" 
                          Height="20"
                          VerticalAlignment="Center"/>
-                <TextBlock Text="News" 
+                <TextBlock Text="{Binding NewsTitle^}" 
                            FontSize="16" 
                            FontWeight="Bold" 
                            Foreground="White" 
@@ -131,7 +132,7 @@
                             Canvas.Left="{Binding ActiveTabPosition}"
                             Width="{Binding TabWidth}"
                             Height="{Binding TabHeight}"
-                            Background="{StaticResource HytaleOrangeBrush}"
+                            Background="{DynamicResource SystemAccentBrush}"
                             CornerRadius="8"/>
                 </Canvas>
                 
@@ -142,7 +143,7 @@
                             Classes.active="{Binding ActiveFilter, Converter={StaticResource StringEqualityConverter}, ConverterParameter='all'}"
                             Command="{Binding SetFilterCommand}"
                             CommandParameter="all">
-                        <TextBlock Text="All" 
+                        <TextBlock Text="{Binding NewsAll^}" 
                                    HorizontalAlignment="Center" 
                                    VerticalAlignment="Center"/>
                     </Button>
@@ -152,7 +153,7 @@
                             Classes.active="{Binding ActiveFilter, Converter={StaticResource StringEqualityConverter}, ConverterParameter='hytale'}"
                             Command="{Binding SetFilterCommand}"
                             CommandParameter="hytale">
-                        <TextBlock Text="Hytale" 
+                        <TextBlock Text="{Binding NewsHytale^}" 
                                    HorizontalAlignment="Center" 
                                    VerticalAlignment="Center"/>
                     </Button>
@@ -162,7 +163,7 @@
                             Classes.active="{Binding ActiveFilter, Converter={StaticResource StringEqualityConverter}, ConverterParameter='hyprism'}"
                             Command="{Binding SetFilterCommand}"
                             CommandParameter="hyprism">
-                        <TextBlock Text="HyPrism" 
+                        <TextBlock Text="{Binding NewsHyPrism^}" 
                                    HorizontalAlignment="Center" 
                                    VerticalAlignment="Center"/>
                     </Button>
@@ -183,7 +184,7 @@
                     <StackPanel Spacing="12" HorizontalAlignment="Center">
                         <Border Width="32" 
                                 Height="32"
-                                BorderBrush="{StaticResource HytaleOrangeBrush}"
+                                BorderBrush="{DynamicResource SystemAccentBrush}"
                                 BorderThickness="3"
                                 CornerRadius="16"
                                 HorizontalAlignment="Center">
@@ -205,7 +206,7 @@
                                 </Style>
                             </Border.Styles>
                         </Border>
-                        <TextBlock Text="Loading news..."
+                        <TextBlock Text="{Binding NewsLoading^}"
                                    Foreground="#999"
                                    FontSize="12"/>
                     </StackPanel>
@@ -257,70 +258,9 @@
                     </ItemsControl.Styles>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Button Classes="news-card"
-                                    Command="{Binding $parent[UserControl].DataContext.OpenLinkCommand}"
-                                    CommandParameter="{Binding Url}"
-                                    Margin="0,0,0,12">
-                                <Border Classes="news-card-content">
-                                    <Grid ColumnDefinitions="Auto, *">
-                                        <!-- News Image (Thumbnail) -->
-                                        <Border Grid.Column="0"
-                                                Width="80"
-                                                Height="80"
-                                                CornerRadius="8"
-                                                ClipToBounds="True"
-                                                Margin="0,0,12,0"
-                                                Background="Transparent">
-                                            <Image asyncImageLoader:ImageLoader.Source="{Binding ImageUrl}"
-                                                   Stretch="UniformToFill"
-                                                   RenderOptions.BitmapInterpolationMode="HighQuality"/>
-                                        </Border>
-                                        
-                                        <!-- Content -->
-                                        <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
-                                            <!-- Title -->
-                                            <TextBlock Text="{Binding Title}" 
-                                                       FontWeight="Bold" 
-                                                       Foreground="White" 
-                                                       FontSize="13"
-                                                       TextWrapping="Wrap"
-                                                       MaxLines="2"
-                                                       LineHeight="18"/>
-                                            
-                                            <!-- Excerpt -->
-                                            <TextBlock Text="{Binding Excerpt}" 
-                                                       FontSize="11" 
-                                                       Foreground="#AAAAAA"
-                                                       TextWrapping="Wrap"
-                                                       MaxLines="2"
-                                                       LineHeight="15"
-                                                       TextTrimming="CharacterEllipsis"/>
-                                            
-                                            <!-- Meta Info -->
-                                            <Grid ColumnDefinitions="Auto, *" Margin="0,2,0,0">
-                                                <StackPanel Grid.Column="0" 
-                                                            Orientation="Horizontal" 
-                                                            Spacing="6">
-                                                    <TextBlock Text="•" 
-                                                               FontSize="10" 
-                                                               Foreground="#888"
-                                                               VerticalAlignment="Center"/>
-                                                    <TextBlock Text="{Binding Author}" 
-                                                               FontSize="10" 
-                                                               Foreground="#999"
-                                                               FontWeight="Medium"/>
-                                                </StackPanel>
-                                                <TextBlock Grid.Column="1" 
-                                                           Text="{Binding Date}" 
-                                                           FontSize="10" 
-                                                           Foreground="#777"
-                                                           HorizontalAlignment="Right"
-                                                           VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </Button>
+                            <cards:NewsCard Command="{Binding $parent[UserControl].DataContext.OpenLinkCommand}"
+                                           CommandParameter="{Binding Url}"
+                                           Margin="0,0,0,12"/>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

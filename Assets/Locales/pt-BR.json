@@ -1,0 +1,131 @@
+{
+  "_langName": "Português (Brasil)",
+  "app": {
+    "title": "HyPrism",
+    "version": "HyPrism {0}"
+  },
+  "main": {
+    "play": "JOGAR",
+    "release": "Lançamento",
+    "preRelease": "Pré-Lançamento",
+    "latest": "recente",
+    "educational": "Apenas fins educativos. Curtiu?",
+    "buyIt": "COMPRE"
+  },
+  "settings": {
+    "title": "Configurações",
+    "myProfile": "Meu Perfil",
+    "general": "Geral",
+    "visuals": "Visual",
+    "language": "Idioma",
+    "data": "Dados",
+    "instances": "Instâncias",
+    "about": "Sobre",
+    "close": "Fechar",
+    "browse": "Procurar",
+    "profile": {
+      "title": "Meu Perfil",
+      "avatar": "Avatar",
+      "displayName": "Nome",
+      "displayNameHint": "Nome no jogo (1-16 car.).",
+      "uuid": "UUID",
+      "uuidWarning": "ID único. Mudar reseta sua skin!",
+      "randomize": "Aleatório",
+      "copy": "Copiar"
+    },
+    "generalSettings": {
+      "title": "Configurações Gerais",
+      "launcherStorage": "Armazenamento",
+      "launcherStorageHint": "Local dos arquivos.",
+      "updateChannel": "Canal de Atualização",
+      "updateChannelStable": "Estável (Recomendado)",
+      "updateChannelBeta": "Beta (Experimental)",
+      "updateChannelHint": "Apenas versões estáveis.",
+      "closeLauncher": "Fechar Launcher",
+      "closeLauncherHint": "Fechar ao iniciar o jogo.",
+      "disableNews": "Desativar Notícias",
+      "disableNewsHint": "Ocultar notícias do menu."
+    },
+    "visualSettings": {
+      "title": "Configurações Visuais",
+      "accentColor": "Cor de Destaque",
+      "accentColorHint": "Em breve.",
+      "background": "Fundo",
+      "backgroundHint": "Em breve."
+    },
+    "languageSettings": {
+      "title": "Idioma",
+      "interfaceLanguage": "Idioma da Interface",
+      "interfaceLanguageHint": "Escolha o idioma",
+      "note": ""
+    }
+  },
+  "profileEditor": {
+    "title": "Editar Perfil",
+    "avatar": "Avatar",
+    "dropSkin": "Arraste sua skin aqui",
+    "openAvatarFolder": "Pasta de Avatares",
+    "refreshPreview": "Atualizar",
+    "username": "Usuário",
+    "usernameHint": "1-16 caracteres",
+    "uuid": "UUID",
+    "uuidHint": "ID único",
+    "randomize": "Aleatório",
+    "copy": "Copiar",
+    "save": "Salvar",
+    "cancel": "Cancelar"
+  },
+  "deleteProfile": {
+    "title": "Excluir Perfil?",
+    "message": "Tem certeza que deseja excluir",
+    "warning": "Isso excluirá permanentemente:",
+    "avatarData": "Skins e avatares",
+    "gameData": "Progresso do jogo",
+    "settings": "Configurações",
+    "cannotUndo": "Não pode ser desfeito.",
+    "cancel": "Cancelar",
+    "delete": "Excluir"
+  },
+  "error": {
+    "title": "Erro",
+    "technicalDetails": "Detalhes",
+    "copyError": "Copiar Erro",
+    "ok": "OK",
+    "dismiss": "Fechar"
+  },
+  "news": {
+    "title": "Notícias",
+    "all": "Tudo",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
+    "loading": "Carregando...",
+    "readMore": "Ler em hytale.com",
+    "tryAgain": "Tentar Novamente"
+  },
+  "update": {
+    "downloading": "Baixando...",
+    "extracting": "Extraindo...",
+    "launching": "Iniciando...",
+    "pleaseWait": "Aguarde o download.",
+    "autoLaunch": "O jogo iniciará automaticamente."
+  },
+  "modManager": {
+    "title": "Gerenciador de Mods",
+    "installed": "Instalados",
+    "browse": "Procurar",
+    "search": "Buscar mods...",
+    "searchInstalled": "Buscar instalados...",
+    "allCategories": "Todas",
+    "noModsFound": "Nenhum mod",
+    "noModsInstalled": "Sem mods",
+    "noMatch": "Sem resultados",
+    "download": "Baixar",
+    "update": "Atualizar",
+    "delete": "Excluir",
+    "checkForUpdates": "Verificar Atualizações",
+    "allUpToDate": "Tudo atualizado!",
+    "updatesAvailable": "{0} atualizações disponíveis:",
+    "openModsFolder": "Pasta de Mods",
+    "close": "Fechar"
+  }
+}

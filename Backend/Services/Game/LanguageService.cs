@@ -42,20 +42,21 @@ public class LanguageService
         try
         {
             // Map launcher language codes to game language folder names
+            // Support both short codes (legacy) and standard locale codes
             var languageMapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                { "en", "en-US" },
-                { "es", "es-ES" },
-                { "de", "de-DE" },
-                { "fr", "fr-FR" },
-                { "ja", "ja-JP" },
-                { "ko", "ko-KR" },
-                { "pt", "pt-BR" },
-                { "ru", "ru-RU" },
-                { "tr", "tr-TR" },
-                { "uk", "uk-UA" },
-                { "zh", "zh-CN" },
-                { "be", "be-BY" }
+                { "en", "en-US" }, { "en-US", "en-US" },
+                { "es", "es-ES" }, { "es-ES", "es-ES" },
+                { "de", "de-DE" }, { "de-DE", "de-DE" },
+                { "fr", "fr-FR" }, { "fr-FR", "fr-FR" },
+                { "ja", "ja-JP" }, { "ja-JP", "ja-JP" },
+                { "ko", "ko-KR" }, { "ko-KR", "ko-KR" },
+                { "pt", "pt-BR" }, { "pt-BR", "pt-BR" },
+                { "ru", "ru-RU" }, { "ru-RU", "ru-RU" },
+                { "tr", "tr-TR" }, { "tr-TR", "tr-TR" },
+                { "uk", "uk-UA" }, { "uk-UA", "uk-UA" },
+                { "zh", "zh-CN" }, { "zh-CN", "zh-CN" },
+                { "be", "be-BY" }, { "be-BY", "be-BY" }
             };
 
             // Get the game language code

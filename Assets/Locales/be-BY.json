@@ -1,0 +1,131 @@
+{
+  "_langName": "Беларуская",
+  "app": {
+    "title": "HyPrism",
+    "version": "HyPrism {0}"
+  },
+  "main": {
+    "play": "ГУЛЯЦЬ",
+    "release": "Рэліз",
+    "preRelease": "Прэ-рэліз",
+    "latest": "апошняя",
+    "educational": "Толькі для адукацыйных мэт. Падабаецца?",
+    "buyIt": "КУПІ ЯЕ"
+  },
+  "settings": {
+    "title": "Налады",
+    "myProfile": "Мой профіль",
+    "general": "Агульныя",
+    "visuals": "Выгляд",
+    "language": "Мова",
+    "data": "Дадзеныя",
+    "instances": "Гульні",
+    "about": "Пра нас",
+    "close": "Закрыць",
+    "browse": "Агляд",
+    "profile": {
+      "title": "Мой профіль",
+      "avatar": "Аватар",
+      "displayName": "Нікнэйм",
+      "displayNameHint": "Імя ў гульні (1-16 сімвалаў).",
+      "uuid": "UUID",
+      "uuidWarning": "Унікальны ID для мультыплэера. Змена скіне ваш скін!",
+      "randomize": "Выпадкова",
+      "copy": "Кап."
+    },
+    "generalSettings": {
+      "title": "Агульныя налады",
+      "launcherStorage": "Сховішча лаунчера",
+      "launcherStorageHint": "Дзе захоўваюцца гульні і дадзеныя.",
+      "updateChannel": "Канал абнаўленняў",
+      "updateChannelStable": "Стабільны",
+      "updateChannelBeta": "Бэта (Небяспечна)",
+      "updateChannelHint": "Толькі правераныя версіі.",
+      "closeLauncher": "Закрываць лаунчер",
+      "closeLauncherHint": "Закрываць пасля запуску гульні.",
+      "disableNews": "Схаваць навіны",
+      "disableNewsHint": "Прыбраць навіны з галоўнага экрана."
+    },
+    "visualSettings": {
+      "title": "Налады выгляду",
+      "accentColor": "Колер акцэнту",
+      "accentColorHint": "Хутка.",
+      "background": "Фон",
+      "backgroundHint": "Хутка."
+    },
+    "languageSettings": {
+      "title": "Налады мовы",
+      "interfaceLanguage": "Мова інтэрфейсу",
+      "interfaceLanguageHint": "Абярыце мову лаунчера",
+      "note": ""
+    }
+  },
+  "profileEditor": {
+    "title": "Рэдактар профілю",
+    "avatar": "Аватар",
+    "dropSkin": "Перацягніце скін сюды",
+    "openAvatarFolder": "Папка аватараў",
+    "refreshPreview": "Абнавіць",
+    "username": "Нікнэйм",
+    "usernameHint": "1-16 сімвалаў",
+    "uuid": "UUID",
+    "uuidHint": "Унікальны ID профілю",
+    "randomize": "Выпадкова",
+    "copy": "Кап.",
+    "save": "Захаваць",
+    "cancel": "Адмена"
+  },
+  "deleteProfile": {
+    "title": "Выдаліць профіль?",
+    "message": "Вы ўпэўнены, што жадаеце выдаліць",
+    "warning": "Гэта выдаліць усе дадзеныя профілю:",
+    "avatarData": "Скіны і аватары",
+    "gameData": "Прагрэс у гульні",
+    "settings": "Налады профілю",
+    "cannotUndo": "Гэта немагчыма адмяніць.",
+    "cancel": "Адмена",
+    "delete": "Выдаліць"
+  },
+  "error": {
+    "title": "Памылка",
+    "technicalDetails": "Падрабязнасці",
+    "copyError": "Скапіяваць",
+    "ok": "ОК",
+    "dismiss": "Закрыць"
+  },
+  "news": {
+    "title": "Навіны",
+    "all": "Усе",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
+    "loading": "Загрузка...",
+    "readMore": "Чытаць на hytale.com",
+    "tryAgain": "Паўтарыць"
+  },
+  "update": {
+    "downloading": "Загрузка...",
+    "extracting": "Распакаванне...",
+    "launching": "Запуск...",
+    "pleaseWait": "Пачакайце, спампоўваем файлы гульні.",
+    "autoLaunch": "Гульня запусціцца аўтаматычна."
+  },
+  "modManager": {
+    "title": "Моды",
+    "installed": "Усталяваныя",
+    "browse": "Пошук",
+    "search": "Шукаць моды...",
+    "searchInstalled": "Шукаць ва ўсталяваных...",
+    "allCategories": "Усе катэгорыі",
+    "noModsFound": "Нічога не знойдзена",
+    "noModsInstalled": "Модаў няма",
+    "noMatch": "Няма супадзенняў",
+    "download": "Спампаваць",
+    "update": "Абнавіць",
+    "delete": "Выдаліць",
+    "checkForUpdates": "Праверыць абнаўленні",
+    "allUpToDate": "Усё абноўлена!",
+    "updatesAvailable": "Даступна абнаўленняў: {0}",
+    "openModsFolder": "Папка модаў",
+    "close": "Закрыць"
+  }
+}

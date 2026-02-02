@@ -1,0 +1,131 @@
+{
+  "_langName": "Українська",
+  "app": {
+    "title": "HyPrism",
+    "version": "HyPrism {0}"
+  },
+  "main": {
+    "play": "ГРАТИ",
+    "release": "Реліз",
+    "preRelease": "Пре-реліз",
+    "latest": "остання",
+    "educational": "Лише для освітніх цілей. Подобається?",
+    "buyIt": "КУПИ ÏЇ"
+  },
+  "settings": {
+    "title": "Налаштування",
+    "myProfile": "Мій профіль",
+    "general": "Загальні",
+    "visuals": "Вигляд",
+    "language": "Мова",
+    "data": "Дані",
+    "instances": "Ігри",
+    "about": "Про нас",
+    "close": "Закрити",
+    "browse": "Огляд",
+    "profile": {
+      "title": "Мій профіль",
+      "avatar": "Аватар",
+      "displayName": "Нікнейм",
+      "displayNameHint": "Ім'я в грі (1-16 символів).",
+      "uuid": "UUID",
+      "uuidWarning": "Унікальний ID для мультиплеєра. Зміна скине ваш скін!",
+      "randomize": "Випадково",
+      "copy": "Коп."
+    },
+    "generalSettings": {
+      "title": "Загальні налаштування",
+      "launcherStorage": "Сховище лаунчера",
+      "launcherStorageHint": "Де зберігаються ігри та дані.",
+      "updateChannel": "Канал оновлень",
+      "updateChannelStable": "Стабільний",
+      "updateChannelBeta": "Бета (Небезпечно)",
+      "updateChannelHint": "Тільки перевірені версії.",
+      "closeLauncher": "Закривати лаунчер",
+      "closeLauncherHint": "Закривати після запуску гри.",
+      "disableNews": "Приховати новини",
+      "disableNewsHint": "Прибрати новини з головного екрана."
+    },
+    "visualSettings": {
+      "title": "Налаштування вигляду",
+      "accentColor": "Колір акценту",
+      "accentColorHint": "Скоро.",
+      "background": "Фон",
+      "backgroundHint": "Скоро."
+    },
+    "languageSettings": {
+      "title": "Налаштування мови",
+      "interfaceLanguage": "Мова інтерфейсу",
+      "interfaceLanguageHint": "Оберіть мову лаунчера",
+      "note": ""
+    }
+  },
+  "profileEditor": {
+    "title": "Редактор профілю",
+    "avatar": "Аватар",
+    "dropSkin": "Перетягніть скін сюди",
+    "openAvatarFolder": "Папка аватарів",
+    "refreshPreview": "Оновити",
+    "username": "Нікнейм",
+    "usernameHint": "1-16 символів",
+    "uuid": "UUID",
+    "uuidHint": "Унікальний ID профілю",
+    "randomize": "Випадково",
+    "copy": "Коп.",
+    "save": "Зберегти",
+    "cancel": "Скасувати"
+  },
+  "deleteProfile": {
+    "title": "Видалити профіль?",
+    "message": "Ви впевнені, що хочете видалити",
+    "warning": "Це видалить усі дані профілю:",
+    "avatarData": "Скіни та аватари",
+    "gameData": "Прогрес у грі",
+    "settings": "Налаштування профілю",
+    "cannotUndo": "Це неможливо скасувати.",
+    "cancel": "Скасувати",
+    "delete": "Видалити"
+  },
+  "error": {
+    "title": "Помилка",
+    "technicalDetails": "Деталі",
+    "copyError": "Копіювати",
+    "ok": "ОК",
+    "dismiss": "Закрити"
+  },
+  "news": {
+    "title": "Новини",
+    "all": "Всі",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
+    "loading": "Завантаження...",
+    "readMore": "Читати на hytale.com",
+    "tryAgain": "Спробувати ще"
+  },
+  "update": {
+    "downloading": "Завантаження...",
+    "extracting": "Розпакування...",
+    "launching": "Запуск...",
+    "pleaseWait": "Зачекайте, завантажуємо файли гри.",
+    "autoLaunch": "Гра запуститься автоматично."
+  },
+  "modManager": {
+    "title": "Моди",
+    "installed": "Встановлені",
+    "browse": "Пошук",
+    "search": "Шукати моди...",
+    "searchInstalled": "Шукати у встановлених...",
+    "allCategories": "Всі категорії",
+    "noModsFound": "Нічого не знайдено",
+    "noModsInstalled": "Модів немає",
+    "noMatch": "Немає збігів",
+    "download": "Завантажити",
+    "update": "Оновити",
+    "delete": "Видалити",
+    "checkForUpdates": "Перевірити оновлення",
+    "allUpToDate": "Все оновлено!",
+    "updatesAvailable": "Доступно оновлень: {0}",
+    "openModsFolder": "Папка модів",
+    "close": "Закрити"
+  }
+}

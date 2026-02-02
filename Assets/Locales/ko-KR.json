@@ -1,0 +1,131 @@
+{
+  "_langName": "한국어",
+  "app": {
+    "title": "HyPrism",
+    "version": "HyPrism {0}"
+  },
+  "main": {
+    "play": "플레이",
+    "release": "릴리즈",
+    "preRelease": "프리릴리즈",
+    "latest": "최신",
+    "educational": "교육 목적입니다.",
+    "buyIt": "구매하기"
+  },
+  "settings": {
+    "title": "설정",
+    "myProfile": "내 프로필",
+    "general": "일반",
+    "visuals": "시각",
+    "language": "언어",
+    "data": "데이터",
+    "instances": "인스턴스",
+    "about": "정보",
+    "close": "닫기",
+    "browse": "찾아보기",
+    "profile": {
+      "title": "내 프로필",
+      "avatar": "아바타",
+      "displayName": "표시 이름",
+      "displayNameHint": "게임 내 이름 (1-16자).",
+      "uuid": "UUID",
+      "uuidWarning": "고유 ID입니다. 변경 시 스킨이 초기화됩니다!",
+      "randomize": "무작위",
+      "copy": "복사"
+    },
+    "generalSettings": {
+      "title": "일반 설정",
+      "launcherStorage": "저장소",
+      "launcherStorageHint": "데이터 저장 위치.",
+      "updateChannel": "업데이트 채널",
+      "updateChannelStable": "안정 (권장)",
+      "updateChannelBeta": "베타 (실험적)",
+      "updateChannelHint": "안정 버전만 받습니다.",
+      "closeLauncher": "런처 닫기",
+      "closeLauncherHint": "게임 시작 시 런처 종료.",
+      "disableNews": "뉴스 끄기",
+      "disableNewsHint": "메인 메뉴에서 뉴스 숨김."
+    },
+    "visualSettings": {
+      "title": "시각 설정",
+      "accentColor": "강조 색상",
+      "accentColorHint": "준비 중.",
+      "background": "배경",
+      "backgroundHint": "준비 중."
+    },
+    "languageSettings": {
+      "title": "언어 설정",
+      "interfaceLanguage": "인터페이스 언어",
+      "interfaceLanguageHint": "언어 선택",
+      "note": ""
+    }
+  },
+  "profileEditor": {
+    "title": "프로필 편집",
+    "avatar": "아바타",
+    "dropSkin": "스킨 파일을 여기에 드롭",
+    "openAvatarFolder": "폴더 열기",
+    "refreshPreview": "새로고침",
+    "username": "사용자명",
+    "usernameHint": "1-16자",
+    "uuid": "UUID",
+    "uuidHint": "고유 ID",
+    "randomize": "무작위",
+    "copy": "복사",
+    "save": "저장",
+    "cancel": "취소"
+  },
+  "deleteProfile": {
+    "title": "프로필 삭제?",
+    "message": "정말 삭제하시겠습니까:",
+    "warning": "다음 데이터가 영구 삭제됩니다:",
+    "avatarData": "스킨 및 아바타",
+    "gameData": "게임 진행 데이터",
+    "settings": "설정",
+    "cannotUndo": "되돌릴 수 없습니다.",
+    "cancel": "취소",
+    "delete": "삭제"
+  },
+  "error": {
+    "title": "오류",
+    "technicalDetails": "상세 정보",
+    "copyError": "복사",
+    "ok": "확인",
+    "dismiss": "닫기"
+  },
+  "news": {
+    "title": "뉴스",
+    "all": "전체",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
+    "loading": "로딩 중...",
+    "readMore": "hytale.com에서 읽기",
+    "tryAgain": "재시도"
+  },
+  "update": {
+    "downloading": "다운로드 중...",
+    "extracting": "압축 해제 중...",
+    "launching": "시작 중...",
+    "pleaseWait": "잠시만 기다려주세요.",
+    "autoLaunch": "자동으로 시작됩니다."
+  },
+  "modManager": {
+    "title": "모드 관리자",
+    "installed": "설치됨",
+    "browse": "찾아보기",
+    "search": "모드 검색...",
+    "searchInstalled": "설치된 모드 검색...",
+    "allCategories": "모든 카테고리",
+    "noModsFound": "없음",
+    "noModsInstalled": "설치된 모드 없음",
+    "noMatch": "일치하는 항목 없음",
+    "download": "다운로드",
+    "update": "업데이트",
+    "delete": "삭제",
+    "checkForUpdates": "업데이트 확인",
+    "allUpToDate": "모두 최신입니다!",
+    "updatesAvailable": "{0}개의 업데이트 가능:",
+    "openModsFolder": "모드 폴더",
+    "close": "닫기"
+  }
+}

@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Avalonia.Platform.Storage;
 using System.Linq;
 using HyPrism.Backend.Services.Core;
+using System;
+using System.Reactive.Linq;
 
 namespace HyPrism.UI.ViewModels;
 
@@ -25,6 +27,16 @@ public class SettingsViewModel : ReactiveObject
 {
     private readonly AppService _appService;
     public LocalizationService Localization => _appService.Localization;
+
+    // Reactive Localization Properties - will update automatically when language changes
+    public IObservable<string> SettingsTitle { get; }
+    public IObservable<string> MyProfile { get; }
+    public IObservable<string> General { get; }
+    public IObservable<string> Visuals { get; }
+    public IObservable<string> Language { get; }
+    public IObservable<string> Data { get; }
+    public IObservable<string> Instances { get; }
+    public IObservable<string> About { get; }
 
     // Tabs
     private string _activeTab = "profile";
@@ -145,8 +157,19 @@ public class SettingsViewModel : ReactiveObject
     {
         _appService = appService;
         
-        // Initialize language items
-        LanguageItems = LocalizationService.AvailableLanguages
+        // Initialize reactive localization properties - these will update automatically
+        var loc = LocalizationService.Instance;
+        SettingsTitle = loc.GetObservable("settings.title");
+        MyProfile = loc.GetObservable("settings.myProfile");
+        General = loc.GetObservable("settings.general");
+        Visuals = loc.GetObservable("settings.visuals");
+        Language = loc.GetObservable("settings.language");
+        Data = loc.GetObservable("settings.data");
+        Instances = loc.GetObservable("settings.instances");
+        About = loc.GetObservable("settings.about");
+        
+        // Initialize language items - load names from locale files
+        LanguageItems = LocalizationService.GetAvailableLanguages()
             .Select(kvp => new LanguageItem { Code = kvp.Key, DisplayName = kvp.Value })
             .OrderBy(l => l.DisplayName)
             .ToList();
@@ -162,7 +185,7 @@ public class SettingsViewModel : ReactiveObject
         
         // Initialize language selection
         var currentLanguage = _appService.Configuration.Language;
-        _selectedLanguageItem = LanguageItems.FirstOrDefault(l => l.Code == currentLanguage) ?? LanguageItems.First(l => l.Code == "en");
+        _selectedLanguageItem = LanguageItems.FirstOrDefault(l => l.Code == currentLanguage) ?? LanguageItems.First(l => l.Code == "en-US");
         
         SwitchTabCommand = ReactiveCommand.Create<string>(tab => ActiveTab = tab);
         CloseCommand = ReactiveCommand.Create(() => { });

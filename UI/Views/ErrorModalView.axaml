@@ -115,7 +115,7 @@
                         <!-- Close -->
                         <Button Grid.Column="1" 
                                 Command="{Binding CloseErrorModalCommand}"
-                                Background="{DynamicResource HytaleOrangeBrush}" 
+                                Background="{DynamicResource SystemAccentBrush}" 
                                 Foreground="#111"
                                 Padding="12" 
                                 CornerRadius="8"

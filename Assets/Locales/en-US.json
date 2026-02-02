@@ -1,4 +1,5 @@
 {
+  "_langName": "English",
   "app": {
     "title": "HyPrism",
     "version": "HyPrism {0}"
@@ -94,6 +95,9 @@
   },
   "news": {
     "title": "News",
+    "all": "All",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
     "loading": "Loading news...",
     "readMore": "Read more on hytale.com",
     "tryAgain": "Try Again"

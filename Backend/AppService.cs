@@ -52,7 +52,6 @@ public class AppService : IDisposable
     private readonly RosettaService _rosettaService;
     private readonly BrowserService _browserService;
     private readonly ProgressNotificationService _progressNotificationService;
-    private readonly LocalizationService _localizationService;
     
     // Exposed for ViewModel access
     public Config Configuration => _config;
@@ -60,7 +59,7 @@ public class AppService : IDisposable
     public NewsService NewsService => _newsService;
     public VersionService VersionService => _versionService;
     public ModService ModService => _modService;
-    public LocalizationService Localization => _localizationService;
+    public LocalizationService Localization => LocalizationService.Instance;
 
     // UI Events (forwarded from ProgressNotificationService)
     public event Action<string, double, string, long, long>? DownloadProgressChanged
@@ -108,11 +107,12 @@ public class AppService : IDisposable
         _appDir = UtilityService.GetEffectiveAppDir();
         Directory.CreateDirectory(_appDir);
         _configPath = Path.Combine(_appDir, "config.json");
-        _config = LoadConfig();
         
-        // Initialize new services
+        // Initialize ConfigService - it will load and migrate config
         _configService = new ConfigService(_appDir);
-        _config = _configService.Configuration; // Use config from ConfigService
+        _config = _configService.Configuration;
+        
+        // Initialize other services
         _profileService = new ProfileService(_appDir, _configService);
         _newsService = new NewsService();
         _versionService = new VersionService(_appDir, HttpClient, _configService);
@@ -185,9 +185,8 @@ public class AppService : IDisposable
         _rosettaService = new RosettaService();
         _browserService = new BrowserService();
         
-        // Initialize LocalizationService (reads from embedded resources)
-        _localizationService = new LocalizationService();
-        _localizationService.CurrentLanguage = _config.Language;
+        // Initialize LocalizationService singleton
+        LocalizationService.Instance.CurrentLanguage = _config.Language;
         
         // Initialize after DiscordService (needed below)
         _butlerService = new ButlerService(_appDir);
@@ -279,83 +278,6 @@ public class AppService : IDisposable
         return ("release", releaseLatest);
     }
 
-    private Config LoadConfig()
-    {
-        Config config;
-        
-        if (File.Exists(_configPath))
-        {
-            try
-            {
-                var json = File.ReadAllText(_configPath);
-                config = JsonSerializer.Deserialize<Config>(json) ?? new Config();
-                
-                // Migration: Ensure UUID exists
-                if (string.IsNullOrEmpty(config.UUID))
-                {
-                    config.UUID = Guid.NewGuid().ToString();
-                    config.Version = "2.0.0";
-                    Logger.Info("Config", $"Migrated to v2.0.0, UUID: {config.UUID}");
-                }
-                
-                // Migration: Migrate existing UUID to UserUuids mapping
-                // This ensures existing users don't lose their skin when upgrading
-                config.UserUuids ??= new Dictionary<string, string>();
-                if (!string.IsNullOrEmpty(config.UUID) && !string.IsNullOrEmpty(config.Nick))
-                {
-                    // Check if current nick already has a UUID mapping
-                    var existingKey = config.UserUuids.Keys
-                        .FirstOrDefault(k => k.Equals(config.Nick, StringComparison.OrdinalIgnoreCase));
-                    
-                    if (existingKey == null)
-                    {
-                        // No mapping exists for current nick - add the legacy UUID
-                        config.UserUuids[config.Nick] = config.UUID;
-                        Logger.Info("Config", $"Migrated existing UUID to UserUuids mapping for '{config.Nick}'");
-                        SaveConfigInternal(config);
-                    }
-                }
-                
-                return config;
-            }
-            catch
-            {
-                config = new Config();
-            }
-        }
-        else
-        {
-            config = new Config();
-        }
-        
-        // New config - generate UUID
-        if (string.IsNullOrEmpty(config.UUID))
-        {
-            config.UUID = Guid.NewGuid().ToString();
-        }
-
-        // Default nick to random name if empty or placeholder
-        if (string.IsNullOrWhiteSpace(config.Nick) || config.Nick == "Player" || config.Nick == "Hyprism" || config.Nick == "HyPrism")
-        {
-            config.Nick = UtilityService.GenerateRandomUsername();
-        }
-        
-        // Initialize UserUuids and add current user
-        config.UserUuids ??= new Dictionary<string, string>();
-        if (!string.IsNullOrEmpty(config.Nick) && !string.IsNullOrEmpty(config.UUID))
-        {
-            config.UserUuids[config.Nick] = config.UUID;
-        }
-
-        // Migrate legacy "latest" branch to release
-        if (config.VersionType == "latest")
-        {
-            config.VersionType = "release";
-        }
-        SaveConfigInternal(config);
-        return config;
-    }
-
     private void SaveConfigInternal(Config config)
     {
         var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
@@ -369,10 +291,11 @@ public class AppService : IDisposable
     
     public void SetLanguage(string languageCode)
     {
-        if (LocalizationService.AvailableLanguages.ContainsKey(languageCode))
+        var availableLanguages = LocalizationService.GetAvailableLanguages();
+        if (availableLanguages.ContainsKey(languageCode))
         {
             _config.Language = languageCode;
-            _localizationService.CurrentLanguage = languageCode;
+            LocalizationService.Instance.CurrentLanguage = languageCode;
             SaveConfig();
             Logger.Info("Localization", $"Language changed to: {languageCode}");
         }

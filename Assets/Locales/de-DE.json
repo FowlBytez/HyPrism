@@ -1,0 +1,131 @@
+{
+  "_langName": "Deutsch",
+  "app": {
+    "title": "HyPrism",
+    "version": "HyPrism {0}"
+  },
+  "main": {
+    "play": "SPIELEN",
+    "release": "Release",
+    "preRelease": "Pre-Release",
+    "latest": "neueste",
+    "educational": "Nur für Bildungszwecke. Gefällt es dir?",
+    "buyIt": "KAUF ES"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "myProfile": "Mein Profil",
+    "general": "Allgemein",
+    "visuals": "Design",
+    "language": "Sprache",
+    "data": "Daten",
+    "instances": "Instanzen",
+    "about": "Über",
+    "close": "Schließen",
+    "browse": "Durchsuchen",
+    "profile": {
+      "title": "Mein Profil",
+      "avatar": "Avatar",
+      "displayName": "Anzeigename",
+      "displayNameHint": "Name im Spiel (1-16 Zeichen).",
+      "uuid": "UUID",
+      "uuidWarning": "Deine ID für Multiplayer. Ändern setzt Skin zurück!",
+      "randomize": "Zufällig",
+      "copy": "Kopieren"
+    },
+    "generalSettings": {
+      "title": "Allgemeine Einst.",
+      "launcherStorage": "Speicherort",
+      "launcherStorageHint": "Wo Spiele und Daten gespeichert werden.",
+      "updateChannel": "Update-Kanal",
+      "updateChannelStable": "Stabil (Empfohlen)",
+      "updateChannelBeta": "Beta (Experimentell)",
+      "updateChannelHint": "Nur stabile Versionen.",
+      "closeLauncher": "Launcher schließen",
+      "closeLauncherHint": "Schließt Launcher automatisch beim Start.",
+      "disableNews": "News ausblenden",
+      "disableNewsHint": "Versteckt News im Hauptmenü."
+    },
+    "visualSettings": {
+      "title": "Visuelle Einstellungen",
+      "accentColor": "Akzentfarbe",
+      "accentColorHint": "Bald verfügbar.",
+      "background": "Hintergrund",
+      "backgroundHint": "Bald verfügbar."
+    },
+    "languageSettings": {
+      "title": "Spracheinstellungen",
+      "interfaceLanguage": "Sprache",
+      "interfaceLanguageHint": "Wähle deine Sprache",
+      "note": ""
+    }
+  },
+  "profileEditor": {
+    "title": "Profil bearbeiten",
+    "avatar": "Avatar",
+    "dropSkin": "Skin hier ablegen",
+    "openAvatarFolder": "Avatar-Ordner",
+    "refreshPreview": "Vorschau akt.",
+    "username": "Benutzername",
+    "usernameHint": "1-16 Zeichen",
+    "uuid": "UUID",
+    "uuidHint": "Eindeutige ID",
+    "randomize": "Zufällig",
+    "copy": "Kopie",
+    "save": "Speichern",
+    "cancel": "Abbrechen"
+  },
+  "deleteProfile": {
+    "title": "Profil löschen?",
+    "message": "Möchtest du wirklich löschen:",
+    "warning": "Dies löscht alle Profildaten:",
+    "avatarData": "Skins und Avatare",
+    "gameData": "Spielstand",
+    "settings": "Profileinstellungen",
+    "cannotUndo": "Kann nicht rückgängig gemacht werden.",
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  },
+  "error": {
+    "title": "Fehler",
+    "technicalDetails": "Details",
+    "copyError": "Kopieren",
+    "ok": "OK",
+    "dismiss": "Schließen"
+  },
+  "news": {
+    "title": "Neuigkeiten",
+    "all": "Alle",
+    "hytale": "Hytale",
+    "hyprism": "HyPrism",
+    "loading": "Lädt...",
+    "readMore": "Mehr auf hytale.com",
+    "tryAgain": "Erneut versuchen"
+  },
+  "update": {
+    "downloading": "Herunterladen...",
+    "extracting": "Entpacken...",
+    "launching": "Starten...",
+    "pleaseWait": "Bitte warten, Spieldateien werden geladen.",
+    "autoLaunch": "Spiel startet automatisch."
+  },
+  "modManager": {
+    "title": "Mod-Manager",
+    "installed": "Installiert",
+    "browse": "Durchsuchen",
+    "search": "Suche Mods...",
+    "searchInstalled": "Suche in Installierten...",
+    "allCategories": "Alle Kategorien",
+    "noModsFound": "Keine Mods gefunden",
+    "noModsInstalled": "Keine Mods installiert",
+    "noMatch": "Keine Treffer",
+    "download": "Installieren",
+    "update": "Update",
+    "delete": "Löschen",
+    "checkForUpdates": "Nach Updates suchen",
+    "allUpToDate": "Alles aktuell!",
+    "updatesAvailable": "{0} Updates verfügbar:",
+    "openModsFolder": "Mod-Ordner",
+    "close": "Schließen"
+  }
+}

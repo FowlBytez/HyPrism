@@ -15,7 +15,7 @@ public class ProgressToWidthConverter : IValueConverter
         {
             // Progress is 0-100, convert to 0-500 (width of progress bar container)
             var maxWidth = 500.0;
-            var width = (progress / 100.0) * maxWidth;
+            var width = progress / 100.0 * maxWidth;
             return Math.Max(0, Math.Min(maxWidth, width));
         }
         return 0.0;

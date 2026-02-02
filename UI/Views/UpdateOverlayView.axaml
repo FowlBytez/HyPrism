@@ -76,7 +76,7 @@
                         CornerRadius="6" 
                         ClipToBounds="True">
                     <!-- Progress Fill -->
-                    <Border Background="{DynamicResource HytaleOrangeBrush}"
+                    <Border Background="{DynamicResource SystemAccentBrush}"
                             HorizontalAlignment="Left"
                             Width="{Binding ProgressValue, Converter={StaticResource ProgressToWidthConverter}}"
                             CornerRadius="6">
@@ -97,7 +97,7 @@
                     <TextBlock Grid.Column="1" 
                                FontSize="13" 
                                FontWeight="Bold"
-                               Foreground="{DynamicResource HytaleOrangeBrush}">
+                               Foreground="{DynamicResource SystemAccentBrush}">
                         <Run Text="{Binding ProgressValue, StringFormat='{}{0:F0}'}"/>
                         <Run Text="%"/>
                     </TextBlock>

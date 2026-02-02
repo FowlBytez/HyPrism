@@ -2,12 +2,13 @@ using ReactiveUI;
 using System.Reactive;
 using HyPrism.Backend;
 using HyPrism.Backend.Services.Core;
-using HyPrism.UI.Models;
+using HyPrism.Backend.Models;
 using System.Threading.Tasks;
 using System;
 using Avalonia.Threading;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reactive.Linq;
 
 namespace HyPrism.UI.ViewModels;
 
@@ -15,6 +16,12 @@ public class MainViewModel : ReactiveObject
 {
     public AppService AppService { get; }
     public LocalizationService Localization => AppService.Localization;
+
+    // Reactive Localization Properties
+    public IObservable<string> AppVersion { get; }
+    public IObservable<string> MainEducational { get; }
+    public IObservable<string> MainBuyIt { get; }
+    public IObservable<string> MainPlay { get; }
 
     // User Profile
     private string _nick;
@@ -196,7 +203,7 @@ public class MainViewModel : ReactiveObject
     public ObservableCollection<string> Branches { get; } = new() { "Release", "Pre-Release" };
     
     // News
-    public ObservableCollection<NewsItem> News { get; } = new();
+    public ObservableCollection<NewsItemResponse> News { get; } = new();
     
     private bool _isLoadingNews;
     public bool IsLoadingNews
@@ -224,6 +231,13 @@ public class MainViewModel : ReactiveObject
         
         AppService = new AppService();
         _nick = AppService.Configuration.Nick;
+        
+        // Initialize reactive localization properties
+        var loc = LocalizationService.Instance;
+        AppVersion = loc.GetObservable("app.version");
+        MainEducational = loc.GetObservable("main.educational");
+        MainBuyIt = loc.GetObservable("main.buyIt");
+        MainPlay = loc.GetObservable("main.play");
         
         // Output properties
         _isOverlayOpen = this.WhenAnyValue(
@@ -496,16 +510,7 @@ public class MainViewModel : ReactiveObject
                 {
                     foreach (var item in newsItems)
                     {
-                        News.Add(new NewsItem
-                        {
-                            Title = item.Title,
-                            Excerpt = item.Excerpt,
-                            Url = item.Url ?? "",
-                            Date = item.Date,
-                            Author = item.Author,
-                            ImageUrl = item.ImageUrl ?? "",
-                            Source = "hytale"
-                        });
+                        News.Add(item);
                     }
                 }
             });
