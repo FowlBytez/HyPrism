@@ -3,6 +3,28 @@ using DiscordRPC.Logging;
 
 namespace HyPrism.Backend.Services.Core;
 
+/// <summary>
+/// Silent logger for Discord RPC that suppresses connection error spam.
+/// Only logs critical errors to HyPrism's logger.
+/// </summary>
+internal class SilentDiscordLogger : ILogger
+{
+    public LogLevel Level { get; set; } = LogLevel.Error;
+
+    public void Trace(string message, params object[] args) { }
+    public void Info(string message, params object[] args) { }
+    public void Warning(string message, params object[] args) { }
+    
+    public void Error(string message, params object[] args)
+    {
+        // Only log if it's not a connection failure (those are expected when Discord is not running)
+        if (!message.Contains("Failed connection") && !message.Contains("Failed to connect"))
+        {
+            Logger.Warning("Discord", string.Format(message, args));
+        }
+    }
+}
+
 public class DiscordService : IDisposable
 {
     private const string ApplicationId = "1464867466382540995";
@@ -32,7 +54,8 @@ public class DiscordService : IDisposable
         try
         {
             _client = new DiscordRpcClient(ApplicationId);
-            _client.Logger = new ConsoleLogger() { Level = LogLevel.Error };
+            // Use silent logger to suppress connection error spam
+            _client.Logger = new SilentDiscordLogger();
             
             _client.OnReady += (sender, e) =>
             {
@@ -42,13 +65,17 @@ public class DiscordService : IDisposable
             
             _client.OnError += (sender, e) =>
             {
-                Logger.Warning("Discord", $"Discord RPC error: {e.Message}");
+                // Only log if Discord was previously connected
+                if (_enabled)
+                {
+                    Logger.Warning("Discord", $"Discord RPC error: {e.Message}");
+                }
                 _enabled = false;
             };
             
             _client.OnConnectionFailed += (sender, e) =>
             {
-                Logger.Warning("Discord", "Discord RPC connection failed - disabling");
+                // Silently disable RPC if Discord is not running (expected behavior)
                 _enabled = false;
             };
             

@@ -442,6 +442,110 @@ public class ProfileManagementService
     }
     
     /// <summary>
+    /// Duplicates an existing profile WITHOUT copying UserData folder.
+    /// Only copies settings, mods, and skin/avatar.
+    /// Returns the newly created profile.
+    /// </summary>
+    public Profile? DuplicateProfileWithoutData(string profileId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(profileId))
+            {
+                Logger.Warning("Profile", "Cannot duplicate profile with empty ID");
+                return null;
+            }
+            
+            var config = _getConfig();
+            var sourceProfile = config.Profiles?.FirstOrDefault(p => p.Id == profileId);
+            if (sourceProfile == null)
+            {
+                Logger.Warning("Profile", $"Profile not found: {profileId}");
+                return null;
+            }
+            
+            // Generate new UUID and name with " Copy" suffix
+            var newUuid = Guid.NewGuid().ToString();
+            var newName = $"{sourceProfile.Name} Copy";
+            
+            // Ensure name is unique
+            int copyCount = 1;
+            while (config.Profiles != null && config.Profiles.Any(p => p.Name == newName))
+            {
+                copyCount++;
+                newName = $"{sourceProfile.Name} Copy {copyCount}";
+            }
+            
+            // Create new profile
+            var newProfile = new Profile
+            {
+                Id = Guid.NewGuid().ToString(),
+                UUID = newUuid,
+                Name = newName,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            config.Profiles ??= new List<Profile>();
+            config.Profiles.Add(newProfile);
+            _saveConfig();
+            
+            // Save profile to disk
+            SaveProfileToDisk(newProfile);
+            
+            // Copy source profile's mods folder to new profile
+            try
+            {
+                var sourceModsPath = GetProfileModsFolder(sourceProfile);
+                var destModsPath = GetProfileModsFolder(newProfile);
+                
+                if (Directory.Exists(sourceModsPath))
+                {
+                    CopyDirectory(sourceModsPath, destModsPath);
+                    Logger.Info("Profile", $"Copied mods from '{sourceProfile.Name}' to '{newProfile.Name}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Profile", $"Failed to copy mods during duplication: {ex.Message}");
+            }
+            
+            // Copy skin/avatar data (but NOT UserData)
+            try
+            {
+                var profilesDir = GetProfilesFolder();
+                var sourceProfileDir = Path.Combine(profilesDir, SanitizeFileName(sourceProfile.Name));
+                var destProfileDir = Path.Combine(profilesDir, SanitizeFileName(newProfile.Name));
+                
+                // Copy skin.png if exists
+                var sourceSkin = Path.Combine(sourceProfileDir, "skin.png");
+                if (File.Exists(sourceSkin))
+                {
+                    File.Copy(sourceSkin, Path.Combine(destProfileDir, "skin.png"), true);
+                }
+                
+                // Copy avatar.png if exists
+                var sourceAvatar = Path.Combine(sourceProfileDir, "avatar.png");
+                if (File.Exists(sourceAvatar))
+                {
+                    File.Copy(sourceAvatar, Path.Combine(destProfileDir, "avatar.png"), true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Profile", $"Failed to copy skin/avatar during duplication: {ex.Message}");
+            }
+            
+            Logger.Success("Profile", $"Duplicated profile (without UserData) '{sourceProfile.Name}' → '{newProfile.Name}'");
+            return newProfile;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Profile", $"Failed to duplicate profile without data: {ex.Message}");
+            return null;
+        }
+    }
+    
+    /// <summary>
     /// Opens the current active profile's folder in the file manager.
     /// </summary>
     public bool OpenCurrentProfileFolder()

@@ -507,6 +507,13 @@ public class AppService : IDisposable
     public Profile? DuplicateProfile(string profileId) => _profileManagementService.DuplicateProfile(profileId);
     
     /// <summary>
+    /// Duplicates an existing profile WITHOUT copying UserData folder.
+    /// Only copies settings and configuration.
+    /// Returns the newly created profile.
+    /// </summary>
+    public Profile? DuplicateProfileWithoutData(string profileId) => _profileManagementService.DuplicateProfileWithoutData(profileId);
+    
+    /// <summary>
     /// Opens the current active profile's folder in the file manager.
     /// </summary>
     public bool OpenCurrentProfileFolder() => _profileManagementService.OpenCurrentProfileFolder();
@@ -2060,5 +2067,325 @@ exec env \
     {
         await Task.CompletedTask;
         return _settingsService.GetMusicEnabled();
+    }
+
+    // ================== WRAPPER MODE METHODS ==================
+    // Used for Flatpak/AppImage wrapper to install/launch HyPrism
+
+    /// <summary>
+    /// Wrapper Mode: Get status of the installed HyPrism binary and check for updates.
+    /// Returns: { installed: bool, version: string, needsUpdate: bool, latestVersion: string }
+    /// </summary>
+    public async Task<Dictionary<string, object>> WrapperGetStatus()
+    {
+        var result = new Dictionary<string, object>
+        {
+            ["installed"] = false,
+            ["version"] = "",
+            ["needsUpdate"] = false,
+            ["latestVersion"] = ""
+        };
+
+        try
+        {
+            var wrapperDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HyPrism", "wrapper");
+            var binaryPath = Path.Combine(wrapperDir, "HyPrism");
+            var versionFile = Path.Combine(wrapperDir, "version.txt");
+
+            if (!File.Exists(binaryPath))
+            {
+                return result;
+            }
+
+            result["installed"] = true;
+
+            if (File.Exists(versionFile))
+            {
+                result["version"] = (await File.ReadAllTextAsync(versionFile)).Trim();
+            }
+
+            // Check GitHub for latest release
+            var latestVersion = await GetLatestLauncherVersionFromGitHub();
+            if (!string.IsNullOrEmpty(latestVersion))
+            {
+                result["latestVersion"] = latestVersion;
+                result["needsUpdate"] = result["version"].ToString() != latestVersion;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"WrapperGetStatus error: {ex.Message}");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Wrapper Mode: Install or update the latest HyPrism binary from GitHub releases.
+    /// Downloads the appropriate release for the current OS and extracts it to wrapper directory.
+    /// </summary>
+    public async Task<bool> WrapperInstallLatest()
+    {
+        try
+        {
+            var wrapperDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HyPrism", "wrapper");
+            Directory.CreateDirectory(wrapperDir);
+
+            // Get latest release from GitHub
+            var latestVersion = await GetLatestLauncherVersionFromGitHub();
+            if (string.IsNullOrEmpty(latestVersion))
+            {
+                Console.WriteLine("Failed to get latest version from GitHub");
+                return false;
+            }
+
+            // Determine the asset name based on OS
+            string assetName;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                assetName = $"HyPrism-{latestVersion}-linux-x64.tar.gz";
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                assetName = $"HyPrism-{latestVersion}-win-x64.zip";
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                assetName = $"HyPrism-{latestVersion}-osx-x64.tar.gz";
+            }
+            else
+            {
+                Console.WriteLine($"Unsupported platform: {RuntimeInformation.OSDescription}");
+                return false;
+            }
+
+            var downloadUrl = $"https://github.com/yyyumeniku/HyPrism/releases/download/{latestVersion}/{assetName}";
+            var archivePath = Path.Combine(wrapperDir, assetName);
+
+            // Download archive
+            _progressNotificationService.SendProgress("wrapper-install", 0, "Downloading HyPrism...", 0, 100);
+            
+            var response = await HttpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"Failed to download: {response.StatusCode}");
+                return false;
+            }
+
+            await using (var contentStream = await response.Content.ReadAsStreamAsync())
+            await using (var fileStream = File.Create(archivePath))
+            {
+                await contentStream.CopyToAsync(fileStream);
+            }
+
+            _progressNotificationService.SendProgress("wrapper-install", 50, "Extracting...", 50, 100);
+
+            // Extract archive
+            if (assetName.EndsWith(".tar.gz"))
+            {
+                await ExtractTarGz(archivePath, wrapperDir);
+            }
+            else if (assetName.EndsWith(".zip"))
+            {
+                ZipFile.ExtractToDirectory(archivePath, wrapperDir, true);
+            }
+
+            // Set executable permission on Linux/Mac
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                var binaryPath = Path.Combine(wrapperDir, "HyPrism");
+                if (File.Exists(binaryPath))
+                {
+                    var process = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "chmod",
+                            Arguments = $"+x \"{binaryPath}\"",
+                            UseShellExecute = false
+                        }
+                    };
+                    process.Start();
+                    await process.WaitForExitAsync();
+                }
+            }
+
+            // Save version
+            await File.WriteAllTextAsync(Path.Combine(wrapperDir, "version.txt"), latestVersion);
+
+            // Cleanup archive
+            File.Delete(archivePath);
+
+            _progressNotificationService.SendProgress("wrapper-install", 100, "Installation complete", 100, 100);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"WrapperInstallLatest error: {ex.Message}");
+            _progressNotificationService.SendErrorEvent("Wrapper Installation Error", ex.Message, null);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Wrapper Mode: Launch the installed HyPrism binary.
+    /// </summary>
+    public async Task<bool> WrapperLaunch()
+    {
+        try
+        {
+            var wrapperDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HyPrism", "wrapper");
+            var binaryPath = Path.Combine(wrapperDir, RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "HyPrism.exe" : "HyPrism");
+
+            if (!File.Exists(binaryPath))
+            {
+                Console.WriteLine("HyPrism binary not found");
+                return false;
+            }
+
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = binaryPath,
+                    UseShellExecute = true,
+                    WorkingDirectory = wrapperDir
+                }
+            };
+
+            process.Start();
+            await Task.CompletedTask;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"WrapperLaunch error: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Helper: Extract .tar.gz archive (for Linux/Mac releases).
+    /// </summary>
+    private static async Task ExtractTarGz(string archivePath, string destinationDir)
+    {
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "tar",
+                Arguments = $"-xzf \"{archivePath}\" -C \"{destinationDir}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            }
+        };
+
+        process.Start();
+        await process.WaitForExitAsync();
+
+        if (process.ExitCode != 0)
+        {
+            var error = await process.StandardError.ReadToEndAsync();
+            throw new Exception($"Failed to extract tar.gz: {error}");
+        }
+    }
+
+    /// <summary>
+    /// Helper: Get latest launcher version from GitHub releases API.
+    /// </summary>
+    private async Task<string> GetLatestLauncherVersionFromGitHub()
+    {
+        try
+        {
+            var response = await HttpClient.GetStringAsync("https://api.github.com/repos/yyyumeniku/HyPrism/releases/latest");
+            var doc = JsonDocument.Parse(response);
+            if (doc.RootElement.TryGetProperty("tag_name", out var tagName))
+            {
+                return tagName.GetString() ?? "";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to get latest version: {ex.Message}");
+        }
+        return "";
+    }
+
+    // ================== OPTIMIZATION MODS ==================
+
+    /// <summary>
+    /// Installs a predefined list of optimization mods to the current game instance.
+    /// Optimization mods improve game performance and FPS.
+    /// TODO: Define actual optimization mod list when Hytale mod ecosystem is available.
+    /// </summary>
+    public async Task<bool> InstallOptimizationModsAsync()
+    {
+        try
+        {
+            // Predefined list of optimization mod IDs from CurseForge
+            // TODO: Add actual mod IDs when Hytale optimization mods become available
+            var optimizationModIds = new List<string>
+            {
+                // Example: "sodium", "lithium", "phosphor", "ferritecore", etc.
+            };
+
+            if (optimizationModIds.Count == 0)
+            {
+                Logger.Warning("OptimizationMods", "No optimization mods defined yet - feature is a stub");
+                return false;
+            }
+
+            // Get current game instance path
+            var branch = UtilityService.NormalizeVersionType(_config.VersionType);
+            var instancePath = GetLatestInstancePath(branch);
+            
+            if (!_instanceService.IsClientPresent(instancePath))
+            {
+                Logger.Warning("OptimizationMods", "Game client not installed - cannot install optimization mods");
+                return false;
+            }
+
+            // Install each optimization mod
+            foreach (var modId in optimizationModIds)
+            {
+                try
+                {
+                    // Get latest mod file
+                    var filesResult = await _modService.GetModFilesAsync(modId, 1, 10);
+                    if (filesResult.Files.Count == 0) continue;
+
+                    var latestFile = filesResult.Files[0];
+                    
+                    // Install mod to instance
+                    await _modService.InstallModFileToInstanceAsync(
+                        modId, 
+                        latestFile.Id.ToString(), 
+                        instancePath,
+                        (stage, msg) => _progressNotificationService.SendProgress(
+                            "optimization-mods", 
+                            0, 
+                            $"Installing {latestFile.DisplayName}: {msg}", 
+                            0, 
+                            100
+                        )
+                    );
+                    
+                    Logger.Success("OptimizationMods", $"Installed optimization mod: {latestFile.DisplayName}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning("OptimizationMods", $"Failed to install mod {modId}: {ex.Message}");
+                }
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("OptimizationMods", $"InstallOptimizationModsAsync error: {ex.Message}");
+            _progressNotificationService.SendErrorEvent("Optimization Mods Installation Error", ex.Message, null);
+            return false;
+        }
     }
 }

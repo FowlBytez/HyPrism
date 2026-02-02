@@ -279,6 +279,34 @@
 
         <!-- Error Modal -->
         <views:ErrorModalView/>
+        
+        <!-- Loading Screen (Curtain Animation) -->
+        <Grid IsVisible="{Binding IsLoading}" ZIndex="1000" Name="LoadingScreen">
+            <Grid.Transitions>
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:1.0" Easing="CubicEaseInOut"/>
+                </Transitions>
+            </Grid.Transitions>
+            <Grid.Styles>
+                <!-- Curtain slide-up animation when loading completes -->
+                <Style Selector="Grid[IsVisible=False]">
+                    <Setter Property="RenderTransform">
+                        <Setter.Value>
+                            <TranslateTransform Y="-1000"/>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+                <Style Selector="Grid[IsVisible=True]">
+                    <Setter Property="RenderTransform">
+                        <Setter.Value>
+                            <TranslateTransform Y="0"/>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Grid.Styles>
+            
+            <views:LoadingView DataContext="{Binding LoadingViewModel}"/>
+        </Grid>
     </Grid>
     
 </Window>

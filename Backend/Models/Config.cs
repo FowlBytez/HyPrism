@@ -71,6 +71,11 @@ public class Config
     public string LastExportPath { get; set; } = "";
     
     /// <summary>
+    /// If true, show alpha/beta mods in mod search results.
+    /// </summary>
+    public bool ShowAlphaMods { get; set; } = false;
+    
+    /// <summary>
     /// List of saved profiles (UUID, name pairs).
     /// </summary>
     public List<Profile> Profiles { get; set; } = new();

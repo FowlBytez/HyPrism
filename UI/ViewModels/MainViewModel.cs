@@ -1,6 +1,7 @@
 using ReactiveUI;
 using System.Reactive;
 using HyPrism.Backend;
+using HyPrism.Backend.Services.Core;
 using HyPrism.UI.Models;
 using System.Threading.Tasks;
 using System;
@@ -108,11 +109,25 @@ public class MainViewModel : ReactiveObject
         get => _isProfileEditorOpen;
         set => this.RaiseAndSetIfChanged(ref _isProfileEditorOpen, value);
     }
+    
+    private bool _isLoading = true;
+    public bool IsLoading
+    {
+        get => _isLoading;
+        set => this.RaiseAndSetIfChanged(ref _isLoading, value);
+    }
 
     private readonly ObservableAsPropertyHelper<bool> _isOverlayOpen;
     public bool IsOverlayOpen => _isOverlayOpen.Value;
     
     // Child ViewModels for Overlays
+    private LoadingViewModel? _loadingViewModel;
+    public LoadingViewModel? LoadingViewModel
+    {
+        get => _loadingViewModel;
+        set => this.RaiseAndSetIfChanged(ref _loadingViewModel, value);
+    }
+    
     private SettingsViewModel? _settingsViewModel;
     public SettingsViewModel? SettingsViewModel
     {
@@ -189,6 +204,9 @@ public class MainViewModel : ReactiveObject
     
     public MainViewModel()
     {
+        // Initialize loading screen
+        LoadingViewModel = new LoadingViewModel();
+        
         AppService = new AppService();
         _nick = AppService.Configuration.Nick;
         
@@ -290,10 +308,6 @@ public class MainViewModel : ReactiveObject
         
         ToggleMusicCommand = ReactiveCommand.Create(ToggleMusic);
         
-        // Load initial news and music state
-        _ = LoadNewsAsync();
-        _ = LoadMusicStateAsync();
-        
         // Event subscriptions need to be marshaled to UI thread
         AppService.DownloadProgressChanged += (state, progress, speed, dl, total) => 
             Dispatcher.UIThread.Post(() => OnDownloadProgress(state, progress, speed, dl, total));
@@ -303,6 +317,39 @@ public class MainViewModel : ReactiveObject
             
         AppService.ErrorOccurred += (title, msg, trace) => 
             Dispatcher.UIThread.Post(() => OnError(title, msg, trace));
+        
+        // Initialize application data asynchronously
+        _ = InitializeAsync();
+    }
+    
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            // Load initial news and music state
+            await LoadNewsAsync();
+            await LoadMusicStateAsync();
+            
+            // Simulate minimum loading time for smooth UX
+            await Task.Delay(3000);
+            
+            // Complete loading screen animation
+            if (LoadingViewModel != null)
+            {
+                await LoadingViewModel.CompleteLoadingAsync();
+                // Wait for curtain animation to finish
+                await Task.Delay(1200);
+            }
+            
+            // Hide loading screen
+            IsLoading = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("MainViewModel", $"Initialization error: {ex.Message}");
+            // Still hide loading screen even if there's an error
+            IsLoading = false;
+        }
     }
 
     private async void OnDownloadProgress(string state, double progress, string speed, long downloaded, long total)

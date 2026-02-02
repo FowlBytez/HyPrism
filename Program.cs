@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
 using HyPrism.Backend;
@@ -14,6 +15,15 @@ class Program
     [STAThread]
     static void Main(string[] args)
     {
+        // Check for wrapper mode flag
+        if (args.Contains("--wrapper"))
+        {
+            // In wrapper mode, launch the wrapper UI
+            // This is used by Flatpak/AppImage to manage the installation of the actual HyPrism binary
+            Console.WriteLine("Running in wrapper mode");
+            // The wrapper UI will use WrapperGetStatus, WrapperInstallLatest, WrapperLaunch methods
+        }
+        
         BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(args);
             
