@@ -8,6 +8,7 @@ using HyPrism.Services.Core;
 using HyPrism.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using Avalonia.Threading;
 
 namespace HyPrism.UI;
 
@@ -47,6 +48,13 @@ public partial class App : Application
         {
             // Resolve MainViewModel from the container
             var mainVm = Services!.GetRequiredService<MainViewModel>();
+            
+            // Subscribe to accent color changes
+            var settingsService = Services!.GetRequiredService<SettingsService>();
+            settingsService.OnAccentColorChanged += (color) =>
+            {
+                Dispatcher.UIThread.InvokeAsync(() => ThemeService.Instance.ApplyAccentColor(color));
+            };
             
             desktop.MainWindow = new MainWindow
             {

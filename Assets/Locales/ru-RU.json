@@ -50,15 +50,38 @@
     "visualSettings": {
       "title": "Визуальные настройки",
       "accentColor": "Цвет акцента",
-      "accentColorHint": "Настройка темы будет доступна скоро.",
       "background": "Фон",
-      "backgroundHint": "Настройка фона будет доступна скоро."
+      "autoShuffle": "Авто / Перемешать",
+      "current": "Текущий"
     },
     "languageSettings": {
       "title": "Настройки языка",
       "interfaceLanguage": "Язык интерфейса",
       "interfaceLanguageHint": "Выберите язык лаунчера",
       "note": "Примечание: Некоторый текст может оставаться на английском языке до завершения полной локализации."
+    },
+    "dataSettings": {
+      "title": "Управление данными",
+      "gameDirectory": "Папка игры",
+      "gameDirectoryHint": "Где хранятся установленные версии игры",
+      "launcherData": "Данные лаунчера",
+      "launcherDataHint": "Где хранятся конфиги и ассеты",
+      "open": "Открыть",
+      "cleanData": "Очистка данных",
+      "cleanDataHint": "Удалить временные файлы и кэш",
+      "cleanDataAction": "Очистить временные файлы"
+    },
+    "instanceSettings": {
+      "title": "Управление играми",
+      "description": "Управление установленными версиями игры",
+      "openFolder": "Открыть папку",
+      "delete": "Удалить игру"
+    },
+    "aboutSettings": {
+      "header": "О программе HyPrism",
+      "title": "HyPrism Launcher",
+      "version": "Версия {0}",
+      "description": "Современный лаунчер для Hytale"
     }
   },
   "profileEditor": {

@@ -50,15 +50,38 @@
     "visualSettings": {
       "title": "Görsel Ayarlar",
       "accentColor": "Vurgu Rengi",
-      "accentColorHint": "Yakında.",
       "background": "Arkaplan",
-      "backgroundHint": "Yakında."
+      "autoShuffle": "Oto / Karışık",
+      "current": "Mevcut"
     },
     "languageSettings": {
       "title": "Dil Ayarları",
       "interfaceLanguage": "Arayüz Dili",
       "interfaceLanguageHint": "Dil seçin",
       "note": "Not: Tam yerelleştirme tamamlanana kadar bazı metinler İngilizce kalabilir."
+    },
+    "dataSettings": {
+      "title": "Veri Yönetimi",
+      "gameDirectory": "Oyun Dizini",
+      "gameDirectoryHint": "Yüklü oyun örneklerinin saklandığı konum",
+      "launcherData": "Başlatıcı Verileri",
+      "launcherDataHint": "Başlatıcı yapılandırmasının ve varlıkların saklandığı konum",
+      "open": "Aç",
+      "cleanData": "Verileri Temizle",
+      "cleanDataHint": "Yer açmak için geçici dosyaları ve önbellekleri kaldırın",
+      "cleanDataAction": "Geçici Dosyaları Temizle"
+    },
+    "instanceSettings": {
+      "title": "Örnek Yönetimi",
+      "description": "Yüklü oyun sürümlerinizi yönetin",
+      "openFolder": "Klasörü Aç",
+      "delete": "Örneği Sil"
+    },
+    "aboutSettings": {
+      "header": "HyPrism Hakkında",
+      "title": "HyPrism Başlatıcısı",
+      "version": "Sürüm {0}",
+      "description": "Hytale için modern bir başlatıcı"
     }
   },
   "profileEditor": {

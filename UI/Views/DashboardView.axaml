@@ -25,7 +25,15 @@
             </Grid.Transitions>
 
             <!-- Background -->
-            <Image Source="/Assets/bg_1.jpg" Stretch="UniformToFill"/>
+            <Image Source="{Binding BackgroundImage}" 
+                   Stretch="UniformToFill" 
+                   Opacity="{Binding BackgroundOpacity}">
+                <Image.Transitions>
+                    <Transitions>
+                        <DoubleTransition Property="Opacity" Duration="0:0:0.4" Easing="CubicEaseInOut"/>
+                    </Transitions>
+                </Image.Transitions>
+            </Image>
             <Rectangle Fill="#CC090909"/> 
         
             <!-- Main Layout Grid -->

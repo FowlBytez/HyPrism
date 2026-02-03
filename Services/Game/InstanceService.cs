@@ -1018,5 +1018,61 @@ public class InstanceService
             return false;
         }
     }
+
+    /// <summary>
+    /// Scan for all installed instances in the standard hierarchy.
+    /// </summary>
+    public List<InstalledInstance> GetInstalledInstances()
+    {
+        var branches = new[] { "release", "pre-release" };
+        var results = new List<InstalledInstance>();
+        var root = GetInstanceRoot();
+
+        if (!Directory.Exists(root)) return results;
+
+        foreach (var branch in branches)
+        {
+            var branchDir = Path.Combine(root, branch);
+            if (!Directory.Exists(branchDir)) continue;
+
+            try
+            {
+                var folders = Directory.GetDirectories(branchDir);
+                foreach (var folder in folders)
+                {
+                    var dirName = Path.GetFileName(folder);
+                    if (int.TryParse(dirName, out var version))
+                    {
+                        var userDataPath = Path.Combine(folder, "UserData");
+                        bool hasUserData = Directory.Exists(userDataPath);
+                        long size = 0;
+                        if (hasUserData)
+                        {
+                            try
+                            {
+                                size = new DirectoryInfo(userDataPath).EnumerateFiles("*", SearchOption.AllDirectories).Sum(fi => fi.Length);
+                            }
+                            catch { }
+                        }
+
+                        results.Add(new InstalledInstance
+                        {
+                            Branch = branch,
+                            Version = version,
+                            Path = folder,
+                            HasUserData = hasUserData,
+                            UserDataSize = size
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("InstanceService", $"Error scanning branch {branch}: {ex.Message}");
+            }
+        }
+
+        return results.OrderByDescending(x => x.Version).ToList();
+    }
 }
 

@@ -29,7 +29,6 @@
   </ItemGroup>
 
   <!-- Avalonia packages -->
-  <!-- Avalonia packages -->
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.11" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.11" />
@@ -51,7 +50,8 @@
 
   <!-- Avalonia XAML files -->
   <ItemGroup>
-    <AvaloniaResource Include="Assets/**" Exclude="Assets/Locales/**" />
+    <AvaloniaResource Include="Assets/**/*" />
+    <AvaloniaResource Remove="Assets/Locales/**/*" />
   </ItemGroup>
 
   <!-- Localization files as embedded resources -->

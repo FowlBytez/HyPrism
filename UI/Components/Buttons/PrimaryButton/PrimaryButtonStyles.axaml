@@ -20,10 +20,15 @@
         <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+
+    <!-- Transitions on ContentPresenter -->
+    <Style Selector="btn|PrimaryButton /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Transitions">
             <Transitions>
-                <BrushTransition Property="Background" Duration="0:0:0.1"/>
-                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1"/>
+                <BrushTransition Property="Background" Duration="0:0:0.150"/>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.150"/>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.150"/>
             </Transitions>
         </Setter>
     </Style>
@@ -32,14 +37,14 @@
     <Style Selector="btn|PrimaryButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource SystemAccentBrush}"/>
         <Setter Property="Opacity" Value="0.9"/>
-        <Setter Property="RenderTransform" Value="scale(1.02)"/>
+        <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
 
     <!-- Pressed State -->
     <Style Selector="btn|PrimaryButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource SystemAccentBrush}"/>
         <Setter Property="Opacity" Value="0.8"/>
-        <Setter Property="RenderTransform" Value="scale(0.98)"/>
+        <Setter Property="RenderTransform" Value="scale(0.95)"/>
     </Style>
 
     <!-- Disabled State -->

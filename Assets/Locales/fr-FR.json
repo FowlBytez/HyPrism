@@ -50,15 +50,38 @@
     "visualSettings": {
       "title": "Apparence",
       "accentColor": "Couleur",
-      "accentColorHint": "Bientôt.",
       "background": "Arrière-plan",
-      "backgroundHint": "Bientôt."
+      "autoShuffle": "Auto / Aléatoire",
+      "current": "Actuel"
     },
     "languageSettings": {
       "title": "Langue",
       "interfaceLanguage": "Langue de l'interface",
       "interfaceLanguageHint": "Choisir la langue",
       "note": "Remarque : Certains textes peuvent rester en anglais jusqu'à ce que la localisation complète soit terminée."
+    },
+    "dataSettings": {
+      "title": "Gestion des données",
+      "gameDirectory": "Répertoire du jeu",
+      "gameDirectoryHint": "Emplacement où sont stockées les instances de jeu installées",
+      "launcherData": "Données du lanceur",
+      "launcherDataHint": "Emplacement où sont stockés la configuration et les ressources du lanceur",
+      "open": "Ouvrir",
+      "cleanData": "Nettoyer les données",
+      "cleanDataHint": "Supprimer les fichiers temporaires et les caches pour libérer de l'espace",
+      "cleanDataAction": "Nettoyer les fichiers temporaires"
+    },
+    "instanceSettings": {
+      "title": "Gestion des instances",
+      "description": "Gérez vos versions de jeu installées",
+      "openFolder": "Ouvrir le dossier",
+      "delete": "Supprimer l'instance"
+    },
+    "aboutSettings": {
+      "header": "À propos de HyPrism",
+      "title": "Lanceur HyPrism",
+      "version": "Version {0}",
+      "description": "Un lanceur moderne pour Hytale"
     }
   },
   "profileEditor": {

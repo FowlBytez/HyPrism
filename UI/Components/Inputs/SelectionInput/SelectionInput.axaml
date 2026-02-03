@@ -194,7 +194,7 @@
                         Padding="6"
                         MaxHeight="300"
                         BoxShadow="0 8 32 0 #66000000">
-                    <ScrollViewer>
+                    <ScrollViewer VerticalScrollBarVisibility="Hidden">
                         <ListBox ItemsSource="{Binding ElementName=Root, Path=ItemsSource}"
                                  SelectedItem="{Binding ElementName=Root, Path=SelectedItem}"
                                  ItemTemplate="{Binding ElementName=Root, Path=ItemTemplate}"

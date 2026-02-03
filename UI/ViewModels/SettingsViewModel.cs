@@ -6,8 +6,15 @@ using System.Threading.Tasks;
 using Avalonia.Platform.Storage;
 using System.Linq;
 using HyPrism.Services.Core;
+using HyPrism.Services.Game;
+using HyPrism.Models;
 using System;
 using System.Reactive.Linq;
+using System.Diagnostics;
+using System.IO;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 
 namespace HyPrism.UI.ViewModels;
 
@@ -24,13 +31,42 @@ public class LanguageItem
     public string FlagIconPath { get; set; } = "";
 }
 
+public class BackgroundItem : ReactiveObject
+{
+    public string Filename { get; set; } = "";
+    public string FullPath { get; set; } = "";
+    public Bitmap? Thumbnail { get; set; }
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => this.RaiseAndSetIfChanged(ref _isSelected, value);
+    }
+}
+
+public class AccentColorItem : ReactiveObject
+{
+    public Color Color { get; set; }
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => this.RaiseAndSetIfChanged(ref _isSelected, value);
+    }
+}
+
 public class SettingsViewModel : ReactiveObject
 {
     private readonly SettingsService _settingsService;
     private readonly ConfigService _configService;
     private readonly FileDialogService _fileDialogService;
+    private readonly InstanceService _instanceService;
+    private readonly FileService _fileService;
     
     public LocalizationService Localization { get; }
+
 
     // Reactive Localization Properties - will update automatically when language changes
     public IObservable<string> SettingsTitle { get; }
@@ -39,7 +75,7 @@ public class SettingsViewModel : ReactiveObject
     public IObservable<string> Visuals { get; }
     public IObservable<string> Language { get; }
     public IObservable<string> Data { get; }
-    public IObservable<string> Instances { get; }
+    public IObservable<string> InstancesTabTitle { get; }
     public IObservable<string> About { get; }
     
     // Tab Contents
@@ -67,15 +103,38 @@ public class SettingsViewModel : ReactiveObject
     // Visual
     public IObservable<string> VisualHeader { get; }
     public IObservable<string> VisualAccentColor { get; }
-    public IObservable<string> VisualAccentColorHint { get; }
     public IObservable<string> VisualBackground { get; }
-    public IObservable<string> VisualBackgroundHint { get; }
+    public IObservable<string> VisualAutoShuffle { get; }
+    public IObservable<string> VisualCurrent { get; }
     
     // Language
     public IObservable<string> LanguageHeader { get; }
     public IObservable<string> LanguageInterface { get; }
     public IObservable<string> LanguageInterfaceHint { get; }
     public IObservable<string> LanguageNote { get; }
+
+    // Data
+    public IObservable<string> DataHeader { get; }
+    public IObservable<string> DataGameDir { get; }
+    public IObservable<string> DataGameDirHint { get; }
+    public IObservable<string> DataLauncherDir { get; }
+    public IObservable<string> DataLauncherDirHint { get; }
+    public IObservable<string> DataClean { get; }
+    public IObservable<string> DataCleanHint { get; }
+    public IObservable<string> DataOpen { get; }
+    public IObservable<string> DataCleanAction { get; }
+
+    // Instances
+    public IObservable<string> InstancesHeader { get; }
+    public IObservable<string> InstancesDesc { get; }
+    public IObservable<string> InstancesOpenFolder { get; }
+    public IObservable<string> InstancesDelete { get; }
+    
+    // About
+    public IObservable<string> AboutHeader { get; }
+    public IObservable<string> AboutTitle { get; }
+    public IObservable<string> AboutVersion { get; }
+    public IObservable<string> AboutDescription { get; }
 
     // Tabs
     private string _activeTab = "profile";
@@ -143,6 +202,8 @@ public class SettingsViewModel : ReactiveObject
         get => _launcherDataDirectory;
         set => this.RaiseAndSetIfChanged(ref _launcherDataDirectory, value);
     }
+
+    public string InstanceDirectory => _instanceService.GetInstanceRoot();
     
     private List<BranchItem> _branchItems = new();
     public List<BranchItem> BranchItems
@@ -171,6 +232,42 @@ public class SettingsViewModel : ReactiveObject
     // Language
     public List<LanguageItem> LanguageItems { get; }
     
+    // Visuals
+    public List<AccentColorItem> AccentColors { get; } =
+    [
+        new() { Color = Color.Parse("#FFA845") }, // Orange
+        new() { Color = Color.Parse("#3B82F6") }, // Blue
+        new() { Color = Color.Parse("#10B981") }, // Emerald
+        new() { Color = Color.Parse("#8B5CF6") }, // Violet
+        new() { Color = Color.Parse("#EC4899") }, // Pink
+        new() { Color = Color.Parse("#F59E0B") }, // Amber
+        new() { Color = Color.Parse("#EF4444") }, // Red
+        new() { Color = Color.Parse("#06B6D4") }, // Cyan
+        new() { Color = Color.Parse("#A855F7") }, // Purple
+        new() { Color = Color.Parse("#6366F1") }, // Indigo
+        new() { Color = Color.Parse("#14B8A6") }, // Teal
+        new() { Color = Color.Parse("#F43F5E") }  // Rose
+    ];
+
+    public List<BackgroundItem> Backgrounds { get; }
+
+    // Instances
+    private List<InstalledInstance> _instances = new();
+    public List<InstalledInstance> Instances
+    {
+        get => _instances;
+        set => this.RaiseAndSetIfChanged(ref _instances, value);
+    }
+    
+    // Commands
+    public ReactiveCommand<AccentColorItem, Unit> SetAccentColorCommand { get; }
+    public ReactiveCommand<string, Unit> SetBackgroundCommand { get; }
+    public ReactiveCommand<Unit, Unit> RefreshInstancesCommand { get; }
+    public ReactiveCommand<InstalledInstance, Unit> OpenInstanceFolderCommand { get; }
+    public ReactiveCommand<InstalledInstance, Unit> DeleteInstanceCommand { get; }
+    public ReactiveCommand<Unit, Unit> OpenLauncherFolderCommand { get; }
+    public ReactiveCommand<Unit, Unit> OpenInstancesFolderCommand { get; }
+    
     private LanguageItem? _selectedLanguageItem;
     public LanguageItem? SelectedLanguageItem
     {
@@ -196,11 +293,15 @@ public class SettingsViewModel : ReactiveObject
         SettingsService settingsService,
         ConfigService configService,
         FileDialogService fileDialogService,
-        LocalizationService localizationService)
+        LocalizationService localizationService,
+        InstanceService instanceService,
+        FileService fileService)
     {
         _settingsService = settingsService;
         _configService = configService;
         _fileDialogService = fileDialogService;
+        _instanceService = instanceService;
+        _fileService = fileService;
         Localization = localizationService;
         
         // Initialize reactive localization properties - these will update automatically
@@ -211,7 +312,7 @@ public class SettingsViewModel : ReactiveObject
         Visuals = loc.GetObservable("settings.visuals");
         Language = loc.GetObservable("settings.language");
         Data = loc.GetObservable("settings.data");
-        Instances = loc.GetObservable("settings.instances");
+        InstancesTabTitle = loc.GetObservable("settings.instances");
         About = loc.GetObservable("settings.about");
 
         // Profile
@@ -238,15 +339,39 @@ public class SettingsViewModel : ReactiveObject
         // Visual
         VisualHeader = loc.GetObservable("settings.visualSettings.title");
         VisualAccentColor = loc.GetObservable("settings.visualSettings.accentColor");
-        VisualAccentColorHint = loc.GetObservable("settings.visualSettings.accentColorHint");
         VisualBackground = loc.GetObservable("settings.visualSettings.background");
-        VisualBackgroundHint = loc.GetObservable("settings.visualSettings.backgroundHint");
+        VisualAutoShuffle = loc.GetObservable("settings.visualSettings.autoShuffle");
+        VisualCurrent = loc.GetObservable("settings.visualSettings.current");
         
         // Language
         LanguageHeader = loc.GetObservable("settings.languageSettings.title");
         LanguageInterface = loc.GetObservable("settings.languageSettings.interfaceLanguage");
         LanguageInterfaceHint = loc.GetObservable("settings.languageSettings.interfaceLanguageHint");
         LanguageNote = loc.GetObservable("settings.languageSettings.note");
+
+        // Data
+        DataHeader = loc.GetObservable("settings.dataSettings.title");
+        DataGameDir = loc.GetObservable("settings.dataSettings.gameDirectory");
+        DataGameDirHint = loc.GetObservable("settings.dataSettings.gameDirectoryHint");
+        DataLauncherDir = loc.GetObservable("settings.dataSettings.launcherData");
+        DataLauncherDirHint = loc.GetObservable("settings.dataSettings.launcherDataHint");
+        DataClean = loc.GetObservable("settings.dataSettings.cleanData");
+        DataCleanHint = loc.GetObservable("settings.dataSettings.cleanDataHint");
+        DataOpen = loc.GetObservable("settings.dataSettings.open");
+        DataCleanAction = loc.GetObservable("settings.dataSettings.cleanDataAction");
+
+        // Instances
+        InstancesHeader = loc.GetObservable("settings.instanceSettings.title");
+        InstancesDesc = loc.GetObservable("settings.instanceSettings.description");
+        InstancesOpenFolder = loc.GetObservable("settings.instanceSettings.openFolder");
+        InstancesDelete = loc.GetObservable("settings.instanceSettings.delete");
+        
+        // About
+        AboutHeader = loc.GetObservable("settings.aboutSettings.header");
+        AboutTitle = loc.GetObservable("settings.aboutSettings.title");
+        AboutVersion = loc.GetObservable("settings.aboutSettings.version")
+            .Select(fmt => string.Format(fmt, _configService.Configuration.Version));
+        AboutDescription = loc.GetObservable("settings.aboutSettings.description");
 
         // Update branch items when language changes
         Observable.CombineLatest(
@@ -303,6 +428,148 @@ public class SettingsViewModel : ReactiveObject
         BrowseLauncherDataCommand = ReactiveCommand.CreateFromTask(BrowseLauncherDataAsync);
         RandomizeUuidCommand = ReactiveCommand.Create(RandomizeUuid);
         CopyUuidCommand = ReactiveCommand.CreateFromTask(CopyUuidAsync);
+        
+        // New Commands
+        SetAccentColorCommand = ReactiveCommand.Create<AccentColorItem>(SetAccentColor);
+        SetBackgroundCommand = ReactiveCommand.Create<string>(SetBackground);
+        RefreshInstancesCommand = ReactiveCommand.Create(RefreshInstances);
+        OpenInstanceFolderCommand = ReactiveCommand.Create<InstalledInstance>(OpenInstanceFolder);
+        DeleteInstanceCommand = ReactiveCommand.Create<InstalledInstance>(DeleteInstance);
+        
+        OpenLauncherFolderCommand = ReactiveCommand.Create(() => 
+        {
+            var path = _settingsService.GetLauncherDataDirectory();
+            _fileService.OpenFolder(path);
+        });
+        
+        OpenInstancesFolderCommand = ReactiveCommand.Create(() => 
+        {
+            var path = _instanceService.GetInstanceRoot();
+            _fileService.OpenFolder(path);
+        });
+        
+        Backgrounds = _settingsService.GetAvailableBackgrounds()
+            .Select(x => 
+            {
+                var fullPath = $"avares://HyPrism/Assets/Images/Backgrounds/{x}";
+                Bitmap? bitmap = null;
+                try
+                {
+                    var uri = new Uri(fullPath);
+                    using var stream = AssetLoader.Open(uri);
+                    bitmap = new Bitmap(stream);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Settings", $"Failed to load background asset '{fullPath}': {ex.Message}");
+                }
+
+                return new BackgroundItem 
+                { 
+                    Filename = x,
+                    FullPath = fullPath,
+                    Thumbnail = bitmap
+                };
+            })
+            .ToList();
+            
+        // Debug: Log found backgrounds
+        Logger.Info("Settings", $"Found {Backgrounds.Count} backgrounds");
+        
+        // Listen to background changes to update selection state
+        _settingsService.OnBackgroundChanged += OnBackgroundChanged;
+        
+        // Listen to accent color changes
+        _settingsService.OnAccentColorChanged += OnAccentColorChanged;
+        
+        // Initial selection state
+        UpdateBackgroundSelection(_settingsService.GetBackgroundMode());
+        UpdateAccentColorSelection(_settingsService.GetAccentColor());
+
+        // Initial load
+        RefreshInstances();
+    }
+
+    private void OnBackgroundChanged(string? mode)
+    {
+        UpdateBackgroundSelection(mode);
+    }
+    
+    private void OnAccentColorChanged(string color)
+    {
+        UpdateAccentColorSelection(color);
+    }
+
+    private void UpdateBackgroundSelection(string? mode)
+    {
+        if (Backgrounds == null) return;
+        
+        // If mode is null/empty, it usually means default or auto, but let's check exact string
+        // The buttons pass "auto" or the filename
+        
+        var currentMode = string.IsNullOrEmpty(mode) ? "bg_1.jpg" : mode;
+
+        foreach (var bg in Backgrounds)
+        {
+            if (currentMode == "auto")
+            {
+                 // If "auto" is selected, we deselect all specific images? 
+                 // Or we need an "Auto" item?
+                 // The UI has a separate button for "Auto / Shuffle".
+                 // So if mode is "auto", all images should be deselected.
+                 bg.IsSelected = false;
+            }
+            else
+            {
+                bg.IsSelected = bg.Filename == currentMode;
+            }
+        }
+    }
+
+    private void RefreshInstances()
+    {
+        Instances = _instanceService.GetInstalledInstances();
+    }
+
+    private void UpdateAccentColorSelection(string hexColor)
+    {
+        if (AccentColors == null) return;
+        
+        if (Color.TryParse(hexColor, out Color currentColor))
+        {
+             foreach (var item in AccentColors)
+             {
+                 item.IsSelected = item.Color == currentColor;
+             }
+        }
+    }
+
+    private void SetAccentColor(AccentColorItem item)
+    {
+        _settingsService.SetAccentColor(item.Color.ToString());
+    }
+    
+    private void SetBackground(string background)
+    {
+        _settingsService.SetBackgroundMode(background);
+        // Force refresh just in case, though the event should handle it
+        if (background == "auto")
+        {
+             // Handled by DashboardViewModel via event
+        }
+    }
+
+    private void OpenInstanceFolder(InstalledInstance instance)
+    {
+        if (instance != null) _fileService.OpenFolder(instance.Path);
+    }
+    
+    private void DeleteInstance(InstalledInstance instance)
+    {
+        if (instance == null) return;
+        // TODO: Add confirmation dialog
+        _instanceService.DeleteGame(instance.Branch, instance.Version);
+        RefreshInstances();
     }
 
     private async Task BrowseLauncherDataAsync()

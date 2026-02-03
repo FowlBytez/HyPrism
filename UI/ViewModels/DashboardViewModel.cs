@@ -10,6 +10,9 @@ using HyPrism.Models;
 using Avalonia.Threading;
 using HyPrism.UI.ViewModels.Dashboard;
 using Microsoft.Extensions.DependencyInjection;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using System.IO;
 
 namespace HyPrism.UI.ViewModels;
 
@@ -124,6 +127,26 @@ public class DashboardViewModel : ReactiveObject
         get => _isErrorModalOpen;
         set => this.RaiseAndSetIfChanged(ref _isErrorModalOpen, value);
     }
+    
+    // Background Logic
+    private Bitmap? _backgroundImage;
+    public Bitmap? BackgroundImage
+    {
+        get => _backgroundImage;
+        set => this.RaiseAndSetIfChanged(ref _backgroundImage, value);
+    }
+
+    private double _backgroundOpacity = 1.0;
+    public double BackgroundOpacity
+    {
+        get => _backgroundOpacity;
+        set => this.RaiseAndSetIfChanged(ref _backgroundOpacity, value);
+    }
+
+    
+    private DispatcherTimer? _backgroundTimer;
+    private int _currentSlideIndex = 0;
+    private List<string> _slideshowImages = new();
 
     private readonly ObservableAsPropertyHelper<bool> _isOverlayOpen;
     public bool IsOverlayOpen => _isOverlayOpen.Value;
@@ -214,6 +237,21 @@ public class DashboardViewModel : ReactiveObject
         _profileService = profileService;
         _skinService = skinService;
 
+        // Initialize Backgrounds
+        try 
+        {
+            _slideshowImages = _settingsService.GetAvailableBackgrounds()
+                .Select(x => $"avares://HyPrism/Assets/Images/Backgrounds/{x}")
+                .ToList();
+        } 
+        catch (Exception ex)
+        {
+            Logger.Error("Dashboard", $"Error loading backgrounds: {ex.Message}");
+        }
+            
+        UpdateBackground(_settingsService.GetBackgroundMode());
+        _settingsService.OnBackgroundChanged += UpdateBackground;
+
         // --- Setup Overlay State ---
         _isOverlayOpen = this.WhenAnyValue(
                 x => x.IsSettingsOpen, 
@@ -244,7 +282,13 @@ public class DashboardViewModel : ReactiveObject
         
         // Lazy-load settings if possible, or init straight away
         // We'll init settings VM here to handle the lazy open
-        SettingsViewModel = new SettingsViewModel(_settingsService, _configService, _fileDialogService, LocalizationService.Instance);
+        SettingsViewModel = new SettingsViewModel(
+            _settingsService, 
+            _configService, 
+            _fileDialogService, 
+            LocalizationService.Instance,
+            _instanceService,
+            _fileService);
         SettingsViewModel.CloseCommand.Subscribe(_ => IsSettingsOpen = false);
 
         // --- Commands ---
@@ -326,5 +370,68 @@ public class DashboardViewModel : ReactiveObject
             IsErrorModalOpen = true;
             IsDownloading = false;
         });
+    }
+
+    private Bitmap? LoadBitmap(string uriString)
+    {
+        try
+        {
+            var uri = new Uri(uriString);
+            using var stream = AssetLoader.Open(uri);
+            return new Bitmap(stream);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Dashboard", $"Failed to load background '{uriString}': {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task ChangeBackgroundAsync(string uriString)
+    {
+        // Fade out
+        BackgroundOpacity = 0;
+        await Task.Delay(400); // Matches View transition duration + buffer
+
+        // Load new
+        var newBitmap = LoadBitmap(uriString);
+        BackgroundImage = newBitmap;
+
+        // Fade in
+        BackgroundOpacity = 1;
+    }
+
+    private void UpdateBackground(string? mode)
+    {
+        // Stop any existing timer
+        _backgroundTimer?.Stop();
+        
+        if (string.IsNullOrEmpty(mode) || mode == "auto")
+        {
+            // Start slideshow
+            if (_slideshowImages.Count > 0)
+            {
+                _backgroundTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+                _backgroundTimer.Tick += async (s, e) => 
+                {
+                    _currentSlideIndex = (_currentSlideIndex + 1) % _slideshowImages.Count;
+                    await ChangeBackgroundAsync(_slideshowImages[_currentSlideIndex]);
+                };
+                
+                // Set initial random or first
+                _currentSlideIndex = new Random().Next(_slideshowImages.Count);
+                // Call async method without awaiting (fire-and-forget for initial set) or use simple set if we don't want fade on app start
+                // But changing modes should fade.
+                _ = ChangeBackgroundAsync(_slideshowImages[_currentSlideIndex]);
+                
+                _backgroundTimer.Start();
+            }
+        }
+        else
+        {
+            // Set specific background
+            var path = $"avares://HyPrism/Assets/Images/Backgrounds/{mode}";
+            _ = ChangeBackgroundAsync(path);
+        }
     }
 }

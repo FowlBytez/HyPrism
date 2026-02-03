@@ -50,15 +50,38 @@
     "visualSettings": {
       "title": "시각 설정",
       "accentColor": "강조 색상",
-      "accentColorHint": "준비 중.",
       "background": "배경",
-      "backgroundHint": "준비 중."
+      "autoShuffle": "자동 / 셔플",
+      "current": "현재"
     },
     "languageSettings": {
       "title": "언어 설정",
       "interfaceLanguage": "인터페이스 언어",
       "interfaceLanguageHint": "언어 선택",
       "note": "참고: 전체 현지화가 완료될 때까지 일부 텍스트는 영어로 유지될 수 있습니다."
+    },
+    "dataSettings": {
+      "title": "데이터 관리",
+      "gameDirectory": "게임 디렉토리",
+      "gameDirectoryHint": "설치된 게임 인스턴스가 저장되는 위치",
+      "launcherData": "런처 데이터",
+      "launcherDataHint": "런처 구성 및 자산이 저장되는 위치",
+      "open": "열기",
+      "cleanData": "데이터 정리",
+      "cleanDataHint": "임시 파일 및 캐시를 제거하여 공간 확보",
+      "cleanDataAction": "임시 파일 정리"
+    },
+    "instanceSettings": {
+      "title": "인스턴스 관리",
+      "description": "설치된 게임 버전 관리",
+      "openFolder": "폴더 열기",
+      "delete": "인스턴스 삭제"
+    },
+    "aboutSettings": {
+      "header": "HyPrism 정보",
+      "title": "HyPrism 런처",
+      "version": "버전 {0}",
+      "description": "Hytale을 위한 현대적인 런처"
     }
   },
   "profileEditor": {

@@ -50,15 +50,38 @@
     "visualSettings": {
       "title": "外観設定",
       "accentColor": "アクセント色",
-      "accentColorHint": "近日公開。",
       "background": "背景",
-      "backgroundHint": "近日公開。"
+      "autoShuffle": "自動 / シャッフル",
+      "current": "現在"
     },
     "languageSettings": {
       "title": "言語設定",
       "interfaceLanguage": "インターフェース言語",
       "interfaceLanguageHint": "言語を選択",
       "note": "注：完全なローカライズが完了するまで、一部のテキストは英語のままになる場合があります。"
+    },
+    "dataSettings": {
+      "title": "データ管理",
+      "gameDirectory": "ゲームディレクトリ",
+      "gameDirectoryHint": "インストールされたゲームインスタンスが保存される場所",
+      "launcherData": "ランチャーデータ",
+      "launcherDataHint": "ランチャーの設定とアセットが保存される場所",
+      "open": "開く",
+      "cleanData": "データをクリーンアップ",
+      "cleanDataHint": "一時ファイルとキャッシュを削除して空き容量を確保",
+      "cleanDataAction": "一時ファイルを削除"
+    },
+    "instanceSettings": {
+      "title": "インスタンス管理",
+      "description": "インストールされたゲームバージョンの管理",
+      "openFolder": "フォルダを開く",
+      "delete": "インスタンスを削除"
+    },
+    "aboutSettings": {
+      "header": "HyPrismについて",
+      "title": "HyPrism ランチャー",
+      "version": "バージョン {0}",
+      "description": "Hytaleのためのモダンなランチャー"
     }
   },
   "profileEditor": {

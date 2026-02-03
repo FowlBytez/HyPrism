@@ -21,6 +21,10 @@ public class SettingsService
         }
     }
     
+    // Events
+    public event Action<string>? OnAccentColorChanged;
+    public event Action<string?>? OnBackgroundChanged;
+    
     // ========== Localization Settings (Language) ==========
     
     public string GetLanguage() => _configService.Configuration.Language;
@@ -135,22 +139,29 @@ public class SettingsService
     {
         _configService.Configuration.BackgroundMode = mode;
         _configService.SaveConfig();
+        OnBackgroundChanged?.Invoke(mode);
         Logger.Info("Config", $"Background mode set to: {mode}");
         return true;
     }
 
     /// <summary>
-    /// Gets the list of available background filenames
+    /// Gets the list of available background filenames (paths relative to asset root or names)
     /// </summary>
     public List<string> GetAvailableBackgrounds()
     {
         var backgrounds = new List<string>();
-        // These match the backgrounds in the frontend assets
-        for (int i = 1; i <= 30; i++)
+        // Hardcoded list based on assets
+        var jpgs = new[] { 1, 2, 3, 5, 7, 8, 10, 11, 13, 14, 15, 17, 18, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30 };
+        var pngs = new[] { 4, 6, 9, 12, 16, 19 };
+
+        foreach (var i in jpgs) backgrounds.Add($"bg_{i}.jpg");
+        foreach (var i in pngs) backgrounds.Add($"bg_{i}.png");
+        
+        return backgrounds.OrderBy(x => 
         {
-            backgrounds.Add($"bg_{i}");
-        }
-        return backgrounds;
+            var num = int.Parse(System.Text.RegularExpressions.Regex.Match(x, @"\d+").Value);
+            return num;
+        }).ToList();
     }
 
     // ========== Accent Color Settings ==========
@@ -161,6 +172,7 @@ public class SettingsService
     {
         _configService.Configuration.AccentColor = color;
         _configService.SaveConfig();
+        OnAccentColorChanged?.Invoke(color);
         Logger.Info("Config", $"Accent color set to: {color}");
         return true;
     }

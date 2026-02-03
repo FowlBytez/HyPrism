@@ -50,15 +50,40 @@
     "visualSettings": {
       "title": "外观设置",
       "accentColor": "强调色",
-      "accentColorHint": "即将推出。",
       "background": "背景",
-      "backgroundHint": "即将推出。"
+      "autoShuffle": "自动 / 随机",
+      "current": "当前",
+      "accentColorHint": "即将推出",
+      "backgroundHint": "即将推出"
     },
     "languageSettings": {
       "title": "语言设置",
       "interfaceLanguage": "界面语言",
       "interfaceLanguageHint": "选择语言",
-      "note": "注意：在完全本地化完成之前，某些文本可能会保留英语。"
+      "note": "注意：在完全本地化完成之前，某些文本可能会保留英语"
+    },
+    "dataSettings": {
+      "title": "数据管理",
+      "gameDirectory": "游戏目录",
+      "gameDirectoryHint": "已安装游戏实例的存储位置",
+      "launcherData": "启动器数据",
+      "launcherDataHint": "启动器配置和资源的存储位置",
+      "open": "打开",
+      "cleanData": "清理数据",
+      "cleanDataHint": "删除临时文件和缓存以释放空间",
+      "cleanDataAction": "清理临时文件"
+    },
+    "instanceSettings": {
+      "title": "实例管理",
+      "description": "管理您已安装的游戏版本",
+      "openFolder": "打开文件夹",
+      "delete": "删除实例"
+    },
+    "aboutSettings": {
+      "header": "关于 HyPrism",
+      "title": "HyPrism 启动器",
+      "version": "版本 {0}",
+      "description": "现代化的 Hytale 启动器"
     }
   },
   "profileEditor": {
