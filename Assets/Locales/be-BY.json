@@ -80,10 +80,14 @@
       "delete": "Delete Instance"
     },
     "aboutSettings": {
-      "header": "About HyPrism",
       "title": "HyPrism Launcher",
       "version": "Version {0}",
-      "description": "A modern launcher for Hytale"
+      "description": "A modern launcher for Hytale",
+      "maintainerRole": "Мэйнтейнер і Распрацоўшчык",
+      "authRole": "Стваральнік і Мэйнтейнер Auth Server",
+      "contributorRole": "Кантрыб'ютар",
+      "others": "Іншыя",
+      "contributorsDescription": "Выдатныя людзі, якія дапамаглі ў стварэнні гэтага лаунчера"
     }
   },
   "profileEditor": {

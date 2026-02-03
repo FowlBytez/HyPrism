@@ -78,10 +78,14 @@
       "delete": "Удалить игру"
     },
     "aboutSettings": {
-      "header": "О программе HyPrism",
       "title": "HyPrism Launcher",
       "version": "Версия {0}",
-      "description": "Современный лаунчер для Hytale"
+      "description": "Современный лаунчер для Hytale",
+      "maintainerRole": "Разработчик и Сопровождающий",
+      "authRole": "Создатель и Сопровождающий Сервера Авторизации",
+      "contributorRole": "Участник",
+      "others": "Другие",
+      "contributorsDescription": "Потрясающие люди, которые помогли в создании этого лаунчера"
     }
   },
   "profileEditor": {

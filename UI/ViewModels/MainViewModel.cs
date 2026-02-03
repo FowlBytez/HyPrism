@@ -53,7 +53,8 @@ public class MainViewModel : ReactiveObject
         SettingsService settingsService,
         FileDialogService fileDialogService,
         ProfileService profileService,
-        SkinService skinService)
+        SkinService skinService,
+        GitHubService gitHubService)
     {
         _newsService = newsService;
         _discordService = discordService;
@@ -86,7 +87,8 @@ public class MainViewModel : ReactiveObject
             settingsService,
             fileDialogService,
             profileService,
-            skinService
+            skinService,
+            gitHubService
         );
 
         // Start App Initialization sequence

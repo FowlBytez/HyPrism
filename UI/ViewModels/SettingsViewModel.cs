@@ -15,6 +15,10 @@ using System.IO;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using System.Collections.ObjectModel;
+
+using System.Windows.Input;
+using System.Linq;
 
 namespace HyPrism.UI.ViewModels;
 
@@ -48,13 +52,33 @@ public class BackgroundItem : ReactiveObject
 public class AccentColorItem : ReactiveObject
 {
     public Color Color { get; set; }
-
+    
     private bool _isSelected;
     public bool IsSelected
     {
         get => _isSelected;
         set => this.RaiseAndSetIfChanged(ref _isSelected, value);
     }
+}
+
+public class CreditProfile : ReactiveObject
+{
+    public string Name { get; set; } = "";
+    public string Role { get; set; } = "";
+    public string ProfileUrl { get; set; } = "";
+    public string AvatarUrl { get; set; } = "";
+
+    private Bitmap? _avatar;
+    public Bitmap? Avatar
+    {
+        get => _avatar;
+        set => this.RaiseAndSetIfChanged(ref _avatar, value);
+    }
+
+    public bool IsOverflow { get; set; }
+    public int OverflowCount { get; set; }
+
+    public ICommand? OpenCommand { get; set; }
 }
 
 public class SettingsViewModel : ReactiveObject
@@ -64,6 +88,8 @@ public class SettingsViewModel : ReactiveObject
     private readonly FileDialogService _fileDialogService;
     private readonly InstanceService _instanceService;
     private readonly FileService _fileService;
+    private readonly GitHubService _gitHubService;
+    private readonly BrowserService _browserService;
     
     public LocalizationService Localization { get; }
 
@@ -135,6 +161,11 @@ public class SettingsViewModel : ReactiveObject
     public IObservable<string> AboutTitle { get; }
     public IObservable<string> AboutVersion { get; }
     public IObservable<string> AboutDescription { get; }
+    public IObservable<string> AboutContributorsDescription { get; }
+
+    // Credits
+    public ObservableCollection<CreditProfile> Maintainers { get; } = new();
+    public ObservableCollection<CreditProfile> Contributors { get; } = new();
 
     // Tabs
     private string _activeTab = "profile";
@@ -295,13 +326,17 @@ public class SettingsViewModel : ReactiveObject
         FileDialogService fileDialogService,
         LocalizationService localizationService,
         InstanceService instanceService,
-        FileService fileService)
+        FileService fileService,
+        GitHubService gitHubService,
+        BrowserService browserService)
     {
         _settingsService = settingsService;
         _configService = configService;
         _fileDialogService = fileDialogService;
         _instanceService = instanceService;
         _fileService = fileService;
+        _gitHubService = gitHubService;
+        _browserService = browserService;
         Localization = localizationService;
         
         // Initialize reactive localization properties - these will update automatically
@@ -372,6 +407,9 @@ public class SettingsViewModel : ReactiveObject
         AboutVersion = loc.GetObservable("settings.aboutSettings.version")
             .Select(fmt => string.Format(fmt, _configService.Configuration.Version));
         AboutDescription = loc.GetObservable("settings.aboutSettings.description");
+        AboutContributorsDescription = loc.GetObservable("settings.aboutSettings.contributorsDescription");
+
+        InitializeCredits();
 
         // Update branch items when language changes
         Observable.CombineLatest(
@@ -549,6 +587,92 @@ public class SettingsViewModel : ReactiveObject
         _settingsService.SetAccentColor(item.Color.ToString());
     }
     
+    private async void InitializeCredits()
+    {
+        try 
+        {
+            Logger.Info("Github", "Getting HyPrism contributors");
+
+            // --- Maintainers ---
+            var yyu = await _gitHubService.GetUserAsync("yyyumeniku");
+            var sana = await _gitHubService.GetUserAsync("sanasol");
+            
+            // Localized Strings
+            // Since this method is async void and run once, strings might be stale if language changes.
+            // But we can fetch current value.
+            // Ideally we'd rebuild on language change but for now fetch current.
+            var maintainerRole = Localization.GetString("settings.aboutSettings.maintainerRole");
+            var authRole = Localization.GetString("settings.aboutSettings.authRole");
+            var contributorRole = Localization.GetString("settings.aboutSettings.contributorRole");
+            var othersText = Localization.GetString("settings.aboutSettings.others");
+
+            CreditProfile CreateProfile(GitHubUser? user, string name, string role) {
+                 var p = new CreditProfile {
+                     Name = name,
+                     Role = role,
+                     ProfileUrl = user?.HtmlUrl ?? "",
+                     AvatarUrl = user?.AvatarUrl ?? "",
+                     OpenCommand = ReactiveCommand.Create(() => {
+                         if(!string.IsNullOrEmpty(user?.HtmlUrl)) _browserService.OpenURL(user.HtmlUrl);
+                     })
+                 };
+                 // Load Avatar Async
+                 if(!string.IsNullOrEmpty(user?.AvatarUrl)) {
+                     _ = Task.Run(async () => {
+                         var bmp = await _gitHubService.LoadAvatarAsync(user.AvatarUrl);
+                         if(bmp != null) Avalonia.Threading.Dispatcher.UIThread.Post(() => p.Avatar = bmp);
+                     });
+                 }
+                 return p;
+            }
+    
+            Maintainers.Add(CreateProfile(yyu, "yyyumeniku", maintainerRole));
+            Maintainers.Add(CreateProfile(sana, "sanasol", authRole));
+            
+            // --- Contributors ---
+            var allContributors = await _gitHubService.GetContributorsAsync();
+            
+            Logger.Success("Github", "Hyprism developers sucessfully fetched");
+
+            // Filter out specific users if needed (e.g. maintainers)
+            var list = allContributors.Where(c => c.Login.ToLower() != "yyyumeniku" && c.Login.ToLower() != "sanasol").ToList();
+            
+            int maxDisplay = 14; 
+            
+            List<GitHubUser> usersToShow;
+            int overflow = 0;
+            
+            if (list.Count > maxDisplay)
+            {
+                 usersToShow = list.Take(maxDisplay - 1).ToList();
+                 overflow = list.Count - (maxDisplay - 1);
+            }
+            else
+            {
+                 usersToShow = list;
+            }
+            
+            foreach(var c in usersToShow) {
+                 Contributors.Add(CreateProfile(c, c.Login, contributorRole));
+            }
+            
+            if (overflow > 0)
+            {
+                 Contributors.Add(new CreditProfile {
+                     Name = othersText,
+                     Role = "",
+                     IsOverflow = true,
+                     OverflowCount = overflow,
+                     OpenCommand = ReactiveCommand.Create(() => _browserService.OpenURL("https://github.com/yyyumeniku/HyPrism/graphs/contributors"))
+                 });
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("SettingsViewModel", $"Failed to load credits: {ex.Message}");
+        }
+    }
+
     private void SetBackground(string background)
     {
         _settingsService.SetBackgroundMode(background);

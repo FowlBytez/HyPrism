@@ -222,7 +222,8 @@ public class DashboardViewModel : ReactiveObject
         SettingsService settingsService,
         FileDialogService fileDialogService,
         ProfileService profileService,
-        SkinService skinService)
+        SkinService skinService,
+        GitHubService gitHubService)
     {
         _gameSessionService = gameSessionService;
         _modService = modService;
@@ -288,7 +289,9 @@ public class DashboardViewModel : ReactiveObject
             _fileDialogService, 
             LocalizationService.Instance,
             _instanceService,
-            _fileService);
+            _fileService,
+            gitHubService,
+            _browserService);
         SettingsViewModel.CloseCommand.Subscribe(_ => IsSettingsOpen = false);
 
         // --- Commands ---

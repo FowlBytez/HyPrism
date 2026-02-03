@@ -78,10 +78,14 @@
       "delete": "Delete Instance"
     },
     "aboutSettings": {
-      "header": "About HyPrism",
       "title": "HyPrism Launcher",
       "version": "Version {0}",
-      "description": "A modern launcher for Hytale"
+      "description": "A modern launcher for Hytale",
+      "maintainerRole": "Maintainer & Developer",
+      "authRole": "Creator and Maintainer of the Auth Server",
+      "contributorRole": "Contributor",
+      "others": "Others",
+      "contributorsDescription": "Awesome people that helped in the creation of this launcher"
     }
   },
   "profileEditor": {
