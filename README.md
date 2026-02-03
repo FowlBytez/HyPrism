@@ -3,6 +3,7 @@
 </p>
 
 # HyPrism
+THIS PROJECT IS NOT RELATED OR FROM THE PRISM LAUNCHER TEAM
 
 [![Downloads](https://img.shields.io/github/downloads/yyyumeniku/HyPrism/total?style=plastic&logo=github&label=Total%20Downloads&color=0aa06e)](https://github.com/yyyumeniku/HyPrism/releases)
 [![Website](https://img.shields.io/badge/Official%20Site-HyPrism-0aa06e?style=plastic&logo=firefox-browser)](https://yyyumeniku.github.io/hyprism-site/)
