@@ -67,6 +67,7 @@ public class GameSessionService
         try
         {
             _downloadCts = new CancellationTokenSource();
+            _progressService.ReportDownloadProgress("preparing", 0, "Preparing game session...", null, 0, 0);
             
             string branch = UtilityService.NormalizeVersionType(_config.VersionType);
             var versions = await _versionService.GetVersionListAsync(branch);
@@ -163,7 +164,7 @@ public class GameSessionService
                     if (installedVersion > 0 && installedVersion < latestVersion)
                     {
                         Logger.Info("Download", $"Differential update available: {installedVersion} -> {latestVersion}");
-                        _progressService.ReportDownloadProgress("update", 0, $"Updating game from v{installedVersion} to v{latestVersion}...", 0, 0);
+                        _progressService.ReportDownloadProgress("update", 0, $"Updating game from v{installedVersion} to v{latestVersion}...", null, 0, 0);
                         
                         try
                         {
@@ -178,7 +179,7 @@ public class GameSessionService
                                 int baseProgress = (i * 90) / patchesToApply.Count;
                                 int progressPerPatch = 90 / patchesToApply.Count;
                                 
-                                _progressService.ReportDownloadProgress("update", baseProgress, $"Downloading patch {i + 1}/{patchesToApply.Count} (v{patchVersion})...", 0, 0);
+                                _progressService.ReportDownloadProgress("update", baseProgress, $"Downloading patch {i + 1}/{patchesToApply.Count} (v{patchVersion})...", null, 0, 0);
                                 
                                 // Ensure Butler is installed
                                 await _butlerService.EnsureButlerInstalledAsync((p, m) => { });
@@ -220,18 +221,18 @@ public class GameSessionService
                                 await _downloadService.DownloadFileAsync(patchUrl, patchPwrPath, (progress, downloaded, total) =>
                                 {
                                     int mappedProgress = baseProgress + (int)(progress * 0.5 * progressPerPatch / 100);
-                                    _progressService.ReportDownloadProgress("update", mappedProgress, $"Downloading patch {i + 1}/{patchesToApply.Count}... {progress}%", downloaded, total);
+                                    _progressService.ReportDownloadProgress("update", mappedProgress, $"Downloading patch {i + 1}/{patchesToApply.Count}... {progress}%", null, downloaded, total);
                                 }, _downloadCts.Token);
                                 
                                 ThrowIfCancelled();
                                 
                                 int applyBaseProgress = baseProgress + (progressPerPatch / 2);
-                                _progressService.ReportDownloadProgress("update", applyBaseProgress, $"Applying patch {i + 1}/{patchesToApply.Count}...", 0, 0);
+                                _progressService.ReportDownloadProgress("update", applyBaseProgress, $"Applying patch {i + 1}/{patchesToApply.Count}...", null, 0, 0);
                                 
                                 await _butlerService.ApplyPwrAsync(patchPwrPath, versionPath, (progress, message) =>
                                 {
                                     int mappedProgress = applyBaseProgress + (int)(progress * 0.5 * progressPerPatch / 100);
-                                    _progressService.ReportDownloadProgress("update", mappedProgress, message, 0, 0);
+                                    _progressService.ReportDownloadProgress("update", mappedProgress, message, null, 0, 0);
                                 }, _downloadCts.Token);
                                 
                                 if (File.Exists(patchPwrPath))
@@ -265,13 +266,13 @@ public class GameSessionService
                 // VC++ Redist check
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    _progressService.ReportDownloadProgress("install", 94, "Checking Visual C++ Runtime...", 0, 0);
+                    _progressService.ReportDownloadProgress("install", 94, "Checking Visual C++ Runtime...", null, 0, 0);
                     try
                     {
                         await _launchService.EnsureVCRedistInstalledAsync((progress, message) =>
                         {
                             int mappedProgress = 94 + (int)(progress * 0.02);
-                            _progressService.ReportDownloadProgress("install", mappedProgress, message, 0, 0);
+                            _progressService.ReportDownloadProgress("install", mappedProgress, message, null, 0, 0);
                         });
                     }
                     catch (Exception ex)
@@ -284,13 +285,13 @@ public class GameSessionService
                 if (!File.Exists(jrePath))
                 {
                     Logger.Info("Download", "JRE missing, installing...");
-                    _progressService.ReportDownloadProgress("install", 96, "Installing Java Runtime...", 0, 0);
+                    _progressService.ReportDownloadProgress("install", 96, "Installing Java Runtime...", null, 0, 0);
                     try
                     {
                         await _launchService.EnsureJREInstalledAsync((progress, message) =>
                         {
                             int mappedProgress = 96 + (int)(progress * 0.03);
-                            _progressService.ReportDownloadProgress("install", mappedProgress, message, 0, 0);
+                            _progressService.ReportDownloadProgress("install", mappedProgress, message, null, 0, 0);
                         });
                     }
                     catch (Exception ex)
@@ -300,7 +301,7 @@ public class GameSessionService
                     }
                 }
                 
-                _progressService.ReportDownloadProgress("complete", 100, "Launching game...", 0, 0);
+                _progressService.ReportDownloadProgress("complete", 100, "Launching game...", null, 0, 0);
                 try
                 {
                     await LaunchGameAsync(versionPath, branch);
@@ -317,14 +318,14 @@ public class GameSessionService
             // Game is NOT installed
             Logger.Info("Download", "Game not installed, starting download...");
 
-            _progressService.ReportDownloadProgress("download", 0, "Preparing download...", 0, 0);
+            _progressService.ReportDownloadProgress("download", 0, "Preparing download...", null, 0, 0);
             
             try
             {
                 await _butlerService.EnsureButlerInstalledAsync((progress, message) =>
                 {
                     int mappedProgress = (int)(progress * 0.05);
-                    _progressService.ReportDownloadProgress("download", mappedProgress, message, 0, 0);
+                    _progressService.ReportDownloadProgress("download", mappedProgress, message, null, 0, 0);
                 });
             }
             catch (Exception ex)
@@ -343,29 +344,78 @@ public class GameSessionService
             
             Directory.CreateDirectory(Path.GetDirectoryName(pwrPath)!);
             
-            Logger.Info("Download", $"Downloading: {downloadUrl}");
+            // --- Caching Logic ---
+            bool needDownload = true;
+            long remoteSize = -1;
             
-            await _downloadService.DownloadFileAsync(downloadUrl, pwrPath, (progress, downloaded, total) =>
+            try 
             {
-                int mappedProgress = 5 + (int)(progress * 0.60);
-                _progressService.ReportDownloadProgress("download", mappedProgress, $"Downloading... {progress}%", downloaded, total);
-            }, _downloadCts.Token);
+               remoteSize = await _downloadService.GetFileSizeAsync(downloadUrl, _downloadCts.Token);
+            } 
+            catch { /* Warning? Proceed to download anyway? */ }
+
+            if (File.Exists(pwrPath))
+            {
+                if (remoteSize > 0)
+                {
+                    long localSize = new FileInfo(pwrPath).Length;
+                    if (localSize == remoteSize)
+                    {
+                        Logger.Info("Download", "Using cached PWR file.");
+                        needDownload = false;
+                    }
+                    else
+                    {
+                        Logger.Warning("Download", $"Cached file size mismatch ({localSize} vs {remoteSize}). Deleting.");
+                        try { File.Delete(pwrPath); } catch { }
+                    }
+                }
+                else
+                {
+                    // Can't check remote size, assuming cache might be valid or risky?
+                    // Safer to re-download if we can't verify, or trust it if it's large enough?
+                    // Let's trust it if > 0, otherwise redownload.
+                    Logger.Info("Download", "Cannot verify remote size, using valid local cache entry.");
+                    needDownload = false;
+                }
+            }
+
+            if (needDownload)
+            {
+                Logger.Info("Download", $"Downloading: {downloadUrl}");
+                string partPath = pwrPath + ".part";
+                
+                await _downloadService.DownloadFileAsync(downloadUrl, partPath, (progress, downloaded, total) =>
+                {
+                    int mappedProgress = 5 + (int)(progress * 0.60);
+                    _progressService.ReportDownloadProgress("download", mappedProgress, "launch.detail.downloading_generic", [progress], downloaded, total);
+                }, _downloadCts.Token);
+                
+                // Rename part to final
+                if (File.Exists(partPath))
+                {
+                    File.Move(partPath, pwrPath, true);
+                }
+            }
+            else
+            {
+                 // Fast forward progress
+                 _progressService.ReportDownloadProgress("download", 65, "Using cached installer...", null, 0, 0);
+            }
             
             // Extract PWR
-            _progressService.ReportDownloadProgress("install", 65, "Installing game with Butler...", 0, 0);
+            _progressService.ReportDownloadProgress("install", 65, "Installing game with Butler...", null, 0, 0);
             
             try
             {
                 await _butlerService.ApplyPwrAsync(pwrPath, versionPath, (progress, message) =>
                 {
                     int mappedProgress = 65 + (int)(progress * 0.20);
-                    _progressService.ReportDownloadProgress("install", mappedProgress, message, 0, 0);
+                    _progressService.ReportDownloadProgress("install", mappedProgress, message, null, 0, 0);
                 }, _downloadCts.Token);
                 
-                if (File.Exists(pwrPath))
-                {
-                    try { File.Delete(pwrPath); } catch { }
-                }
+                // Note: We DO NOT delete pwrPath here anymore. 
+                // We wait until complete success to ensure resumability on crash during install.
                 
                 ThrowIfCancelled();
             }
@@ -384,17 +434,17 @@ public class GameSessionService
                 _instanceService.SaveLatestInfo(branch, targetVersion);
             }
             
-            _progressService.ReportDownloadProgress("complete", 95, "Download complete!", 0, 0);
+            _progressService.ReportDownloadProgress("complete", 95, "Download complete!", null, 0, 0);
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                _progressService.ReportDownloadProgress("install", 95, "Checking Visual C++ Runtime...", 0, 0);
+                _progressService.ReportDownloadProgress("install", 95, "Checking Visual C++ Runtime...", null, 0, 0);
                 try
                 {
                     await _launchService.EnsureVCRedistInstalledAsync((progress, message) =>
                     {
                         int mappedProgress = 95 + (int)(progress * 0.01);
-                        _progressService.ReportDownloadProgress("install", mappedProgress, message, 0, 0);
+                        _progressService.ReportDownloadProgress("install", mappedProgress, message, null, 0, 0);
                     });
                 }
                 catch (Exception ex)
@@ -403,13 +453,13 @@ public class GameSessionService
                 }
             }
 
-            _progressService.ReportDownloadProgress("install", 96, "Checking Java Runtime...", 0, 0);
+            _progressService.ReportDownloadProgress("install", 96, "Checking Java Runtime...", null, 0, 0);
             try
             {
                 await _launchService.EnsureJREInstalledAsync((progress, message) =>
                 {
                     int mappedProgress = 96 + (int)(progress * 0.03); 
-                    _progressService.ReportDownloadProgress("install", mappedProgress, message, 0, 0);
+                    _progressService.ReportDownloadProgress("install", mappedProgress, message, null, 0, 0);
                 });
             }
             catch (Exception ex)
@@ -420,11 +470,19 @@ public class GameSessionService
 
             ThrowIfCancelled();
 
-            _progressService.ReportDownloadProgress("complete", 100, "Launching game...", 0, 0);
+            _progressService.ReportDownloadProgress("complete", 100, "Launching game...", null, 0, 0);
 
             try
             {
                 await LaunchGameAsync(versionPath, branch);
+                
+                // --- Success! Now we can cleanup the cache ---
+                // The launcher has successfully launched, so the installation is valid.
+                if (File.Exists(pwrPath))
+                {
+                    try { File.Delete(pwrPath); } catch { } 
+                }
+                
                 return new DownloadProgress { Success = true, Progress = 100 };
             }
             catch (Exception ex)
@@ -502,6 +560,7 @@ public class GameSessionService
         bool enablePatching = true;
         if (enablePatching && !string.IsNullOrWhiteSpace(_config.AuthDomain))
         {
+            _progressService.ReportDownloadProgress("patching", 0, "Initializing Patcher...", null, 0, 0);
             try
             {
                 string baseDomain = _config.AuthDomain;
@@ -511,17 +570,35 @@ public class GameSessionService
                 }
                 
                 Logger.Info("Game", $"Patching binary: hytale.com -> {baseDomain}");
+                
+                _progressService.ReportDownloadProgress("patching", 10, "Patching Client Binary...", null, 0, 0);
+                
                 var patcher = new ClientPatcher(baseDomain);
                 
                 var patchResult = patcher.EnsureClientPatched(versionPath, (msg, progress) =>
                 {
                    Logger.Info("Patcher", progress.HasValue ? $"{msg} ({progress}%)" : msg);
+                   if (progress.HasValue) 
+                   {
+                        // Map 10-60
+                        int mapped = 10 + (int)(progress.Value * 0.5);
+                        _progressService.ReportDownloadProgress("patching", mapped, msg, null, 0, 0);
+                   }
                 });
                 
                 Logger.Info("Game", $"Patching server JAR: sessions.hytale.com -> sessions.{baseDomain}");
+                
+                _progressService.ReportDownloadProgress("patching", 65, "Patching Server JAR...", null, 0, 0);
+
                 var serverPatchResult = patcher.PatchServerJar(versionPath, (msg, progress) =>
                 {
                    Logger.Info("Patcher", progress.HasValue ? $"{msg} ({progress}%)" : msg);
+                    // Map 65-90
+                   if (progress.HasValue) 
+                   {
+                        int mapped = 65 + (int)(progress.Value * 0.25);
+                        _progressService.ReportDownloadProgress("patching", mapped, msg, null, 0, 0);
+                   }
                 });
                 
                 if (patchResult.Success)
@@ -530,6 +607,7 @@ public class GameSessionService
                     {
                         try
                         {
+                            _progressService.ReportDownloadProgress("patching", 95, "Re-signing binary...", null, 0, 0);
                             Logger.Info("Game", "Re-signing patched binary...");
                             string appBundle = Path.Combine(versionPath, "Client", "Hytale.app");
                             bool signed = ClientPatcher.SignMacOSBinary(appBundle);
@@ -542,12 +620,16 @@ public class GameSessionService
                         }
                     }
                 }
+                _progressService.ReportDownloadProgress("patching", 100, "Patching Complete", null, 0, 0);
             }
             catch (Exception ex)
             {
                 Logger.Warning("Game", $"Error during binary patching: {ex.Message}");
+                // Non-fatal, try to launch anyway?
             }
         }
+        
+        _progressService.ReportDownloadProgress("launching", 0, "Authenticating...", null, 0, 0);
 
         string sessionUuid = _userIdentityService.GetUuidForUser(_config.Nick);
         Logger.Info("Game", $"Using UUID for user '{_config.Nick}': {sessionUuid}");
@@ -557,6 +639,7 @@ public class GameSessionService
         
         if (_config.OnlineMode && !string.IsNullOrWhiteSpace(_config.AuthDomain))
         {
+            _progressService.ReportDownloadProgress("launching", 20, $"Authenticating with {_config.AuthDomain}...", null, 0, 0);
             Logger.Info("Game", $"Online mode enabled - fetching auth tokens from {_config.AuthDomain}...");
             try
             {
@@ -732,6 +815,8 @@ exec env \
 
         try
         {
+            _progressService.ReportDownloadProgress("launching", 80, "Starting game process...", null, 0, 0);
+
             var process = Process.Start(startInfo);
             
             if (process != null)
@@ -741,6 +826,11 @@ exec env \
                 
                 _discordService.SetPresence(DiscordService.PresenceState.Playing, $"Playing as {_config.Nick}");
                 _progressService.ReportGameStateChanged("started", process.Id);
+                
+                _progressService.ReportDownloadProgress("launching", 100, "Game started!", null, 0, 0);
+                // Give UI a moment to show 100%
+                await Task.Delay(1000);
+                _progressService.ReportDownloadProgress("complete", 100, "Done", null, 0, 0);
                 
                 // Handle process exit in background
                 _ = Task.Run(async () =>

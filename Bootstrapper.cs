@@ -46,6 +46,7 @@ public static class Bootstrapper
                     sp.GetRequiredService<ConfigService>()));
                     
             services.AddSingleton<DownloadService>(); 
+            services.AddSingleton<GitHubService>();
             
             services.AddSingleton<VersionService>(sp => 
                 new VersionService(
@@ -148,7 +149,6 @@ public static class Bootstrapper
                 new ProgressNotificationService(sp.GetRequiredService<DiscordService>()));
             
             services.AddSingleton<BrowserService>();
-            services.AddSingleton<GitHubService>();
             services.AddSingleton<DiscordService>();
             services.AddSingleton<RosettaService>();
             services.AddSingleton<FileDialogService>();

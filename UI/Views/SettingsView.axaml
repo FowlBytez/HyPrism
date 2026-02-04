@@ -12,7 +12,8 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="HyPrism.UI.Views.SettingsView"
              x:DataType="vm:SettingsViewModel"
-             x:Name="Root">
+             x:Name="Root"
+             UseLayoutRounding="True">
 
     <UserControl.Resources>
         <cv:StringEqualityConverter x:Key="StringEqualityConverter"/>
@@ -439,7 +440,7 @@
                                      <ItemsControl ItemsSource="{Binding Backgrounds}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
-                                                <WrapPanel Orientation="Horizontal" />
+                                                <WrapPanel Orientation="Horizontal"/>
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
@@ -676,7 +677,7 @@
                                                 <Border Width="48" Height="48" CornerRadius="24" ClipToBounds="True" Background="#333">
                                                      <Panel>
                                                          <svg:Svg Path="/Assets/Icons/user.svg" Width="20" Height="20" Opacity="0.5" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNull}}"/>
-                                                         <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                                         <Image Source="{Binding Avatar}" Stretch="UniformToFill" RenderOptions.BitmapInterpolationMode="HighQuality" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                                      </Panel>
                                                 </Border>
                                                 
@@ -715,7 +716,7 @@
                                                      <Border Width="40" Height="40" CornerRadius="20" ClipToBounds="True" Background="#252525" Margin="0,0,0,6" IsVisible="{Binding !IsOverflow}">
                                                          <Panel>
                                                              <svg:Svg Path="/Assets/Icons/user.svg" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.3" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNull}}"/>
-                                                             <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                                             <Image Source="{Binding Avatar}" Stretch="UniformToFill" RenderOptions.BitmapInterpolationMode="HighQuality" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                                          </Panel>
                                                      </Border>
                                                      

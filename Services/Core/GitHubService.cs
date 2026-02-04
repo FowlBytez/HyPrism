@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using System.Text.Json.Serialization;
 
 namespace HyPrism.Services.Core;
@@ -65,7 +66,7 @@ public class GitHubService
         }
     }
 
-    public async Task<Bitmap?> LoadAvatarAsync(string url)
+    public async Task<Bitmap?> LoadAvatarAsync(string url, int? width = null)
     {
         try
         {
@@ -73,6 +74,12 @@ public class GitHubService
             
             var data = await _httpClient.GetByteArrayAsync(url);
             using var stream = new MemoryStream(data);
+            
+            if (width.HasValue)
+            {
+                return Bitmap.DecodeToWidth(stream, width.Value, BitmapInterpolationMode.HighQuality);
+            }
+            
             return new Bitmap(stream);
         }
         catch (Exception ex)

@@ -8,6 +8,7 @@ using HyPrism.Services.Core;
 using HyPrism.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.IO;
 using Avalonia.Threading;
 
 namespace HyPrism.UI;
@@ -22,8 +23,10 @@ public partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         
-        // Initialize AsyncImageLoader
-        ImageLoader.AsyncImageLoader = new RamCachedWebImageLoader();
+        // Initialize AsyncImageLoader with Disk Cache to save RAM
+        var cacheDir = Path.Combine(UtilityService.GetEffectiveAppDir(), "Cache", "Images");
+        Directory.CreateDirectory(cacheDir);
+        ImageLoader.AsyncImageLoader = new DiskCachedWebImageLoader(cacheDir);
         
         // Initialize DI
         Services = Bootstrapper.Initialize();

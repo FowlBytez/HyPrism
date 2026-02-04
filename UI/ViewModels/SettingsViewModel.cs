@@ -18,6 +18,7 @@ using Avalonia.Platform;
 using System.Collections.ObjectModel;
 
 using System.Windows.Input;
+using HyPrism.UI.Helpers;
 using System.Linq;
 
 namespace HyPrism.UI.ViewModels;
@@ -512,12 +513,11 @@ public class SettingsViewModel : ReactiveObject
             .Select(x => 
             {
                 var fullPath = $"avares://HyPrism/Assets/Images/Backgrounds/{x}";
-                Bitmap? bitmap = null;
+                Bitmap? thumbnail = null;
                 try
                 {
-                    var uri = new Uri(fullPath);
-                    using var stream = AssetLoader.Open(uri);
-                    bitmap = new Bitmap(stream);
+                    // Efficiently load thumbnail (decode width 240)
+                    thumbnail = BitmapHelper.LoadBitmap(fullPath, 240);
                 }
                 catch (Exception ex)
                 {
@@ -528,7 +528,7 @@ public class SettingsViewModel : ReactiveObject
                 { 
                     Filename = x,
                     FullPath = fullPath,
-                    Thumbnail = bitmap
+                    Thumbnail = thumbnail
                 };
             })
             .ToList();
@@ -652,13 +652,18 @@ public class SettingsViewModel : ReactiveObject
                          if(!string.IsNullOrEmpty(user?.HtmlUrl)) _browserService.OpenURL(user.HtmlUrl);
                      })
                  };
-                 // Load Avatar Async
-                 if(!string.IsNullOrEmpty(user?.AvatarUrl)) {
-                     _ = Task.Run(async () => {
-                         var bmp = await _gitHubService.LoadAvatarAsync(user.AvatarUrl);
-                         if(bmp != null) Avalonia.Threading.Dispatcher.UIThread.Post(() => p.Avatar = bmp);
-                     });
-                 }
+                     // Load Avatar Async with resize (96px for 48px HiDPI display)
+                     var avatarUrl = user?.AvatarUrl;
+                     if (!string.IsNullOrEmpty(avatarUrl))
+                     {
+                         _ = Task.Run(async () => {
+                             var bmp = await _gitHubService.LoadAvatarAsync(avatarUrl, 96);
+                             if(bmp != null) 
+                             {
+                                 Avalonia.Threading.Dispatcher.UIThread.Post(() => p.Avatar = bmp);
+                             }
+                         });
+                     }
                  return p;
             }
     

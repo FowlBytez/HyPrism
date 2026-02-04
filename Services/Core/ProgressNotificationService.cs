@@ -1,3 +1,5 @@
+using HyPrism.Models;
+
 namespace HyPrism.Services.Core;
 
 /// <summary>
@@ -8,7 +10,7 @@ public class ProgressNotificationService
     private readonly DiscordService _discordService;
     
     // Events
-    public event Action<string, double, string, long, long>? DownloadProgressChanged;
+    public event Action<ProgressUpdateMessage>? DownloadProgressChanged;
     public event Action<string, int>? GameStateChanged;
     public event Action<string, string, string?>? ErrorOccurred;
     
@@ -20,9 +22,19 @@ public class ProgressNotificationService
     /// <summary>
     /// Sends progress update notification.
     /// </summary>
-    public void SendProgress(string stage, int progress, string message, long downloaded, long total)
+    public void SendProgress(string stage, int progress, string messageKey, object[]? args, long downloaded, long total)
     {
-        DownloadProgressChanged?.Invoke(stage, progress, message, downloaded, total);
+        var msg = new ProgressUpdateMessage 
+        { 
+            State = stage, 
+            Progress = progress, 
+            MessageKey = messageKey, 
+            Args = args,
+            DownloadedBytes = downloaded,
+            TotalBytes = total
+        };
+        
+        DownloadProgressChanged?.Invoke(msg);
         
         // Don't update Discord during download/install to avoid showing extraction messages
         // Only update on complete or idle
@@ -32,8 +44,8 @@ public class ProgressNotificationService
         }
     }
 
-    public void ReportDownloadProgress(string stage, int progress, string message, long downloaded, long total) 
-        => SendProgress(stage, progress, message, downloaded, total);
+    public void ReportDownloadProgress(string stage, int progress, string messageKey, object[]? args = null, long downloaded = 0, long total = 0) 
+        => SendProgress(stage, progress, messageKey, args, downloaded, total);
     
     /// <summary>
     /// Sends game state change notification.

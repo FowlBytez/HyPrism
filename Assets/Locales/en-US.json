@@ -90,6 +90,38 @@
       "disclaimer": "HyPrism is not an official Hytale launcher or a product developed by Hypixel Studios"
     }
   },
+  "launch": {
+    "state": {
+      "preparing": "Preparing",
+      "download": "Downloading",
+      "update": "Updating",
+      "install": "Installing",
+      "patching": "Patching",
+      "launching": "Launching",
+      "complete": "Complete"
+    },
+    "detail": {
+      "preparing_session": "Preparing game session...",
+      "checking_install": "Checking installation...",
+      "game_installed": "Game is already installed",
+      "update_check": "Checking for updates...",
+      "downloading_patch": "Downloading patch {0}/{1} ({2}%)",
+      "applying_patch": "Applying patch {0}/{1}...",
+      "patch_applied": "Patch {0} applied successfully",
+      "vc_redist": "Checking Visual C++ Runtime...",
+      "java_install": "Installing Java Runtime...",
+      "authenticating": "Authenticating with {0}...",
+      "patching_client": "Patching Client Binary...",
+      "patching_server": "Patching Server JAR...",
+      "resigning": "Re-signing binary...",
+      "starting_process": "Starting game process...",
+      "started": "Game started!",
+      "done": "Done",
+      "butler_install": "Installing Butler...",
+      "downloading_generic": "Downloading Hytale... {0}%",
+      "installing_butler_pwr": "Installing game with Butler..."
+    }
+  },
   "profileEditor": {
     "title": "Profile Editor",
     "avatar": "Avatar",

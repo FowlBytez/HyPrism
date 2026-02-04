@@ -15,12 +15,14 @@
                     HorizontalAlignment="Left"
                     Orientation="Horizontal" 
                     Spacing="10">
-            <!-- Mods -->
+            <!-- Mods (Disabled pending rewrite) -->
+            <!--
             <btn:IconButton Command="{Binding ToggleModsCommand}"
                             ButtonBackground="#2a2a2a"
                             Width="50" Height="50"
                             IconPath="/Assets/Icons/package.svg"
                             IconSize="24"/>
+            -->
             
             <!-- Folder -->
             <btn:IconButton Command="{Binding OpenFolderCommand}"

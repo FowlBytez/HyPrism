@@ -10,6 +10,7 @@ using HyPrism.Models;
 using Avalonia.Threading;
 using HyPrism.UI.ViewModels.Dashboard;
 using Microsoft.Extensions.DependencyInjection;
+using HyPrism.UI.Helpers;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using System.IO;
@@ -190,6 +191,14 @@ public class DashboardViewModel : ReactiveObject
         get => _currentSpeed;
         set => this.RaiseAndSetIfChanged(ref _currentSpeed, value);
     }
+    
+    // Icon Logic
+    private string _progressIconPath = "/Assets/Icons/download-cloud.svg";
+    public string ProgressIconPath
+    {
+        get => _progressIconPath;
+        set => this.RaiseAndSetIfChanged(ref _progressIconPath, value);
+    }
 
     // Error
     private string _errorMessage = "";
@@ -349,18 +358,59 @@ public class DashboardViewModel : ReactiveObject
         }
     }
     
-    private void OnDownloadProgressChanged(string state, double progress, string message, long downloaded, long total)
+    private string _statusTitle = "Loading...";
+    public string StatusTitle
+    {
+        get => _statusTitle;
+        set => this.RaiseAndSetIfChanged(ref _statusTitle, value);
+    }
+
+    private void OnDownloadProgressChanged(ProgressUpdateMessage msg)
     {
         Dispatcher.UIThread.InvokeAsync(() => {
-            if (state == "download" || state == "update")
-            {
-                ProgressText = message;
-                DownloadProgress = progress;
-            }
             
-            if (state == "complete")
+            IsDownloading = msg.State != "complete" && msg.State != "idle";
+            
+            // Set Icon
+            ProgressIconPath = msg.State switch
             {
-                 IsDownloading = false;
+                "preparing" => "/Assets/Icons/settings.svg",
+                "download" => "/Assets/Icons/download-cloud.svg",
+                "update" => "/Assets/Icons/refresh-cw.svg",
+                "install" => "/Assets/Icons/package.svg",
+                "patching" => "/Assets/Icons/wrench.svg",
+                "launching" => "/Assets/Icons/rocket.svg",
+                "complete" => "/Assets/Icons/check.svg",
+                _ => "/Assets/Icons/info.svg"
+            };
+
+            if (IsDownloading) 
+            {
+                // Title
+                StatusTitle = LocalizationService.Instance.Translate($"launch.state.{msg.State}");
+                if (string.IsNullOrEmpty(StatusTitle)) StatusTitle = msg.State; // Fallback
+                
+                // Detail
+                if (msg.MessageKey.StartsWith("common.raw"))
+                {
+                   ProgressText = msg.Args?.FirstOrDefault()?.ToString() ?? msg.MessageKey;
+                }
+                else
+                {
+                   ProgressText = LocalizationService.Instance.Translate(msg.MessageKey, msg.Args ?? Array.Empty<object>());
+                }
+
+                DownloadProgress = msg.Progress;
+                
+                // Speed
+                if (msg.TotalBytes > 0)
+                {
+                    CurrentSpeed = $"{(msg.DownloadedBytes / 1024.0 / 1024.0):N1} MB / {(msg.TotalBytes / 1024.0 / 1024.0):N1} MB";
+                }
+                else
+                {
+                    CurrentSpeed = ""; 
+                }
             }
         });
     }
@@ -377,17 +427,12 @@ public class DashboardViewModel : ReactiveObject
 
     private Bitmap? LoadBitmap(string uriString)
     {
-        try
+        var bitmap = BitmapHelper.LoadBitmap(uriString, 1920); // Limit width to 1920px
+        if (bitmap == null)
         {
-            var uri = new Uri(uriString);
-            using var stream = AssetLoader.Open(uri);
-            return new Bitmap(stream);
+            Logger.Error("Dashboard", $"Failed to load background '{uriString}'");
         }
-        catch (Exception ex)
-        {
-            Logger.Error("Dashboard", $"Failed to load background '{uriString}': {ex.Message}");
-            return null;
-        }
+        return bitmap;
     }
 
     private async Task ChangeBackgroundAsync(string uriString)

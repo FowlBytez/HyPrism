@@ -19,6 +19,16 @@ public class DownloadProgress
     public string? Error { get; set; }
 }
 
+public class ProgressUpdateMessage
+{
+    public string State { get; set; } = "unknown";
+    public double Progress { get; set; }
+    public string MessageKey { get; set; } = "common.loading";
+    public object[]? Args { get; set; }
+    public long DownloadedBytes { get; set; }
+    public long TotalBytes { get; set; }
+}
+
 /// <summary>
 /// Status of Rosetta 2 installation on macOS Apple Silicon.
 /// </summary>

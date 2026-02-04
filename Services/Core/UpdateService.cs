@@ -797,7 +797,7 @@ rm -f ""$0""
             var archivePath = Path.Combine(wrapperDir, assetName);
 
             // Download archive
-            _progressNotificationService.SendProgress("wrapper-install", 0, "Downloading HyPrism...", 0, 100);
+            _progressNotificationService.SendProgress("wrapper-install", 0, "Downloading HyPrism...", null, 0, 100);
             
             var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
             if (!response.IsSuccessStatusCode)
@@ -812,7 +812,7 @@ rm -f ""$0""
                 await contentStream.CopyToAsync(fileStream);
             }
 
-            _progressNotificationService.SendProgress("wrapper-install", 50, "Extracting...", 50, 100);
+            _progressNotificationService.SendProgress("wrapper-install", 50, "Extracting...", null, 50, 100);
 
             // Extract archive
             if (assetName.EndsWith(".tar.gz"))
@@ -850,7 +850,7 @@ rm -f ""$0""
             // Cleanup archive
             File.Delete(archivePath);
 
-            _progressNotificationService.SendProgress("wrapper-install", 100, "Installation complete", 100, 100);
+            _progressNotificationService.SendProgress("wrapper-install", 100, "Installation complete", null, 100, 100);
             return true;
         }
         catch (Exception ex)
