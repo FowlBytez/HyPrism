@@ -332,6 +332,18 @@ public class NewsService
             
             return news;
         }
+        catch (HttpRequestException ex)
+        {
+             if (ex.StatusCode == System.Net.HttpStatusCode.Forbidden || ex.Message.Contains("403"))
+             {
+                 Logger.Warning("News", "Failed to fetch HyPrism news: Code 403 (rate limit exceeded)");
+             }
+             else
+             {
+                 Logger.Warning("News", $"Failed to fetch HyPrism news: {ex.Message}");
+             }
+             return new List<NewsItemResponse>();
+        }
         catch (Exception ex)
         {
             Logger.Warning("News", $"Failed to fetch HyPrism news: {ex.Message}");

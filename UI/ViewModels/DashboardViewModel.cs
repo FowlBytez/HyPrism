@@ -152,14 +152,14 @@ public class DashboardViewModel : ReactiveObject
     private readonly ObservableAsPropertyHelper<bool> _isOverlayOpen;
     public bool IsOverlayOpen => _isOverlayOpen.Value;
 
-    // Download Overlay Properties
-    private bool _isDownloading;
-    public bool IsDownloading
+    // Launch Overlay Properties
+    private bool _isLaunchOverlayVisible;
+    public bool IsLaunchOverlayVisible
     {
-        get => _isDownloading;
+        get => _isLaunchOverlayVisible;
         set 
         {
-            this.RaiseAndSetIfChanged(ref _isDownloading, value);
+            this.RaiseAndSetIfChanged(ref _isLaunchOverlayVisible, value);
             OverlayOpacity = value ? 1.0 : 0.0;
         }
     }
@@ -169,6 +169,13 @@ public class DashboardViewModel : ReactiveObject
     {
         get => _overlayOpacity;
         set => this.RaiseAndSetIfChanged(ref _overlayOpacity, value);
+    }
+    
+    private string _statusTitle = "Launching...";
+    public string StatusTitle
+    {
+        get => _statusTitle;
+        set => this.RaiseAndSetIfChanged(ref _statusTitle, value);
     }
     
     private string _progressText = "Please wait while we download and install the game files";
@@ -192,7 +199,6 @@ public class DashboardViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _currentSpeed, value);
     }
     
-    // Icon Logic
     private string _progressIconPath = "/Assets/Icons/download-cloud.svg";
     public string ProgressIconPath
     {
@@ -338,15 +344,25 @@ public class DashboardViewModel : ReactiveObject
 
     private async Task LaunchAsync()
     {
-        if (IsDownloading) return;
+        if (IsLaunchOverlayVisible) return;
         
-        IsDownloading = true;
+        // Reset state with localized values matching "preparing" event
+        // This ensures smooth visual transition (no icon swap) when service starts
         DownloadProgress = 0;
-        ProgressText = "Preparing...";
+        StatusTitle = LocalizationService.Instance.Translate("launch.state.preparing");
+        if (string.IsNullOrEmpty(StatusTitle)) StatusTitle = "Preparing...";
+        
+        ProgressIconPath = "/Assets/Icons/settings.svg"; // Matches 'preparing' state icon
+        ProgressText = LocalizationService.Instance.Translate("launch.detail.preparing");
+        if (string.IsNullOrEmpty(ProgressText)) ProgressText = "Preparing game session...";
+        
+        IsLaunchOverlayVisible = true;
         
         try
         {
             await _gameSessionService.DownloadAndLaunchAsync();
+            // Wait 2 seconds to let user see the "Done" state before fading out
+            await Task.Delay(2000);
         }
         catch (Exception ex)
         {
@@ -354,22 +370,13 @@ public class DashboardViewModel : ReactiveObject
         }
         finally
         {
-            IsDownloading = false;
+            IsLaunchOverlayVisible = false;
         }
-    }
-    
-    private string _statusTitle = "Loading...";
-    public string StatusTitle
-    {
-        get => _statusTitle;
-        set => this.RaiseAndSetIfChanged(ref _statusTitle, value);
     }
 
     private void OnDownloadProgressChanged(ProgressUpdateMessage msg)
     {
         Dispatcher.UIThread.InvokeAsync(() => {
-            
-            IsDownloading = msg.State != "complete" && msg.State != "idle";
             
             // Set Icon
             ProgressIconPath = msg.State switch
@@ -384,7 +391,7 @@ public class DashboardViewModel : ReactiveObject
                 _ => "/Assets/Icons/info.svg"
             };
 
-            if (IsDownloading) 
+            if (IsLaunchOverlayVisible) 
             {
                 // Title
                 StatusTitle = LocalizationService.Instance.Translate($"launch.state.{msg.State}");
@@ -421,7 +428,7 @@ public class DashboardViewModel : ReactiveObject
             ErrorMessage = message;
             ErrorTrace = trace ?? "";
             IsErrorModalOpen = true;
-            IsDownloading = false;
+            IsLaunchOverlayVisible = false;
         });
     }
 

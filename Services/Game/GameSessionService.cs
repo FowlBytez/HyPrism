@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using HyPrism.Models;
 using HyPrism.Services.Core;
 using HyPrism.Services.User;
@@ -91,11 +92,11 @@ public class GameSessionService
             // The game is installed if the Client executable exists - that's all we need to check
             bool gameIsInstalled = _instanceService.IsClientPresent(versionPath);
             
-            Logger.Info("Download", $"=== INSTALL CHECK ===");
-            Logger.Info("Download", $"Version path: {versionPath}");
-            Logger.Info("Download", $"Is latest instance: {isLatestInstance}");
-            Logger.Info("Download", $"Target version: {targetVersion}");
-            Logger.Info("Download", $"Client exists (game installed): {gameIsInstalled}");
+            Logger.Info("Download", $"=== INSTALL CHECK ===", false);
+            Logger.Info("Download", $"Version path: {versionPath}", false);
+            Logger.Info("Download", $"Is latest instance: {isLatestInstance}", false);
+            Logger.Info("Download", $"Target version: {targetVersion}", false);
+            Logger.Info("Download", $"Client exists (game installed): {gameIsInstalled}", false);
             
             // If game is already installed, check for updates then launch
             if (gameIsInstalled)
@@ -142,28 +143,28 @@ public class GameSessionService
                                 if (pwrFiles.Count > 0)
                                 {
                                     installedVersion = pwrFiles[0];
-                                    Logger.Info("Download", $"Detected installed version from cache: v{installedVersion}");
+                                    Logger.Info("Download", $"Detected installed version from cache: v{installedVersion}", false);
                                     _instanceService.SaveLatestInfo(branch, installedVersion);
                                 }
                             }
                             
                             if (installedVersion == 0)
                             {
-                                Logger.Info("Download", $"Butler receipt exists but no version info, launching as-is (user can UPDATE manually)");
+                                Logger.Info("Download", $"Butler receipt exists but no version info, launching as-is (user can UPDATE manually)", false);
                             }
                         }
                         else
                         {
-                            Logger.Info("Download", $"No Butler receipt, launching current installation as-is (user can UPDATE manually)");
+                            Logger.Info("Download", $"No Butler receipt, launching current installation as-is (user can UPDATE manually)", false);
                         }
                     }
                     
-                    Logger.Info("Download", $"Installed version: {installedVersion}, Latest version: {latestVersion}");
+                    Logger.Info("Download", $"Installed version: {installedVersion}, Latest version: {latestVersion}", false);
                     
                     // Only apply differential update if we're BEHIND the latest version
                     if (installedVersion > 0 && installedVersion < latestVersion)
                     {
-                        Logger.Info("Download", $"Differential update available: {installedVersion} -> {latestVersion}");
+                        Logger.Info("Download", $"Differential update available: {installedVersion} -> {latestVersion}", false);
                         _progressService.ReportDownloadProgress("update", 0, $"Updating game from v{installedVersion} to v{latestVersion}...", null, 0, 0);
                         
                         try
@@ -258,7 +259,7 @@ public class GameSessionService
                     }
                     else if (installedVersion >= latestVersion)
                     {
-                        Logger.Info("Download", "Already at latest version, no update needed");
+                        Logger.Info("Download", "Already at latest version, no update needed", false);
                         _instanceService.SaveLatestInfo(branch, latestVersion);
                     }
                 }
@@ -699,9 +700,9 @@ public class GameSessionService
                 FileName = executable,
                 WorkingDirectory = workingDir,
                 UseShellExecute = false,
-                CreateNoWindow = false,
-                RedirectStandardOutput = false,
-                RedirectStandardError = false
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             };
             
             // Add arguments using ArgumentList
@@ -804,9 +805,9 @@ exec env \
                 FileName = "/bin/bash",
                 WorkingDirectory = workingDir,
                 UseShellExecute = false,
-                CreateNoWindow = false,
-                RedirectStandardOutput = false,
-                RedirectStandardError = false
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             };
             startInfo.ArgumentList.Add(launchScript);
             
@@ -817,19 +818,137 @@ exec env \
         {
             _progressService.ReportDownloadProgress("launching", 80, "Starting game process...", null, 0, 0);
 
-            var process = Process.Start(startInfo);
+            var process = new Process { StartInfo = startInfo };
+            var interfaceLoadedTcs = new TaskCompletionSource<bool>();
             
-            if (process != null)
+            // Log Filtering State
+            var sysInfoBuffer = new List<string>();
+            bool capturingSysInfo = false;
+            bool capturingAudio = false;
+
+            process.OutputDataReceived += (sender, e) => 
             {
+                if (string.IsNullOrEmpty(e.Data)) return;
+
+                string line = e.Data;
+                
+                // Check if this line is a new log entry (starts with YYYY-MM-DD)
+                // Hytale logs: 2026-02-04 21:36:55.1041|INFO|...
+                bool isNewLogEntry = Regex.IsMatch(line, @"^\d{4}-\d{2}-\d{2}");
+
+                // --- 1. Log Path (Raw output) ---
+                if (line.StartsWith("Set log path to"))
+                {
+                    Logger.Info("Game", line);
+                    return;
+                }
+
+                // --- 2. System Info Block ---
+                // "System informations" usually appears on its own line after the timestamp header
+                if (line.Trim() == "System informations" || line.Contains("|System informations"))
+                {
+                    capturingSysInfo = true;
+                    return;
+                }
+                
+                if (capturingSysInfo)
+                {
+                    if (isNewLogEntry)
+                    {
+                        capturingSysInfo = false;
+                        // Fallthrough to process new line
+                    }
+                    else
+                    {
+                        string trimmed = line.Trim();
+                        if (trimmed.StartsWith("OpenGL") || trimmed.StartsWith("GPU"))
+                        {
+                            sysInfoBuffer.Add(trimmed);
+                            return;
+                        }
+                    }
+                }
+
+                // --- 3. Audio Info Block ---
+                if (line.Contains("|Audio:"))
+                {
+                    capturingAudio = true;
+                    return;
+                }
+
+                if (capturingAudio)
+                {
+                     if (isNewLogEntry)
+                    {
+                        capturingAudio = false;
+                        
+                        // End of Audio block - Print the combined summary
+                        Logger.Info("Game", "Got system info");
+                        foreach(var sysLine in sysInfoBuffer)
+                        {
+                             Logger.Info("Game", $"\t{sysLine}");
+                        }
+                        sysInfoBuffer.Clear();
+                        
+                        // Fallthrough to process this new line
+                    }
+                    else
+                    {
+                        string trimmed = line.Trim();
+                        // User specifically requested these Audio fields
+                        if (trimmed.StartsWith("OpenAL") || 
+                            trimmed.StartsWith("Renderer") || 
+                            trimmed.StartsWith("Vendor") || 
+                            trimmed.StartsWith("Using device"))
+                        {
+                            sysInfoBuffer.Add(trimmed);
+                        }
+                        // Ignore other audio lines and continue
+                        return;
+                    }
+                }
+
+                // --- 4. Success Signal ---
+                if (line.Contains("|INFO|HytaleClient.Application.AppStartup|Interface loaded.") ||
+                    line.Contains("Interface loaded."))
+                {
+                    Logger.Success("Game", "Started successfully");
+                    interfaceLoadedTcs.TrySetResult(true);
+                    return;
+                }
+                
+                // Debug: Uncomment to see all raw lines if needed
+                // Console.WriteLine(line);
+            };
+            
+            process.ErrorDataReceived += (sender, e) => 
+            {
+                // Optionally filter stderr too
+                // if (e.Data != null) Console.WriteLine(e.Data);
+            };
+
+            if (process.Start())
+            {
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
                 _gameProcessService.SetGameProcess(process);
                 Logger.Success("Game", $"Game started with PID: {process.Id}");
                 
                 _discordService.SetPresence(DiscordService.PresenceState.Playing, $"Playing as {_config.Nick}");
                 _progressService.ReportGameStateChanged("started", process.Id);
                 
-                _progressService.ReportDownloadProgress("launching", 100, "Game started!", null, 0, 0);
-                // Give UI a moment to show 100%
-                await Task.Delay(1000);
+                _progressService.ReportDownloadProgress("launching", 100, "Waiting for game window...", null, 0, 0);
+                
+                // Wait for interface loaded signal or timeout (60s)
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(60));
+                var completedTask = await Task.WhenAny(interfaceLoadedTcs.Task, timeoutTask);
+                
+                if (completedTask == timeoutTask)
+                {
+                     Logger.Warning("Game", "Timed out waiting for interface load signal (or game output is silent)");
+                }
+
                 _progressService.ReportDownloadProgress("complete", 100, "Done", null, 0, 0);
                 
                 // Handle process exit in background
@@ -849,8 +968,8 @@ exec env \
             }
             else
             {
-                Logger.Error("Game", "Process.Start returned null - game failed to launch");
-                _progressService.ReportError("launch", "Failed to start game", "Process.Start returned null");
+                Logger.Error("Game", "Process.Start returned false - game failed to launch");
+                _progressService.ReportError("launch", "Failed to start game", "Process.Start returned false");
                 throw new Exception("Failed to start game process");
             }
         }

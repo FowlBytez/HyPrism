@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace HyPrism.UI.Views;
 
-public partial class UpdateOverlayView : UserControl
+public partial class LaunchOverlayView : UserControl
 {
-    public UpdateOverlayView()
+    public LaunchOverlayView()
     {
         InitializeComponent();
     }

@@ -6,10 +6,10 @@
              xmlns:trans="using:HyPrism.UI.Views.Transitions"
              xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Avalonia.Svg.Skia"
              mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
-             x:Class="HyPrism.UI.Views.UpdateOverlayView"
+             x:Class="HyPrism.UI.Views.LaunchOverlayView"
              x:DataType="vm:DashboardViewModel">
     
-    <Grid IsVisible="{Binding IsDownloading}" 
+    <Grid IsHitTestVisible="{Binding IsLaunchOverlayVisible}" 
           Opacity="{Binding OverlayOpacity}"
           Background="#F2090909">
         <Grid.Transitions>

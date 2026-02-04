@@ -8,32 +8,44 @@ public static class Logger
     private static readonly Queue<string> _logBuffer = new();
     private const int MaxLogEntries = 100;
     
-    public static void Info(string category, string message)
+    public static void Info(string category, string message, bool logToConsole = true)
     {
         Log.ForContext("SourceContext", category).Information(message);
-        WriteToConsole("INF", category, message, ConsoleColor.Gray);
-        AddToBuffer("INF", category, message);
+        if (logToConsole)
+        {
+            WriteToConsole("INF", category, message, ConsoleColor.Gray);
+            AddToBuffer("INF", category, message);
+        }
     }
     
-    public static void Success(string category, string message)
+    public static void Success(string category, string message, bool logToConsole = true)
     {
         Log.ForContext("SourceContext", category).Information($"SUCCESS: {message}");
-        WriteToConsole("SUC", category, message, ConsoleColor.Green);
-        AddToBuffer("SUC", category, message);
+        if (logToConsole)
+        {
+            WriteToConsole("SUC", category, message, ConsoleColor.Green);
+            AddToBuffer("SUC", category, message);
+        }
     }
     
-    public static void Warning(string category, string message)
+    public static void Warning(string category, string message, bool logToConsole = true)
     {
         Log.ForContext("SourceContext", category).Warning(message);
-        WriteToConsole("WRN", category, message, ConsoleColor.Yellow);
-        AddToBuffer("WRN", category, message);
+        if (logToConsole)
+        {
+            WriteToConsole("WRN", category, message, ConsoleColor.Yellow);
+            AddToBuffer("WRN", category, message);
+        }
     }
     
-    public static void Error(string category, string message)
+    public static void Error(string category, string message, bool logToConsole = true)
     {
         Log.ForContext("SourceContext", category).Error(message);
-        WriteToConsole("ERR", category, message, ConsoleColor.Red);
-        AddToBuffer("ERR", category, message);
+        if (logToConsole)
+        {
+            WriteToConsole("ERR", category, message, ConsoleColor.Red);
+            AddToBuffer("ERR", category, message);
+        }
     }
     
     public static void Debug(string category, string message)

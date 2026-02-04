@@ -78,7 +78,7 @@
         </Grid>
         
         <!-- Update/Download Progress Overlay -->
-        <views:UpdateOverlayView DataContext="{Binding}"/>
+        <views:LaunchOverlayView DataContext="{Binding}"/>
 
         <!-- Error Modal -->
         <views:ErrorModalView DataContext="{Binding}"/>

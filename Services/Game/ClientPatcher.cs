@@ -312,11 +312,11 @@ public class ClientPatcher
         int totalCount = 0;
         var (mode, mainDomain, subdomainPrefix) = GetDomainStrategy();
 
-        Logger.Info("Patcher", $"Patching strategy: {mode} mode");
+        Logger.Info("Patcher", $"Patching strategy: {mode} mode", false);
         if (mode == "split")
         {
-            Logger.Info("Patcher", $"  Subdomain prefix: {subdomainPrefix}");
-            Logger.Info("Patcher", $"  Main domain: {mainDomain}");
+            Logger.Info("Patcher", $"  Subdomain prefix: {subdomainPrefix}", false);
+            Logger.Info("Patcher", $"  Main domain: {mainDomain}", false);
         }
 
         // 1. Patch telemetry/sentry URL (optional, reduces telemetry)
@@ -398,9 +398,9 @@ public class ClientPatcher
     {
         var (_, mainDomain, _) = GetDomainStrategy();
 
-        Logger.Info("Patcher", "=== Client Patcher v1.0 ===");
-        Logger.Info("Patcher", $"Target: {clientPath}");
-        Logger.Info("Patcher", $"Domain: {_targetDomain} ({_targetDomain.Length} chars)");
+        Logger.Info("Patcher", "=== Client Patcher v1.0 ===", false);
+        Logger.Info("Patcher", $"Target: {clientPath}", false);
+        Logger.Info("Patcher", $"Domain: {_targetDomain} ({_targetDomain.Length} chars)", false);
 
         if (!File.Exists(clientPath))
         {
@@ -414,29 +414,29 @@ public class ClientPatcher
 
         if (IsPatchedAlready(clientPath))
         {
-            Logger.Info("Patcher", $"Client already patched for {_targetDomain}, skipping");
+            Logger.Info("Patcher", $"Client already patched for {_targetDomain}, skipping", false);
             progressCallback?.Invoke("Client already patched", 100);
             return new PatchResult { Success = true, AlreadyPatched = true, PatchCount = 0 };
         }
 
         progressCallback?.Invoke("Reading client binary...", 10);
-        Logger.Info("Patcher", "Reading client binary...");
+        Logger.Info("Patcher", "Reading client binary...", false);
         byte[] data = File.ReadAllBytes(clientPath);
         byte[] originalData = (byte[])data.Clone(); // Keep a copy to check if we modified anything
-        Logger.Info("Patcher", $"Binary size: {data.Length / 1024.0 / 1024.0:F2} MB");
+        Logger.Info("Patcher", $"Binary size: {data.Length / 1024.0 / 1024.0:F2} MB", false);
 
         progressCallback?.Invoke("Patching domain references...", 30);
-        Logger.Info("Patcher", "Applying domain patches (length-prefixed format)...");
+        Logger.Info("Patcher", "Applying domain patches (length-prefixed format)...", false);
         int domainCount = ApplyDomainPatches(data);
 
-        Logger.Info("Patcher", "Patching Discord URLs...");
+        Logger.Info("Patcher", "Patching Discord URLs...", false);
         int discordCount = PatchDiscordUrl(data);
 
         int totalCount = domainCount + discordCount;
 
         if (totalCount == 0)
         {
-            Logger.Warning("Patcher", "No occurrences found with length-prefixed format - trying UTF-8...");
+            Logger.Warning("Patcher", "No occurrences found with length-prefixed format - trying UTF-8...", false); // Silent warning
 
             // Try UTF-8 format (most common for native binaries)
             byte[] oldDomainUtf8 = StringToUtf8(OriginalDomain);
@@ -445,7 +445,7 @@ public class ClientPatcher
 
             if (utf8Count > 0)
             {
-                Logger.Info("Patcher", $"Found {utf8Count} occurrences with UTF-8 format");
+                Logger.Info("Patcher", $"Found {utf8Count} occurrences with UTF-8 format", false);
                 
                 // Also patch common URL patterns with UTF-8
                 string[] urlPatterns = {
@@ -465,12 +465,12 @@ public class ClientPatcher
                     int urlCount = ReplaceBytes(data, oldUrl, newUrl);
                     if (urlCount > 0)
                     {
-                        Logger.Info("Patcher", $"  Patched {urlCount} {pattern} occurrence(s)");
+                        Logger.Info("Patcher", $"  Patched {urlCount} {pattern} occurrence(s)", false);
                         utf8Count += urlCount;
                     }
                 }
                 
-                Logger.Info("Patcher", "Creating backup before writing...");
+                Logger.Info("Patcher", "Creating backup before writing...", false);
                 BackupClient(clientPath);
                 File.WriteAllBytes(clientPath, data);
                 MarkAsPatched(clientPath);
@@ -478,7 +478,7 @@ public class ClientPatcher
                 return new PatchResult { Success = true, PatchCount = utf8Count };
             }
 
-            Logger.Warning("Patcher", "No UTF-8 occurrences - trying legacy UTF-16LE format...");
+            Logger.Warning("Patcher", "No UTF-8 occurrences - trying legacy UTF-16LE format...", false);
 
             // Fallback to direct UTF-16LE replacement
             // IMPORTANT: The base domain (4th occurrence) has 0x89 instead of 0x00 after the last char
@@ -488,7 +488,7 @@ public class ClientPatcher
             byte[] oldDomain = StringToUtf16LE(OriginalDomain);
             byte[] newDomain = StringToUtf16LE(mainDomain);
             int legacyCount = ReplaceBytes(data, oldDomain, newDomain);
-            Logger.Info("Patcher", $"Full UTF-16LE pattern: found {legacyCount} occurrences");
+            Logger.Info("Patcher", $"Full UTF-16LE pattern: found {legacyCount} occurrences", false);
             
             // Now search for partial pattern (19 bytes) to catch the base domain with 0x89 suffix
             // This catches: h.y.t.a.l.e...c.o.m (without the trailing 00)
@@ -665,15 +665,14 @@ public class ClientPatcher
         string serverJarPath = Path.Combine(gameDir, "Server", "HytaleServer.jar");
         string patchFlag = serverJarPath + PatchedFlag;
 
-        Logger.Info("Patcher", "=== Server JAR Patcher v1.0 ===");
-        Logger.Info("Patcher", $"Target: {serverJarPath}");
-        Logger.Info("Patcher", $"Domain: {_targetDomain}");
+        Logger.Info("Patcher", "=== Server JAR Patcher v1.0 ===", false);
+        Logger.Info("Patcher", $"Target: {serverJarPath}", false);
+        Logger.Info("Patcher", $"Domain: {_targetDomain}", false);
 
         if (!File.Exists(serverJarPath))
         {
             string error = $"Server JAR not found: {serverJarPath}";
-            Logger.Warning("Patcher", error);
-            // Not an error - server may not be downloaded yet
+            Logger.Warning("Patcher", error, true);
             return new PatchResult { Success = true, PatchCount = 0, Warning = error };
         }
 
@@ -734,7 +733,7 @@ public class ClientPatcher
                         
                         if (foundPatched)
                         {
-                            Logger.Info("Patcher", $"Server JAR already patched for {_targetDomain}, skipping");
+                            Logger.Info("Patcher", $"Server JAR already patched for {_targetDomain}, skipping", false);
                             progressCallback?.Invoke("Server already patched", 100);
                             return new PatchResult { Success = true, AlreadyPatched = true, PatchCount = 0 };
                         }

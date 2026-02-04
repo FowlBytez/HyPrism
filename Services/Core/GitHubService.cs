@@ -5,7 +5,6 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using System.Text.Json.Serialization;
 
 namespace HyPrism.Services.Core;
@@ -43,12 +42,22 @@ public class GitHubService
         {
             // Per page 100 to get everyone
             var url = $"https://api.github.com/repos/{RepoOwner}/{RepoName}/contributors?per_page=100";
-            return await _httpClient.GetFromJsonAsync<List<GitHubUser>>(url) ?? new List<GitHubUser>();
+            return await _httpClient.GetFromJsonAsync<List<GitHubUser>>(url) ?? [];
+        }
+        catch (HttpRequestException ex)
+        {
+            if (ex.StatusCode == System.Net.HttpStatusCode.Forbidden || ex.Message.Contains("403"))
+            {
+                Logger.Warning("GitHub", "Failed to fetch contributors rate limit exceeded");
+                return [];
+            }
+            Logger.Error("GitHub", $"Failed to fetch contributors: {ex}");
+            return [];
         }
         catch (Exception ex)
         {
             Logger.Error("GitHub", $"Failed to fetch contributors: {ex}");
-            return new List<GitHubUser>();
+            return [];
         }
     }
 
@@ -59,6 +68,16 @@ public class GitHubService
             var url = $"https://api.github.com/users/{username}";
             return await _httpClient.GetFromJsonAsync<GitHubUser>(url);
         }
+        catch (HttpRequestException ex)
+        {
+            if (ex.StatusCode == System.Net.HttpStatusCode.Forbidden || ex.Message.Contains("403"))
+            {
+                Logger.Warning("GitHub", $"Failed to fetch user {username} rate limit exceeded");
+                return null;
+            }
+            Logger.Error("GitHub", $"Failed to fetch user {username}: {ex}");
+            return null;
+        }
         catch (Exception ex)
         {
             Logger.Error("GitHub", $"Failed to fetch user {username}: {ex}");
@@ -66,7 +85,7 @@ public class GitHubService
         }
     }
 
-    public async Task<Bitmap?> LoadAvatarAsync(string url, int? width = null)
+    public async Task<Bitmap?> LoadAvatarAsync(string url)
     {
         try
         {
@@ -74,12 +93,6 @@ public class GitHubService
             
             var data = await _httpClient.GetByteArrayAsync(url);
             using var stream = new MemoryStream(data);
-            
-            if (width.HasValue)
-            {
-                return Bitmap.DecodeToWidth(stream, width.Value, BitmapInterpolationMode.HighQuality);
-            }
-            
             return new Bitmap(stream);
         }
         catch (Exception ex)
