@@ -21,6 +21,7 @@ namespace HyPrism.UI.ViewModels;
 public class DashboardViewModel : ReactiveObject
 {
     private readonly GameSessionService _gameSessionService;
+    private readonly GameProcessService _gameProcessService;
     private readonly ModService _modService;
     private readonly InstanceService _instanceService;
     private readonly ConfigService _configService;
@@ -229,6 +230,7 @@ public class DashboardViewModel : ReactiveObject
 
     public DashboardViewModel(
         GameSessionService gameSessionService,
+        GameProcessService gameProcessService,
         ModService modService,
         InstanceService instanceService,
         ConfigService configService,
@@ -244,6 +246,7 @@ public class DashboardViewModel : ReactiveObject
         AppPathConfiguration appPathConfiguration)
     {
         _gameSessionService = gameSessionService;
+        _gameProcessService = gameProcessService;
         _modService = modService;
         _instanceService = instanceService;
         _configService = configService;
@@ -299,7 +302,7 @@ public class DashboardViewModel : ReactiveObject
 
         // --- Initialize Child ViewModels ---
         HeaderViewModel = new HeaderViewModel(_configService, toggleProfileEditorAction, toggleSettingsAction);
-        GameControlViewModel = new GameControlViewModel(_instanceService, _fileService, toggleModsAction, toggleSettingsAction, LaunchAsync);
+        GameControlViewModel = new GameControlViewModel(_instanceService, _fileService, _gameProcessService, toggleModsAction, toggleSettingsAction, LaunchAsync);
         NewsViewModel = new NewsViewModel(_newsService, _browserService);
         
         // Lazy-load settings if possible, or init straight away

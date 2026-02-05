@@ -6,6 +6,7 @@
   },
   "main": {
     "play": "PLAY",
+    "running": "RUNNING",
     "release": "Release",
     "preRelease": "Pre-Release",
     "latest": "latest",

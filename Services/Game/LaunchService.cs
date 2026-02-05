@@ -523,11 +523,11 @@ public class LaunchService
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            return Path.Combine(_appDir, "jre", "bin", "java.exe");
+            return Path.Combine(_appDir, "Jre", "bin", "java.exe");
         }
         else
         {
-            return Path.Combine(_appDir, "jre", "bin", "java");
+            return Path.Combine(_appDir, "Jre", "bin", "java");
         }
     }
 

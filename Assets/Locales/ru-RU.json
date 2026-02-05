@@ -6,6 +6,7 @@
   },
   "main": {
     "play": "ИГРАТЬ",
+    "running": "ЗАПУЩЕНО",
     "release": "Релиз",
     "preRelease": "Пре-релиз",
     "latest": "последняя",

@@ -49,7 +49,7 @@
 
     <!-- Disabled State -->
     <Style Selector="btn|PrimaryButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="#333"/>
-        <Setter Property="Foreground" Value="#666"/>
+        <Setter Property="Background" Value="#d64b4b"/>
+        <Setter Property="Foreground" Value="Black"/>
     </Style>
 </Styles>

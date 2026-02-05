@@ -44,6 +44,7 @@ public class MainViewModel : ReactiveObject
         // Ideally we would use a Factory or DI container resolution for the child, 
         // but passing them is fine for now.
         GameSessionService gameSessionService,
+        GameProcessService gameProcessService,
         ModService modService,
         InstanceService instanceService,
         ConfigService configService,
@@ -79,6 +80,7 @@ public class MainViewModel : ReactiveObject
         // Create the Dashboard ViewModel which encapsulates the main app logic
         DashboardViewModel = new DashboardViewModel(
             gameSessionService,
+            gameProcessService,
             modService,
             instanceService,
             configService,
