@@ -21,6 +21,7 @@ using Avalonia.Threading;
 using System.Windows.Input;
 using HyPrism.UI.Helpers;
 using System.Linq;
+using System.Reactive.Disposables;
 
 namespace HyPrism.UI.Views.SettingsView;
 
@@ -91,7 +92,7 @@ public class CreditProfile : ReactiveObject
     public ICommand? OpenCommand { get; set; }
 }
 
-public class SettingsViewModel : ReactiveObject
+public class SettingsViewModel : ReactiveObject, IDisposable
 {
     private readonly SettingsService _settingsService;
     private readonly ConfigService _configService;
@@ -101,6 +102,8 @@ public class SettingsViewModel : ReactiveObject
     private readonly GitHubService _gitHubService;
     private readonly BrowserService _browserService;
     private readonly VersionService _versionService;
+    private bool _disposed;
+    private readonly CompositeDisposable _subscriptions = new();
 
     private string _branchIconAccentCss = "* { stroke: #FFA845; fill: none; }";
     public string BranchIconAccentCss
@@ -533,7 +536,8 @@ public class SettingsViewModel : ReactiveObject
             loc.GetObservable("settings.aboutSettings.contributorRole"),
             loc.GetObservable("settings.aboutSettings.others"),
             (m, a, c, o) => (m, a, c, o)
-        ).Subscribe(t => UpdateCreditRoles(t.m, t.a, t.c, t.o));
+        ).Subscribe(t => UpdateCreditRoles(t.m, t.a, t.c, t.o))
+        .DisposeWith(_subscriptions);
 
         InitializeCredits();
 
@@ -552,7 +556,8 @@ public class SettingsViewModel : ReactiveObject
                 // Restore selection
                 var current = _settingsService.GetLauncherBranch();
                 SelectedBranchItem = items.FirstOrDefault(x => x.Value == current) ?? items.FirstOrDefault();
-            });
+            })
+            .DisposeWith(_subscriptions);
 
         Observable.CombineLatest(
             loc.GetObservable("main.release"),
@@ -570,7 +575,8 @@ public class SettingsViewModel : ReactiveObject
                 AppliedLaunchBranchItem = items.FirstOrDefault(x => x.Value == current) ?? items.FirstOrDefault();
                 SelectedLaunchBranchItem = items.FirstOrDefault(x => x.Value == current) ?? items.FirstOrDefault();
                 _isInitializingBranches = false;
-            });
+            })
+            .DisposeWith(_subscriptions);
         
         // Initialize language items - load names from locale files
         LanguageItems = LocalizationService.GetAvailableLanguages()
@@ -958,5 +964,38 @@ public class SettingsViewModel : ReactiveObject
                 await topLevel.Clipboard.SetTextAsync(UUID);
             }
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        // Unsubscribe from events
+        _settingsService.OnBackgroundChanged -= OnBackgroundChanged;
+        _settingsService.OnAccentColorChanged -= OnAccentColorChanged;
+
+        // Dispose Rx subscriptions (CombineLatest etc.)
+        _subscriptions.Dispose();
+
+        // Dispose all background thumbnails
+        foreach (var bg in Backgrounds)
+        {
+            bg.Thumbnail?.Dispose();
+        }
+        Backgrounds.Clear();
+
+        // Dispose contributor avatars
+        foreach (var credit in Maintainers)
+        {
+            credit.Avatar?.Dispose();
+        }
+        Maintainers.Clear();
+
+        foreach (var credit in Contributors)
+        {
+            credit.Avatar?.Dispose();
+        }
+        Contributors.Clear();
     }
 }

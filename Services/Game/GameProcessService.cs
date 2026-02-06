@@ -18,6 +18,7 @@ public class GameProcessService
         if (_gameProcess != null)
         {
             if (!_gameProcess.HasExited) return true;
+            _gameProcess.Dispose();
             _gameProcess = null; // Cleanup
         }
         
@@ -39,32 +40,47 @@ public class GameProcessService
             var potentialProcesses = Process.GetProcessesByName("java")
                 .Concat(Process.GetProcessesByName("javaw"))
                 .Concat(Process.GetProcessesByName("java.real")) // Wrapper script target
-                .Concat(Process.GetProcessesByName("HytaleClient"));
+                .Concat(Process.GetProcessesByName("HytaleClient"))
+                .ToArray();
 
-            foreach (var p in potentialProcesses)
+            try
             {
-                try 
+                foreach (var p in potentialProcesses)
                 {
-                    // 1. Check Window Title (Works well on Windows, sometime on Linux/macOS)
-                    if (!string.IsNullOrEmpty(p.MainWindowTitle) && 
-                        p.MainWindowTitle.Contains("Hytale"))
+                    try 
                     {
-                        _gameProcess = p;
-                        return true;
-                    }
-
-                    // 2. Check Command Line (More reliable on Linux)
-                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                    {
-                        var cmdLine = GetLinuxCommandLine(p.Id);
-                        if (!string.IsNullOrEmpty(cmdLine) && cmdLine.Contains("Hytale"))
+                        // 1. Check Window Title (Works well on Windows, sometime on Linux/macOS)
+                        if (!string.IsNullOrEmpty(p.MainWindowTitle) && 
+                            p.MainWindowTitle.Contains("Hytale"))
                         {
                             _gameProcess = p;
                             return true;
                         }
+
+                        // 2. Check Command Line (More reliable on Linux)
+                        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                        {
+                            var cmdLine = GetLinuxCommandLine(p.Id);
+                            if (!string.IsNullOrEmpty(cmdLine) && cmdLine.Contains("Hytale"))
+                            {
+                                _gameProcess = p;
+                                return true;
+                            }
+                        }
+                    }
+                    catch { /* Ignore access denied / exited process */ }
+                }
+            }
+            finally
+            {
+                // Dispose all processes that we didn't keep
+                foreach (var p in potentialProcesses)
+                {
+                    if (p != _gameProcess)
+                    {
+                        try { p.Dispose(); } catch { }
                     }
                 }
-                catch { /* Ignore access denied / exited process */ }
             }
         }
         catch { /* Ignore enumeration errors */ }

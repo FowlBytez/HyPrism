@@ -422,7 +422,6 @@ public class ClientPatcher
         progressCallback?.Invoke("launch.detail.reading_client_binary", 10);
         Logger.Info("Patcher", "Reading client binary...", false);
         byte[] data = File.ReadAllBytes(clientPath);
-        byte[] originalData = (byte[])data.Clone(); // Keep a copy to check if we modified anything
         Logger.Info("Patcher", $"Binary size: {data.Length / 1024.0 / 1024.0:F2} MB", false);
 
         progressCallback?.Invoke("launch.detail.patching_domain_refs", 30);

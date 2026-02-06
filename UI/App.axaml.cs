@@ -35,14 +35,10 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         // Initialize simple services like theme
-        // We need to peek at the config to set the initial color
-        // Since MainViewModel will initialize AppService, we can grab it from there or do a quick separate read.
-        // For simplicity, we'll let MainViewModel handle the logic or just read it once here.
-        
-        // Quick read to set initial color before window shows
+        // Use ConfigService from DI instead of creating a new instance
         try 
         {
-            var configService = new ConfigService(UtilityService.GetEffectiveAppDir());
+            var configService = Services!.GetRequiredService<ConfigService>();
             ThemeService.Instance.Initialize(configService.Configuration.AccentColor);
         }
         catch { /* ignore, fallback to default */ }
@@ -62,6 +58,13 @@ public partial class App : Application
             desktop.MainWindow = new HyPrism.UI.MainWindow.MainWindow
             {
                 DataContext = mainVm
+            };
+            
+            // Ensure proper cleanup on shutdown to release all managed/native resources
+            desktop.ShutdownRequested += (_, _) =>
+            {
+                (mainVm.DashboardViewModel as IDisposable)?.Dispose();
+                (Services as IDisposable)?.Dispose();
             };
         }
 

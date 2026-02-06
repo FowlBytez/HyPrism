@@ -11,7 +11,7 @@ using Avalonia.Threading;
 
 namespace HyPrism.UI.Components.Dashboard.GameControlBar;
 
-public class GameControlViewModel : ReactiveObject
+public class GameControlViewModel : ReactiveObject, IDisposable
 {
     private readonly InstanceService _instanceService;
     private readonly FileService _fileService;
@@ -19,6 +19,7 @@ public class GameControlViewModel : ReactiveObject
     private readonly ConfigService _configService;
     private readonly VersionService _versionService;
     private int? _cachedLatestVersion;
+    private IDisposable? _gameStatusTimer;
 
     // Commands
     public ReactiveCommand<Unit, Unit> ToggleModsCommand { get; }
@@ -127,12 +128,18 @@ public class GameControlViewModel : ReactiveObject
         LoadCachedLatestVersion();
         UpdateVersionDisplay();
 
-        // Periodically check for game process status
-        DispatcherTimer.Run(() => 
+        // Periodically check for game process status (store disposable to stop on Dispose)
+        _gameStatusTimer = DispatcherTimer.Run(() => 
         {
             IsGameRunning = _gameProcessService.CheckForRunningGame();
             return true;
         }, TimeSpan.FromSeconds(2));
+    }
+
+    public void Dispose()
+    {
+        _gameStatusTimer?.Dispose();
+        _gameStatusTimer = null;
     }
 
     private void LoadCachedLatestVersion()

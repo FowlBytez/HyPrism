@@ -4,6 +4,7 @@ using HyPrism.UI;
 
 using Avalonia.ReactiveUI;
 using Serilog;
+using System.Runtime;
 
 namespace HyPrism;
 
@@ -12,6 +13,10 @@ class Program
     [STAThread]
     static void Main(string[] args)
     {
+        // Memory optimization: compact LOH on full GC, aggressive memory reclaim
+        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+        System.Runtime.GCSettings.LatencyMode = GCLatencyMode.Interactive;
+
         // Initialize Logger
         var appDir = UtilityService.GetEffectiveAppDir();
         var logsDir = Path.Combine(appDir, "Logs"); // Changed to Uppercase

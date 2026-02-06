@@ -150,12 +150,10 @@ public class SettingsService
     public List<string> GetAvailableBackgrounds()
     {
         var backgrounds = new List<string>();
-        // Hardcoded list based on assets
-        var jpgs = new[] { 1, 2, 3, 5, 7, 8, 10, 11, 13, 14, 15, 17, 18, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30 };
-        var pngs = new[] { 4, 6, 9, 12, 16, 19 };
+        // All backgrounds are now JPG format (PNG converted to save space)
+        var jpgs = new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30 };
 
         foreach (var i in jpgs) backgrounds.Add($"bg_{i}.jpg");
-        foreach (var i in pngs) backgrounds.Add($"bg_{i}.png");
         
         return backgrounds.OrderBy(x => 
         {

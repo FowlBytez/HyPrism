@@ -26,15 +26,15 @@ public class FileService
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                Process.Start("explorer.exe", $"\"{path}\"");
+                Process.Start("explorer.exe", $"\"{path}\"")?.Dispose();
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                Process.Start(new ProcessStartInfo("open", $"\"{path}\"") { UseShellExecute = false });
+                Process.Start(new ProcessStartInfo("open", $"\"{path}\"") { UseShellExecute = false })?.Dispose();
             }
             else
             {
-                Process.Start("xdg-open", $"\"{path}\"");
+                Process.Start("xdg-open", $"\"{path}\"")?.Dispose();
             }
             return true;
         }

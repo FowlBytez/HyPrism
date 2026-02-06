@@ -170,13 +170,12 @@ public class LaunchService
         string archivePath = Path.Combine(cacheDir, $"jre.{archiveType}");
         
         // Download with proper headers for Adoptium API
-        using var jreClient = new HttpClient();
-        jreClient.Timeout = TimeSpan.FromMinutes(10);
+        // Reuse injected HttpClient instead of creating a new one (avoids socket exhaustion)
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Add("User-Agent", "HyPrism/1.0");
         request.Headers.Add("Accept", "*/*");
         
-        using var response = await jreClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
         
         var totalBytes = response.Content.Headers.ContentLength ?? -1;

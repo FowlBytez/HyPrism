@@ -12,12 +12,13 @@ using HyPrism.Services.Core;
 
 namespace HyPrism.UI.Views.ModManagerView;
 
-public class ModManagerViewModel : ReactiveObject
+public class ModManagerViewModel : ReactiveObject, IDisposable
 {
     private readonly ModService _modService;
     private readonly InstanceService _instanceService;
     private readonly string _branch;
     private readonly int _version;
+    private bool _disposed;
 
     // Loading State
     private bool _isLoading;
@@ -353,5 +354,15 @@ public class ModManagerViewModel : ReactiveObject
         
         var instancePath = _instanceService.ResolveInstancePath(_branch, _version, false);
         await _modService.SaveInstanceModsAsync(instancePath, InstalledMods.ToList());
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        InstalledMods.Clear();
+        SearchResults.Clear();
+        Categories.Clear();
+        SelectedModFiles.Clear();
     }
 }

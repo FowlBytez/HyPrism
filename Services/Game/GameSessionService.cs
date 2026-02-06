@@ -643,6 +643,10 @@ public class GameSessionService
                     }
                 }
                 _progressService.ReportDownloadProgress("patching", 100, "launch.detail.patching_complete", null, 0, 0);
+                
+                // Force GC to reclaim the large byte[] arrays used during binary patching
+                GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+                GC.WaitForPendingFinalizers();
             }
             catch (Exception ex)
             {

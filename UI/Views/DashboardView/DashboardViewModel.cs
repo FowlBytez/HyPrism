@@ -1,5 +1,6 @@
 using System;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Threading.Tasks;
 using ReactiveUI;
 using HyPrism;
@@ -23,7 +24,7 @@ using System.IO;
 
 namespace HyPrism.UI.Views.DashboardView;
 
-public class DashboardViewModel : ReactiveObject
+public class DashboardViewModel : ReactiveObject, IDisposable
 {
     private readonly GameSessionService _gameSessionService;
     private readonly GameProcessService _gameProcessService;
@@ -334,6 +335,8 @@ public class DashboardViewModel : ReactiveObject
             if (!IsModsOpen)
             {
                 var branch = branchName?.ToLower().Replace(" ", "-") ?? "release"; 
+                // Dispose old VM to prevent memory leak
+                (ModManagerViewModel as IDisposable)?.Dispose();
                 ModManagerViewModel = new ModManagerViewModel(_modService, _instanceService, branch, version);
                 ModManagerViewModel.CloseCommand.Subscribe(_ => IsModsOpen = false);
             }
@@ -383,6 +386,8 @@ public class DashboardViewModel : ReactiveObject
             return;
         }
 
+        // Dispose old VM to prevent memory leak
+        (ProfileEditorViewModel as IDisposable)?.Dispose();
         ProfileEditorViewModel = new ProfileEditorViewModel(_configService, _profileService, _skinService, _fileService);
         // Wire up close
         var closeCmd = ProfileEditorViewModel.CloseCommand as ReactiveCommand<Unit, Unit>;
@@ -528,7 +533,7 @@ public class DashboardViewModel : ReactiveObject
 
     private Bitmap? LoadBitmap(string uriString)
     {
-        var bitmap = BitmapHelper.LoadBitmap(uriString, 1920); // Limit width to 1920px
+        var bitmap = BitmapHelper.LoadBitmap(uriString, 1280); // Limit width to 1280px to save memory
         if (bitmap == null)
         {
             Logger.Error("Dashboard", $"Failed to load background '{uriString}'");
@@ -542,9 +547,11 @@ public class DashboardViewModel : ReactiveObject
         BackgroundOpacity = 0;
         await Task.Delay(400); // Matches View transition duration + buffer
 
-        // Load new
+        // Load new and dispose old to prevent memory leak
         var newBitmap = LoadBitmap(uriString);
+        var oldBitmap = BackgroundImage;
         BackgroundImage = newBitmap;
+        oldBitmap?.Dispose();
 
         // Fade in
         BackgroundOpacity = 1;
@@ -594,5 +601,33 @@ public class DashboardViewModel : ReactiveObject
         SettingsViewModel.ActiveTab = "instances";
         IsSettingsOpen = true;
         SettingsViewModel.RefreshInstancesCommand.Execute().Subscribe();
+    }
+
+    public void Dispose()
+    {
+        // Stop background slideshow timer
+        _backgroundTimer?.Stop();
+        _backgroundTimer = null;
+
+        // Unsubscribe from events to prevent memory leaks
+        _settingsService.OnBackgroundChanged -= UpdateBackground;
+        _progressService.DownloadProgressChanged -= OnDownloadProgressChanged;
+        _progressService.ErrorOccurred -= OnErrorOccurred;
+
+        // Dispose background bitmap
+        BackgroundImage?.Dispose();
+        BackgroundImage = null;
+
+        // Dispose child ViewModels
+        GameControlViewModel?.Dispose();
+        SettingsViewModel?.Dispose();
+        (ModManagerViewModel as IDisposable)?.Dispose();
+        (ProfileEditorViewModel as IDisposable)?.Dispose();
+        NewsViewModel?.Dispose();
+
+        // Dispose OAPH
+        _isOverlayOpen?.Dispose();
+        _launchAfterDownloadLabel?.Dispose();
+        _cancelLaunchLabel?.Dispose();
     }
 }

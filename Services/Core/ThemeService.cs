@@ -32,8 +32,9 @@ public class ThemeService : ReactiveObject
         {
             if (Application.Current != null)
             {
-                // Cancel previous animation
+                // Cancel and dispose previous animation CTS to prevent memory leak
                 _animationCts?.Cancel();
+                _animationCts?.Dispose();
                 _animationCts = new CancellationTokenSource();
                 
                 // Update the Color resource immediately (structural)

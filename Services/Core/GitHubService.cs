@@ -30,10 +30,14 @@ public class GitHubService
     private const string RepoOwner = "yyyumeniku";
     private const string RepoName = "HyPrism";
 
-    public GitHubService()
+    public GitHubService(HttpClient httpClient)
     {
-        _httpClient = new HttpClient();
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "HyPrism-Launcher");
+        _httpClient = httpClient;
+        // Ensure User-Agent is set (required for GitHub API)
+        if (!_httpClient.DefaultRequestHeaders.Contains("User-Agent"))
+        {
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "HyPrism-Launcher");
+        }
     }
 
     public async Task<List<GitHubUser>> GetContributorsAsync()
@@ -84,15 +88,19 @@ public class GitHubService
         }
     }
 
-    public async Task<Bitmap?> LoadAvatarAsync(string url)
+    public async Task<Bitmap?> LoadAvatarAsync(string url, int decodeWidth = 96)
     {
         try
         {
             if (string.IsNullOrEmpty(url)) return null;
             
-            var data = await _httpClient.GetByteArrayAsync(url);
+            // Append GitHub size parameter to request smaller image from CDN (saves bandwidth + memory)
+            var sizedUrl = url.Contains('?') ? $"{url}&s={decodeWidth}" : $"{url}?s={decodeWidth}";
+            
+            var data = await _httpClient.GetByteArrayAsync(sizedUrl);
             using var stream = new MemoryStream(data);
-            return new Bitmap(stream);
+            // Decode directly to target width to avoid full-size Bitmap allocation
+            return Bitmap.DecodeToWidth(stream, decodeWidth, BitmapInterpolationMode.MediumQuality);
         }
         catch (Exception ex)
         {

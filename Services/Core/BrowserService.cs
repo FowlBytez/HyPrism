@@ -64,8 +64,18 @@ public class BrowserService
             // We redirect and discard these streams to keep the application logs clean.
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && process != null)
             {
-                _ = Task.Run(() => process.StandardOutput.ReadToEndAsync());
-                _ = Task.Run(() => process.StandardError.ReadToEndAsync());
+                // Read and discard streams, then dispose handle
+                _ = Task.Run(async () => {
+                    try {
+                        await process.StandardOutput.ReadToEndAsync();
+                        await process.StandardError.ReadToEndAsync();
+                    } catch { } 
+                    finally { process.Dispose(); }
+                });
+            }
+            else
+            {
+                process?.Dispose();
             }
 
             Logger.Success("Browser", $"Opened URL: {url}");

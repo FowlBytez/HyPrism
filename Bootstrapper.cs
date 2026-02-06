@@ -50,7 +50,8 @@ public static class Bootstrapper
                     sp.GetRequiredService<ConfigService>()));
                     
             services.AddSingleton<DownloadService>(); 
-            services.AddSingleton<GitHubService>();
+            services.AddSingleton(sp => 
+                new GitHubService(sp.GetRequiredService<HttpClient>()));
             
             services.AddSingleton(sp => 
                 new VersionService(

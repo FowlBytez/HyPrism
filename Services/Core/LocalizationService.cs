@@ -119,9 +119,9 @@ public class LocalizationService : ReactiveObject
     
     public LocalizationService()
     {
-        // Preload cache
-        Task.Run(PreloadAllLanguages); 
-        LoadLanguage("en-US"); // Default to English immediately
+        // Load only the default language on startup - other languages are loaded on demand
+        // This saves ~500KB of RAM by not preloading all 12 locales
+        LoadLanguage("en-US");
     }
     
     /// <summary>

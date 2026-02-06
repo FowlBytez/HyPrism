@@ -12,10 +12,11 @@ using HyPrism.Models;
 
 namespace HyPrism.UI.Views.NewsView;
 
-public class NewsViewModel : ReactiveObject
+public class NewsViewModel : ReactiveObject, IDisposable
 {
     private readonly NewsService _newsService;
     private readonly BrowserService _browserService;
+    private bool _disposed;
 
     private readonly List<NewsItemResponse> _allNews = new();
     
@@ -176,5 +177,13 @@ public class NewsViewModel : ReactiveObject
         }
         
         return dateString;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _allNews.Clear();
+        News.Clear();
     }
 }

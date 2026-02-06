@@ -131,7 +131,7 @@ public class NewsService
             Logger.Info("News", "Fetching news from Hytale API...");
             var response = await _httpClient.GetStringAsync(HytaleNewsUrl);
             
-            var jsonDoc = JsonDocument.Parse(response);
+            using var jsonDoc = JsonDocument.Parse(response);
             
             JsonElement posts;
             if (jsonDoc.RootElement.ValueKind == JsonValueKind.Array)
@@ -275,7 +275,8 @@ public class NewsService
             Logger.Info("News", "Fetching news from HyPrism GitHub...");
             var response = await _httpClient.GetStringAsync(HyPrismReleasesUrl);
             
-            var releases = JsonDocument.Parse(response).RootElement;
+            using var jsonDoc = JsonDocument.Parse(response);
+            var releases = jsonDoc.RootElement;
             var news = new List<NewsItemResponse>();
             
             var itemCount = 0;
