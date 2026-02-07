@@ -335,7 +335,7 @@ jobs:
             sleep 2
             
             # Set up DMG appearance with AppleScript
-            osascript <<'APPLESCRIPT'
+            osascript << 'APPLESCRIPT'
             tell application "Finder"
               tell disk "HyPrism"
                 open
@@ -363,6 +363,7 @@ jobs:
           fi
           
           # Convert to compressed DMG
+          mkdir -p artifacts
           hdiutil convert temp.dmg -format UDZO -o artifacts/HyPrism-macos-arm64.dmg
           rm -f temp.dmg
 
