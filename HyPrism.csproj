@@ -1,35 +1,41 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    
-    <!-- Launcher Version -->
-    <Version>2.0.4</Version>
+  </PropertyGroup>
+
+  <!-- Electron.NET application metadata -->
+  <PropertyGroup Label="ElectronNetCommon">
+    <ElectronPackageId>hyprism</ElectronPackageId>
+    <Title>HyPrism</Title>
+    <Version>3.0.0</Version>
+    <Description>Cross-platform Hytale launcher</Description>
+    <Company>HyPrism</Company>
+    <Copyright>Copyright © 2025 HyPrism</Copyright>
+    <ElectronVersion>34.2.0</ElectronVersion>
+    <ElectronSkipMigrationChecks>true</ElectronSkipMigrationChecks>
   </PropertyGroup>
 
   <!-- Windows-specific settings -->
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows')) OR '$(RuntimeIdentifier)' == 'win-x64' OR '$(RuntimeIdentifier)' == 'win-arm64'">
     <ApplicationIcon>Packaging/windows/HyPrism.ico</ApplicationIcon>
-    <!-- Enable single-file publishing for Windows only -->
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
-  <!-- Release build optimizations -->
+  <!-- Release optimizations + single-file publish -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <PublishSingleFile>true</PublishSingleFile>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <DebuggerSupport>false</DebuggerSupport>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
   <!-- Memory and size optimizations -->
@@ -44,14 +50,9 @@
     <EventSourceSupport>false</EventSourceSupport>
   </PropertyGroup>
 
-  <!-- Avalonia packages -->
+  <!-- Electron.NET + Core packages -->
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.3.11" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.3.11" />
-    <PackageReference Include="Avalonia.Svg.Skia" Version="11.3.0" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.11" />
-    <PackageReference Include="Avalonia.ReactiveUI" Version="11.3.9" />
-    <PackageReference Include="AsyncImageLoader.Avalonia" Version="3.6.0" />
+    <PackageReference Include="ElectronNET.Core" Version="0.4.0" />
     <PackageReference Include="DiscordRichPresence" Version="1.143.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -59,18 +60,69 @@
     <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.116.1" />
-    <PackageReference Include="Svg.Skia" Version="3.4.1" />
-  </ItemGroup>
-
-  <!-- Avalonia XAML files -->
-  <ItemGroup>
-    <AvaloniaResource Include="Assets/**/*" />
-    <AvaloniaResource Remove="Assets/Locales/**/*" />
   </ItemGroup>
 
   <!-- Localization files as embedded resources -->
   <ItemGroup>
     <EmbeddedResource Include="Assets/Locales/*.json" />
   </ItemGroup>
+
+  <!-- Exclude deprecated Avalonia UI directory from compilation -->
+  <ItemGroup>
+    <Compile Remove="Services/Core/DiskOnlyCachedWebImageLoader.cs" />
+  </ItemGroup>
+
+  <!-- ================================================================ -->
+  <!--  FRONTEND AUTO-BUILD PIPELINE                                     -->
+  <!--  `npm ci` when lockfile changes, then `npm run build`             -->
+  <!--  Runs automatically on `dotnet build` / `dotnet run`              -->
+  <!-- ================================================================ -->
+
+  <Target Name="NpmInstall"
+          BeforeTargets="BuildFrontend"
+          Inputs="Frontend/package.json;Frontend/package-lock.json"
+          Outputs="Frontend/node_modules/.package-lock.json"
+          Condition="Exists('Frontend/package.json')">
+    <Message Importance="high" Text="→ npm ci (Frontend)" />
+    <Exec Command="npm ci --prefer-offline" WorkingDirectory="Frontend" />
+  </Target>
+
+  <Target Name="GenerateIpcTs"
+          BeforeTargets="BuildFrontend"
+          DependsOnTargets="NpmInstall"
+          Inputs="Services/Core/IpcService.cs"
+          Outputs="Frontend/src/lib/ipc.ts"
+          Condition="Exists('Scripts/generate-ipc.mjs')">
+    <Message Importance="high" Text="→ Generating ipc.ts from IpcService.cs" />
+    <Exec Command="node Scripts/generate-ipc.mjs" />
+  </Target>
+
+  <Target Name="BuildFrontend"
+          BeforeTargets="Build"
+          Inputs="Frontend/src/**/*;Frontend/index.html;Frontend/vite.config.ts;Frontend/tsconfig.json;Frontend/tsconfig.app.json"
+          Outputs="Frontend/dist/index.html"
+          Condition="Exists('Frontend/package.json')">
+    <Message Importance="high" Text="→ Building Frontend (Vite)" />
+    <Exec Command="npm run build" WorkingDirectory="Frontend" />
+  </Target>
+
+  <!-- Copy Frontend/dist → wwwroot in output dir -->
+  <Target Name="CopyFrontendDist" AfterTargets="Build" Condition="Exists('Frontend/dist/index.html')">
+    <ItemGroup>
+      <FrontendFiles Include="Frontend/dist/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FrontendFiles)"
+          DestinationFiles="@(FrontendFiles->'$(OutputPath)/wwwroot/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyFrontendDistPublish" AfterTargets="Publish" Condition="Exists('Frontend/dist/index.html')">
+    <ItemGroup>
+      <FrontendFilesPublish Include="Frontend/dist/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FrontendFilesPublish)"
+          DestinationFiles="@(FrontendFilesPublish->'$(PublishDir)/wwwroot/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

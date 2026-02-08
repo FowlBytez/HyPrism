@@ -1,7 +1,7 @@
 namespace HyPrism.Services.Core;
 
 /// <summary>
-/// Provides reactive localization with observable translations for dynamic language switching.
+/// Provides localization with event-based notifications for dynamic language switching.
 /// Supports loading translations from embedded JSON resources and format string interpolation.
 /// </summary>
 public interface ILocalizationService
@@ -18,14 +18,12 @@ public interface ILocalizationService
     /// <param name="key">The translation key (e.g., "dashboard.play").</param>
     /// <returns>The translated string, or the key itself if translation not found.</returns>
     string this[string key] { get; }
-    
+
     /// <summary>
-    /// Gets an observable that emits translated values whenever the language changes.
-    /// Useful for binding UI elements that should update automatically on language switch.
+    /// Raised when the current language changes. Subscribers should refresh their translations.
+    /// The event argument is the new language code.
     /// </summary>
-    /// <param name="key">The translation key to observe.</param>
-    /// <returns>An observable stream of translated strings.</returns>
-    IObservable<string> GetObservable(string key);
+    event Action<string>? LanguageChanged;
     
     /// <summary>
     /// Translates a key with optional format arguments for string interpolation.

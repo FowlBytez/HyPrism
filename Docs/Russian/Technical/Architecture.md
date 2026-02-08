@@ -1,316 +1,75 @@
-# Архитектура системы
+# Архитектура
 
-HyPrism использует паттерн **Model-View-ViewModel (MVVM)** со строгим разделением UI и бизнес-логики.
+## Обзор
 
-> **Миграция:** Проект перешёл с Photino (WebKit) на Avalonia UI. См. [MigrationGuide.md](MigrationGuide.md).
-
----
-
-## Содержание
-
-- [Высокоуровневый обзор](#-высокоуровневый-обзор)
-- [Слои архитектуры](#-слои-архитектуры)
-- [Поток данных](#-поток-данных)
-- [Dependency Injection](#-dependency-injection)
-- [Структура ViewModel](#-структура-viewmodel)
-- [Жизненный цикл приложения](#-жизненный-цикл-приложения)
-- [Коммуникация между компонентами](#-коммуникация-между-компонентами)
-- [Архитектурные принципы](#-архитектурные-принципы)
-
----
-
-## 🏗️ Высокоуровневый обзор
-
-```mermaid
-graph TD
-    subgraph "UI Layer"
-        User[Пользователь] --> View[View<br/>XAML разметка]
-        View -->|Data Binding| ViewModel[ViewModel<br/>ReactiveObject]
-    end
-    
-    subgraph "Service Layer"
-        ViewModel -->|DI| Services[Services<br/>Бизнес-логика]
-        Services --> Core[Core Services]
-        Services --> Game[Game Services]
-        Services --> UserSvc[User Services]
-    end
-    
-    subgraph "Data Layer"
-        Core --> Config[(Config)]
-        Game --> Disk[(Файловая система)]
-        Game --> Network[(Сеть)]
-        UserSvc --> Profile[(Профили)]
-    end
-```
-
----
-
-## 📦 Слои архитектуры
-
-### 1. Presentation Layer (UI)
-
-**Расположение:** `UI/`
-
-| Компонент | Описание |
-|-----------|----------|
-| **Views** | Полноэкранные XAML представления (`DashboardView`, `SettingsView`) |
-| **Components** | Переиспользуемые UI элементы (`PrimaryButton`, `NewsCard`) |
-| **MainWindow** | Главное окно и корневой `MainViewModel` |
-| **Converters** | Value Converters для преобразования данных |
-| **Styles** | Глобальные стили и анимации |
-
-**Принципы:**
-- Code-behind минимален (только конструктор)
-- Вся логика в ViewModel
-- Используется `x:DataType` для compile-time проверки binding
-
-### 2. ViewModel Layer
-
-**Расположение:** `UI/Views/*/`, `UI/MainWindow/`, `UI/Components/*/`
-
-ViewModels наследуют `ReactiveObject` и используют:
-- `RaiseAndSetIfChanged` — реактивные свойства
-- `ReactiveCommand` — команды для UI
-- `WhenAnyValue` — реактивные подписки
-- `ObservableAsPropertyHelper` — вычисляемые свойства
-
-**Ключевые ViewModel:**
-
-| ViewModel | Ответственность |
-|-----------|-----------------|
-| `MainViewModel` | Корневой VM, владеет Loading и Dashboard |
-| `DashboardViewModel` | Главный UI state, управление overlay-ами |
-| `SettingsViewModel` | Настройки приложения |
-| `LoadingViewModel` | Экран загрузки |
-
-### 3. Service Layer
-
-**Расположение:** `Services/`
-
-Сервисы организованы по доменам:
+HyPrism использует архитектурный паттерн **Console + IPC + React SPA**:
 
 ```
-Services/
-├── Core/           # Инфраструктура (Config, Logger, Localization)
-├── Game/           # Игровая логика (Launch, Download, Mods)
-└── User/           # Пользователь (Profile, Skin)
+┌─────────────────────────────────────────────────────┐
+│  .NET Console App  (Program.cs)                     │
+│  ├── Bootstrapper.cs (DI-контейнер)                 │
+│  ├── Services/ (бизнес-логика)                      │
+│  └── IpcService.cs (реестр IPC-каналов)             │
+│         ↕ Сокетный мост Electron.NET                │
+│  ┌─────────────────────────────────────────────┐    │
+│  │  Electron Main Process                      │    │
+│  │  └── BrowserWindow (безрамочное окно)       │    │
+│  │       └── preload.js (contextBridge)        │    │
+│  │            ↕ ipcRenderer                    │    │
+│  │       ┌─────────────────────────────┐       │    │
+│  │       │  React SPA                  │       │    │
+│  │       │  ├── App.tsx (маршрутизация)│       │    │
+│  │       │  ├── pages/ (страницы)      │       │    │
+│  │       │  ├── components/ (общие)    │       │    │
+│  │       │  └── lib/ipc.ts (генерир.)  │       │    │
+│  │       └─────────────────────────────┘       │    │
+│  └─────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────┘
 ```
 
-**Принципы:**
-- Singleton паттерн через DI
-- Единая ответственность (SRP)
-- Сервисы не зависят от UI
+## Процесс запуска
 
-### 4. Model Layer
+1. `Program.Main()` инициализирует логгер Serilog
+2. Устанавливает `ElectronLogInterceptor` на `Console.Out`/`Console.Error`
+3. `Bootstrapper.Initialize()` собирает DI-контейнер
+4. `ElectronNetRuntime.RuntimeController.Start()` порождает процесс Electron
+5. `ElectronBootstrap()` создаёт безрамочное BrowserWindow, загружающее `file://wwwroot/index.html`
+6. `IpcService.RegisterAll()` регистрирует все обработчики IPC-каналов
+7. React SPA монтируется, загружает данные через типизированные IPC-вызовы
 
-**Расположение:** `Models/`
+## Модель взаимодействия
 
-Модели — простые POCO классы:
-- `Config` — конфигурация приложения
-- `Profile` — профиль пользователя
-- `ModInfo` — информация о моде
-- `InstalledInstance` — установленный инстанс игры
+Всё взаимодействие фронтенда и бэкенда использует **именованные IPC-каналы**:
 
----
-
-## 💉 Dependency Injection
-
-HyPrism использует `Microsoft.Extensions.DependencyInjection`.
-
-### Bootstrapper.cs
-
-```csharp
-public static class Bootstrapper
-{
-    public static IServiceProvider Initialize()
-    {
-        var services = new ServiceCollection();
-        
-        // Infrastructure
-        services.AddSingleton(new AppPathConfiguration(appDir));
-        services.AddSingleton<HttpClient>();
-        
-        // Core Services
-        services.AddSingleton<ConfigService>();
-        services.AddSingleton<LocalizationService>();
-        services.AddSingleton<Logger>();
-        
-        // Game Services
-        services.AddSingleton<GameSessionService>();
-        services.AddSingleton<VersionService>();
-        services.AddSingleton<LaunchService>();
-        
-        // User Services
-        services.AddSingleton<ProfileService>();
-        services.AddSingleton<SkinService>();
-        
-        // ViewModels
-        services.AddSingleton<MainViewModel>();
-        services.AddSingleton<DashboardViewModel>();
-        services.AddTransient<SettingsViewModel>();
-        
-        return services.BuildServiceProvider();
-    }
-}
+```
+Именование каналов: hyprism:{домен}:{действие}
+Примеры:            hyprism:game:launch
+                    hyprism:settings:get
+                    hyprism:i18n:set
 ```
 
-### Получение зависимостей
+### Типы каналов
 
-```csharp
-// В App.axaml.cs
-Services = Bootstrapper.Initialize();
-var mainVm = Services.GetRequiredService<MainViewModel>();
+| Тип | Направление | Паттерн |
+|-----|-------------|---------|
+| **send** | React → .NET (без ожидания ответа) | `send(channel, data)` |
+| **invoke** | React → .NET → React (запрос/ответ) | `invoke(channel, data)` → ожидает `:reply` |
+| **event** | .NET → React (push-уведомление) | `on(channel, callback)` |
 
-// В ViewModel через конструктор
-public DashboardViewModel(
-    GameSessionService gameSession,
-    ConfigService config,
-    LocalizationService localization)
-{
-    _gameSession = gameSession;
-    _config = config;
-    _localization = localization;
-}
-```
+### Модель безопасности
 
----
+- `contextIsolation: true` — рендерер не имеет доступа к Node.js
+- `nodeIntegration: false` — нет `require()` в рендерере
+- `preload.js` предоставляет только `window.electron.ipcRenderer` через contextBridge
 
-## 📚 Библиотеки и зависимости
+## Внедрение зависимостей
 
-| Библиотека | Версия | Назначение |
-|------------|--------|------------|
-| **Avalonia** | 11.3.11 | UI Framework |
-| **ReactiveUI** | 11.3.9 | Reactive MVVM |
-| **SkiaSharp** | 3.116.1 | Рендеринг графики |
-| **Serilog** | 4.3.0 | Логирование |
-| **Newtonsoft.Json** | 13.0.3 | JSON сериализация |
-| **M.E.DependencyInjection** | 10.0.2 | DI контейнер |
+Все сервисы регистрируются как синглтоны в `Bootstrapper.cs`.
 
----
+## Перехват логов
 
-## 🔄 Поток данных: Запуск игры
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant View as DashboardView
-    participant VM as DashboardViewModel
-    participant GS as GameSessionService
-    participant VS as VersionService
-    participant DS as DownloadService
-    participant LS as LaunchService
-    
-    User->>View: Клик "Play"
-    View->>VM: PlayCommand.Execute()
-    VM->>GS: DownloadAndLaunchAsync()
-    
-    GS->>VS: GetVersionListAsync()
-    VS-->>GS: версии
-    
-    alt Нужна загрузка
-        GS->>DS: DownloadFileAsync()
-        DS-->>GS: progress events
-        GS-->>VM: OnProgressChanged
-        VM-->>View: ProgressPercent binding
-    end
-    
-    GS->>LS: LaunchAsync()
-    LS-->>GS: Process started
-    GS-->>VM: Game running
-```
-
-### Детальный процесс
-
-1. **View:** Пользователь нажимает кнопку "Play"
-2. **ViewModel:** `PlayCommand` вызывает `GameSessionService.DownloadAndLaunchAsync()`
-3. **GameSessionService:**
-   - Получает список версий через `VersionService`
-   - Определяет целевую версию
-   - Проверяет наличие игры через `InstanceService`
-   - Загружает/обновляет через `ButlerService` + `DownloadService`
-   - Применяет моды через `ModService`
-   - Применяет скины через `SkinService`
-   - Запускает через `LaunchService`
-4. **ViewModel:** Подписан на `ProgressNotificationService.OnProgressChanged`
-5. **View:** UI обновляется автоматически через binding
-
----
-
-## 🗂️ Ключевые компоненты
-
-### GameSessionService
-
-**Файл:** `Services/Game/GameSessionService.cs` (~1000 строк)
-
-Оркестратор всего процесса запуска игры. Координирует:
-- Получение версий
-- Скачивание и патчинг
-- Применение модов и скинов
-- Запуск процесса
-
-### ClientPatcher
-
-**Файл:** `Services/Game/ClientPatcher.cs`
-
-⚠️ **Критический компонент** — бинарное патчирование исполняемого файла игры.
-
-### LocalizationService
-
-**Файл:** `Services/Core/LocalizationService.cs`
-
-Реактивная система локализации с поддержкой hot-reload языка.
-
----
-
-## 📐 Диаграммы
-
-### Зависимости сервисов
-
-```mermaid
-graph LR
-    subgraph Core
-        Config[ConfigService]
-        Loc[LocalizationService]
-        Log[Logger]
-        Theme[ThemeService]
-        Progress[ProgressNotificationService]
-    end
-    
-    subgraph Game
-        GS[GameSessionService]
-        VS[VersionService]
-        IS[InstanceService]
-        DS[DownloadService]
-        LS[LaunchService]
-        BS[ButlerService]
-        MS[ModService]
-    end
-    
-    subgraph User
-        PS[ProfileService]
-        PMS[ProfileManagementService]
-        SS[SkinService]
-    end
-    
-    GS --> Config
-    GS --> VS
-    GS --> IS
-    GS --> DS
-    GS --> LS
-    GS --> BS
-    GS --> MS
-    GS --> SS
-    GS --> Progress
-    
-    PMS --> PS
-    PMS --> Config
-```
-
----
-
-## 📚 Дополнительные ресурсы
-
-- [MigrationGuide.md](MigrationGuide.md) — Миграция с Photino
-- [ServicesReference.md](ServicesReference.md) — Справочник сервисов
-- [MVVMPatterns.md](../Development/MVVMPatterns.md) — Паттерны MVVM
-- [ProjectStructure.md](ProjectStructure.md) — Структура проекта
+Electron.NET выводит неструктурированные сообщения в stdout/stderr. HyPrism перехватывает их через `ElectronLogInterceptor` и перенаправляет в Logger:
+- Сообщения фреймворка → Logger.Info
+- Отладочные сообщения → Logger.Debug
+- Паттерны ошибок → Logger.Warning
+- Шумовые паттерны → подавляются

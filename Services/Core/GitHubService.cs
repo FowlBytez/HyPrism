@@ -4,7 +4,6 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
-using Avalonia.Media.Imaging;
 using System.Text.Json.Serialization;
 
 namespace HyPrism.Services.Core;
@@ -115,19 +114,16 @@ public class GitHubService : IGitHubService
     }
 
     /// <inheritdoc/>
-    public async Task<Bitmap?> LoadAvatarAsync(string url, int decodeWidth = 96)
+    public async Task<byte[]?> LoadAvatarAsync(string url, int decodeWidth = 96)
     {
         try
         {
             if (string.IsNullOrEmpty(url)) return null;
             
-            // Append GitHub size parameter to request smaller image from CDN (saves bandwidth + memory)
+            // Append GitHub size parameter to request smaller image from CDN (saves bandwidth)
             var sizedUrl = url.Contains('?') ? $"{url}&s={decodeWidth}" : $"{url}?s={decodeWidth}";
             
-            var data = await _httpClient.GetByteArrayAsync(sizedUrl);
-            using var stream = new MemoryStream(data);
-            // Decode directly to target width to avoid full-size Bitmap allocation
-            return Bitmap.DecodeToWidth(stream, decodeWidth, BitmapInterpolationMode.MediumQuality);
+            return await _httpClient.GetByteArrayAsync(sizedUrl);
         }
         catch (Exception ex)
         {

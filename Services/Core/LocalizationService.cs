@@ -1,23 +1,25 @@
-using System.Reactive.Linq;
 using System.Text.Json;
 using System.Reflection;
-using ReactiveUI;
 
 namespace HyPrism.Services.Core;
 
 /// <summary>
 /// Provides localization and internationalization services for the application.
-/// Manages translation loading, caching, and reactive language switching.
+/// Manages translation loading, caching, and language switching.
 /// </summary>
 /// <remarks>
 /// Translations are loaded from embedded JSON resources in Assets/Locales.
-/// The service supports runtime language changes with reactive UI updates.
+/// The service supports runtime language changes with event-based notification.
 /// </remarks>
-public class LocalizationService : ReactiveObject, ILocalizationService
+public class LocalizationService : ILocalizationService
 {
-    // Static accessor for XAML markup extensions only (cannot use DI).
-    // Set during app initialization from the DI container.
+    // Static accessor for convenience (set from DI during initialization).
     internal static LocalizationService? Current { get; set; }
+
+    /// <summary>
+    /// Raised when the current language changes. Subscribers can refresh their UI.
+    /// </summary>
+    public event Action<string>? LanguageChanged;
 
     // Thread-safe translations access
     private volatile Dictionary<string, string> _translations = new();
@@ -29,6 +31,23 @@ public class LocalizationService : ReactiveObject, ILocalizationService
     // Cache for loaded translations: Key=LanguageCode, Value=Dictionary of translations
     private readonly Dictionary<string, Dictionary<string, string>> _languageCache = new();
     private readonly object _cacheLock = new();
+
+    /// <summary>
+    /// Returns all translations for the given language code (or current language if null).
+    /// Used by the IPC bridge to send translations to the React frontend.
+    /// </summary>
+    public Dictionary<string, string> GetAllTranslations(string? languageCode = null)
+    {
+        var code = languageCode ?? _currentLanguage;
+        lock (_cacheLock)
+        {
+            if (_languageCache.TryGetValue(code, out var cached))
+                return new Dictionary<string, string>(cached);
+        }
+        // If not cached, load it
+        var loaded = LoadLanguageInternal(code);
+        return loaded != null ? new Dictionary<string, string>(loaded) : new Dictionary<string, string>();
+    }
 
     /// <summary>
     /// Gets available languages by scanning embedded resources.
@@ -124,11 +143,12 @@ public class LocalizationService : ReactiveObject, ILocalizationService
             // Only load if actually changed
             if (_currentLanguage != value)
             {
-                // LOAD FIRST: Update the translation dictionary before notifying UI
+                // LOAD FIRST: Update the translation dictionary before notifying
                 LoadLanguage(value);
                 
-                // NOTIFY SECOND: Now that the dictionary is ready, tell UI to refresh
-                this.RaiseAndSetIfChanged(ref _currentLanguage, value);
+                // NOTIFY SECOND: Now that the dictionary is ready, tell subscribers to refresh
+                _currentLanguage = value;
+                LanguageChanged?.Invoke(value);
             }
         }
     }
@@ -164,14 +184,10 @@ public class LocalizationService : ReactiveObject, ILocalizationService
     }
 
     /// <summary>
-    /// Creates an observable that tracks a specific translation key.
-    /// This is the key method for reactive bindings!
+    /// Gets the current translation for a key. Subscribe to <see cref="LanguageChanged"/>
+    /// to be notified when translations update.
     /// </summary>
-    public IObservable<string> GetObservable(string key)
-    {
-        return this.WhenAnyValue(x => x.CurrentLanguage)
-            .Select(_ => Translate(key));
-    }
+    public string GetTranslation(string key) => Translate(key);
     
     /// <summary>
     /// Loads translations for the specified language code.

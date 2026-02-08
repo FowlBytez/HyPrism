@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════
+   HyPrism Dark Theme — CSS Custom Properties
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* Backgrounds (darkest → lightest) */
+  --bg-darkest: #0A0A0F;
+  --bg-dark: #111118;
+  --bg-medium: #1A1A24;
+  --bg-light: #22222F;
+  --bg-lighter: #2C2C3D;
+  --bg-hover: #33334A;
+
+  /* Text */
+  --text-primary: #F0F0F5;
+  --text-secondary: #A0A0B8;
+  --text-muted: #5C5C72;
+
+  /* Accent (Electric Purple) */
+  --accent: #7C5CFC;
+  --accent-hover: #6A4AE8;
+  --accent-glow: rgba(124, 92, 252, 0.25);
+  --accent-subtle: rgba(124, 92, 252, 0.08);
+
+  /* Status */
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --error: #F87171;
+
+  /* Glassmorphism */
+  --glass-bg: rgba(17, 17, 24, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  /* Animation timing */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* Spacing */
+  --sidebar-width: 72px;
+  --titlebar-height: 40px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Reset & Base
+   ═══════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--bg-darkest);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Scrollbar
+   ═══════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--bg-lighter);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════
+   Utility Classes
+   ═══════════════════════════════════════════════════════ */
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.glow-accent {
+  box-shadow: 0 0 24px var(--accent-glow), 0 0 60px rgba(124, 92, 252, 0.1);
+}
+
+.glow-accent-sm {
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Page transition container */
+.page-transition {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Animated Gradient Background
+   ═══════════════════════════════════════════════════════ */
+
+.animated-bg {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 80%, rgba(124, 92, 252, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(74, 222, 128, 0.03) 0%, transparent 60%),
+    linear-gradient(180deg, var(--bg-darkest) 0%, var(--bg-dark) 100%);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Section Card
+   ═══════════════════════════════════════════════════════ */
+
+.section-card {
+  background: var(--bg-medium);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.section-card:hover {
+  border-color: rgba(124, 92, 252, 0.15);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Toggle Switch
+   ═══════════════════════════════════════════════════════ */
+
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.3s var(--ease-out-expo);
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  background: white;
+  transition: transform 0.3s var(--ease-out-expo);
+}
+
+.toggle-switch.active {
+  background-color: var(--accent);
+}
+
+.toggle-switch.active::after {
+  transform: translateX(20px);
+}
+
+.toggle-switch:not(.active) {
+  background-color: var(--bg-lighter);
+}

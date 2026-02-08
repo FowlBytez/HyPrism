@@ -1,247 +1,102 @@
-# Building HyPrism
+# Building
 
-Detailed instructions for compiling HyPrism from source code.
+## Prerequisites
 
----
+- **.NET 10 SDK**
+- **Node.js 20+** (includes npm)
+- **Git**
 
-## 📋 Requirements
+## Development
 
-### Required Dependencies
-
-| Component | Requirement |
-|-----------|-------------|
-| **.NET SDK** | 10.0 |
-| **Git** | Any modern version |
-| **IDE** | Visual Studio 2022, Rider, or VS Code |
-
-### Operating Systems
-
-| OS | Minimum Version |
-|----|-----------------|
-| Windows | 10 (1809+) or 11 |
-| Linux | Ubuntu 22.04+, Fedora 38+, Arch |
-| macOS | 12 Monterey+ |
-
----
-
-## 🔧 Build Instructions
-
-### Cloning
+### Full Build (Backend + Frontend)
 
 ```bash
-git clone https://github.com/yyyumeniku/HyPrism.git
-cd HyPrism
-```
-
-### Debug Build
-
-```bash
-# Restore NuGet packages
-dotnet restore
-
-# Build
 dotnet build
-
-# Run
-dotnet run
 ```
 
-### Release Build
+This single command runs the entire MSBuild pipeline:
 
-```bash
-dotnet build -c Release
-```
-
----
-
-## 📦 Publishing (Standalone)
-
-### Windows (x64)
-
-```bash
-dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
-```
-
-Output: `bin/Release/net10.0/win-x64/publish/HyPrism.exe`
-
-### Linux (x64)
-
-```bash
-dotnet publish -c Release -r linux-x64 --self-contained
-```
-
-Output: `bin/Release/net10.0/linux-x64/publish/HyPrism`
-
-### macOS (Intel)
-
-```bash
-dotnet publish -c Release -r osx-x64 --self-contained
-```
-
-### macOS (Apple Silicon)
-
-```bash
-dotnet publish -c Release -r osx-arm64 --self-contained
-```
-
----
-
-## 🐧 Linux: Additional Dependencies
-
-Avalonia uses SkiaSharp, which requires native libraries.
-
-### Ubuntu/Debian
-
-```bash
-sudo apt install libfontconfig1 libice6 libsm6 libx11-6 libxext6 libxrender1
-```
-
-### Fedora
-
-```bash
-sudo dnf install fontconfig libX11 libXext libXrender libSM libICE
-```
-
-### Arch Linux
-
-```bash
-sudo pacman -S fontconfig libx11 libxext libxrender libsm libice
-```
-
----
-
-## 📦 Flatpak Build
-
-Flatpak manifests are in `Packaging/flatpak/`.
-
-### Requirements
-
-```bash
-# Ubuntu/Debian
-sudo apt install flatpak-builder
-
-# Fedora
-sudo dnf install flatpak-builder
-```
-
-### Build and Install
-
-```bash
-flatpak-builder --user --install build-dir Packaging/flatpak/dev.hyprism.HyPrism.json
-```
+1. `NpmInstall` — runs `npm ci` in `Frontend/`
+2. `GenerateIpcTs` — generates `Frontend/src/lib/ipc.ts` from C# annotations
+3. `BuildFrontend` — runs `npm run build` (TypeScript + Vite)
+4. `CopyFrontendDist` — copies `Frontend/dist/` → `bin/.../wwwroot/`
+5. Standard .NET compilation
 
 ### Run
 
 ```bash
-flatpak run dev.hyprism.HyPrism
+dotnet run
 ```
 
----
+Starts the .NET Console app → spawns Electron → opens the window.
 
-## 🍎 macOS Build
-
-### App Bundle
-
-To create an `.app` bundle:
+### Frontend-Only Dev
 
 ```bash
-dotnet publish -c Release -r osx-arm64 --self-contained
+cd Frontend
+npm run dev    # Vite dev server on localhost:5173
 ```
 
-Then create the structure:
+Useful for iterating on UI without restarting the full app. Note: IPC calls will not work in standalone mode (no Electron bridge).
 
-```
-HyPrism.app/
-├── Contents/
-│   ├── Info.plist          # From Packaging/macos/
-│   ├── MacOS/
-│   │   └── HyPrism         # Executable
-│   └── Resources/
-│       └── Icon.icns
-```
-
-### DMG
-
-Use `create-dmg` or `hdiutil` to create `.dmg`.
-
----
-
-## 🛠️ Project Configuration
-
-### HyPrism.csproj
-
-Key parameters:
-
-```xml
-<PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <LangVersion>13</LangVersion>
-    <AvaloniaVersion>11.3.11</AvaloniaVersion>
-</PropertyGroup>
-```
-
-### Dependencies
-
-| Package | Version |
-|---------|---------|
-| Avalonia | 11.3.11 |
-| Avalonia.Desktop | 11.3.11 |
-| ReactiveUI | 11.3.9 |
-
-| SkiaSharp | 3.116.1 |
-| Serilog | 4.3.0 |
-
----
-
-## 🔧 Build Scripts
-
-### Linux (`Scripts/build-linux.sh`)
+### Regenerate IPC
 
 ```bash
-#!/bin/bash
-dotnet publish -c Release -r linux-x64 --self-contained
+node Scripts/generate-ipc.mjs
 ```
 
-### Docker (`Scripts/Dockerfile.build`)
+Or triggered automatically by `dotnet build` when `IpcService.cs` changes.
 
-```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:10.0
-WORKDIR /app
-COPY . .
-RUN dotnet publish -c Release -r linux-x64 --self-contained
-```
-
----
-
-## ⚠️ Known Issues
-
-### Linux: libSkiaSharp.so
-
-If "Unable to load libSkiaSharp.so" error appears:
+## Production Build
 
 ```bash
-# Install library manually or use
-export LD_LIBRARY_PATH=/path/to/skia:$LD_LIBRARY_PATH
+# Build frontend for production
+cd Frontend && npm run build
+
+# Publish .NET
+dotnet publish -c Release
 ```
 
-### macOS: Gatekeeper
+The published output is in `bin/Release/net10.0/linux-x64/publish/` (or platform equivalent) and includes the `wwwroot/` folder with the compiled frontend.
 
-On first launch on macOS:
+## Platform Notes
+
+### Linux
 
 ```bash
-xattr -d com.apple.quarantine /path/to/HyPrism.app
+# Standard build
+dotnet build
+
+# Production publish
+dotnet publish -c Release -r linux-x64
+
+# Flatpak (see Packaging/flatpak/)
+flatpak-builder build Packaging/flatpak/dev.hyprism.HyPrism.json
 ```
 
----
+### macOS
 
-## 📚 Additional Resources
+```bash
+dotnet publish -c Release -r osx-x64
+# Or for Apple Silicon:
+dotnet publish -c Release -r osx-arm64
+```
 
-- [Installation.md](../User/Installation.md) — User installation
-- [ProjectStructure.md](ProjectStructure.md) — Project structure
-- [Architecture.md](Architecture.md) — Architecture
+See `Packaging/macos/Info.plist` for macOS-specific metadata.
 
-## Troubleshooting
+### Windows
 
-*   **SkiaSharp Errors (Linux):** Ensure `libSkiaSharp.so` can be found. You may need to install `SkiaSharp.NativeAssets.Linux` NuGet package or install `libskia` system-wide.
-*   **"10.0" Runtime needed:** If the `.csproj` specifies `net10.0` and you only have `net8.0`, you must install the .NET 10 SDK from Microsoft.
+```bash
+dotnet publish -c Release -r win-x64
+```
+
+## MSBuild Targets
+
+| Target | Trigger | Purpose |
+|--------|---------|---------|
+| `NpmInstall` | Before `GenerateIpcTs` | `npm ci --prefer-offline` |
+| `GenerateIpcTs` | Before `BuildFrontend` | `node Scripts/generate-ipc.mjs` |
+| `BuildFrontend` | Before `Build` | `npm run build` in Frontend/ |
+| `CopyFrontendDist` | After `Build` | Copy dist → wwwroot |
+
+All targets use incremental build (Inputs/Outputs) to avoid unnecessary work.

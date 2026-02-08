@@ -5,11 +5,6 @@ using HyPrism.Services;
 using HyPrism.Services.Core;
 using HyPrism.Services.User;
 using HyPrism.Services.Game;
-using HyPrism.UI.MainWindow;
-using HyPrism.UI.Views.NewsView;
-using HyPrism.UI.Views.SettingsView;
-using HyPrism.UI.Views.ModManagerView;
-using HyPrism.UI.Views.ProfileEditorView;
 
 namespace HyPrism;
 
@@ -222,14 +217,10 @@ public static class Bootstrapper
 
             #endregion
 
-            #region ViewModels
+            #region IPC Bridge
 
-            services.AddSingleton<MainViewModel>();
-
-            services.AddTransient<NewsViewModel>();
-            services.AddTransient<SettingsViewModel>();
-            services.AddTransient<ModManagerViewModel>();
-            services.AddTransient<ProfileEditorViewModel>();
+            // IpcService needs all other services → receives IServiceProvider
+            services.AddSingleton<IpcService>();
 
             #endregion
 

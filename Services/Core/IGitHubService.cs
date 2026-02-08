@@ -1,5 +1,3 @@
-using Avalonia.Media.Imaging;
-
 namespace HyPrism.Services.Core;
 
 /// <summary>
@@ -22,10 +20,10 @@ public interface IGitHubService
     Task<GitHubUser?> GetUserAsync(string username);
     
     /// <summary>
-    /// Loads and caches a user's avatar image from the specified URL.
+    /// Downloads a user's avatar image from the specified URL.
     /// </summary>
     /// <param name="url">The URL of the avatar image to load.</param>
-    /// <param name="decodeWidth">The width in pixels to decode the image to. Defaults to 96.</param>
-    /// <returns>The decoded <see cref="Bitmap"/> image, or <c>null</c> if loading failed.</returns>
-    Task<Bitmap?> LoadAvatarAsync(string url, int decodeWidth = 96);
+    /// <param name="decodeWidth">The width hint for the CDN (avatar size in px). Defaults to 96.</param>
+    /// <returns>The raw image bytes, or <c>null</c> if loading failed.</returns>
+    Task<byte[]?> LoadAvatarAsync(string url, int decodeWidth = 96);
 }

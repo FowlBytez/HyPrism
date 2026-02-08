@@ -1,0 +1,30 @@
+{
+  "appId": "dev.hyprism.HyPrism",
+  "productName": "HyPrism",
+  "compression": "maximum",
+  "win": {
+    "icon": "Packaging/windows/HyPrism.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "linux": {
+    "icon": "Assets/Icons/hyprism.png",
+    "target": [
+      "AppImage",
+      "tar.xz"
+    ],
+    "category": "Game"
+  },
+  "mac": {
+    "icon": "Packaging/macos/HyPrism.icns",
+    "target": [
+      "dmg",
+      "zip"
+    ],
+    "category": "public.app-category.games"
+  }
+}
