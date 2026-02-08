@@ -1,0 +1,135 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Avalonia.Svg.Skia"
+             xmlns:cv="using:HyPrism.UI.Converters"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="120"
+             x:Class="HyPrism.UI.Components.Inputs.MultiSelectionInput.MultiSelectionInput"
+             x:Name="Root"
+             ClipToBounds="False">
+
+    <UserControl.Resources>
+        <cv:StringEqualityConverter x:Key="StringEqualityConverter"/>
+    </UserControl.Resources>
+
+    <Grid RowDefinitions="Auto, Auto" ClipToBounds="False">
+        <StackPanel Grid.Row="0" Spacing="8">
+            <TextBlock Text="{Binding ElementName=Root, Path=Label}"
+                       FontSize="15"
+                       FontWeight="SemiBold"
+                       Foreground="White"
+                       IsVisible="{Binding ElementName=Root, Path=Label, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+            <ToggleButton Name="DropdownToggle"
+                          Classes="InputToggle"
+                          Height="{Binding ElementName=Root, Path=ToggleHeight}"
+                          CornerRadius="{Binding ElementName=Root, Path=ToggleCornerRadius}"
+                          IsChecked="{Binding ElementName=Root, Path=IsExpanded, Mode=TwoWay}">
+                <Grid ColumnDefinitions="*, Auto">
+                    <ContentControl Grid.Column="0"
+                                   Content="{Binding ElementName=Root, Path=SelectedItem}"
+                                   ContentTemplate="{Binding ElementName=Root, Path=ItemTemplate}"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Left">
+                        <ContentControl.DataTemplates>
+                            <DataTemplate DataType="x:String">
+                                <TextBlock Text="{Binding}" FontSize="14" Foreground="White" />
+                            </DataTemplate>
+                            <DataTemplate DataType="x:Object">
+                                <TextBlock Text="{Binding}" FontSize="14" Foreground="White"/>
+                            </DataTemplate>
+                        </ContentControl.DataTemplates>
+                    </ContentControl>
+
+                    <ContentControl Grid.Column="0"
+                                   Content="{Binding ElementName=Root, Path=PlaceholderContent}"
+                                   ContentTemplate="{Binding ElementName=Root, Path=PlaceholderTemplate}"
+                                   IsVisible="{Binding ElementName=Root, Path=SelectedItem, Converter={x:Static ObjectConverters.IsNull}}"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Left">
+                        <ContentControl.DataTemplates>
+                            <DataTemplate DataType="x:String">
+                                <TextBlock Text="{Binding}" FontSize="14" Foreground="Gray" />
+                            </DataTemplate>
+                            <DataTemplate DataType="x:Object">
+                                <TextBlock Text="{Binding}" FontSize="14" Foreground="Gray"/>
+                            </DataTemplate>
+                        </ContentControl.DataTemplates>
+                    </ContentControl>
+
+                    <svg:Svg Grid.Column="1"
+                             Classes="Chevron"
+                             Path="/Assets/Icons/chevron-up.svg"
+                             Width="16" Height="16"
+                             Margin="10,0,0,0">
+                        <svg:Svg.Transitions>
+                            <Transitions>
+                                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="CubicEaseOut"/>
+                            </Transitions>
+                        </svg:Svg.Transitions>
+                    </svg:Svg>
+                </Grid>
+            </ToggleButton>
+        </StackPanel>
+
+        <Canvas Name="DropdownPlaceholder"
+            Grid.Row="1"
+                Height="0"
+                HorizontalAlignment="Stretch"
+                ClipToBounds="False">
+            <Grid Name="DropdownContainer"
+                Classes.expanded="{Binding ElementName=Root, Path=IsExpanded}"
+                ClipToBounds="False"
+                Width="{Binding ElementName=Root, Path=Bounds.Width}"
+            Canvas.Top="8">
+
+                <Border Background="{Binding ElementName=Root, Path=DropdownBackground, TargetNullValue=#1E1E1E}"
+                        BorderBrush="{Binding ElementName=Root, Path=DropdownBorderBrush, TargetNullValue=#333}"
+                        BorderThickness="1"
+                        CornerRadius="{Binding ElementName=Root, Path=DropdownCornerRadius}"
+                        Padding="0"
+                        MinWidth="{Binding $parent[UserControl].Bounds.Width}"
+                        MaxHeight="{Binding ElementName=Root, Path=MaxDropdownHeight}"
+                        BoxShadow="0 8 32 0 #66000000">
+                    <Grid RowDefinitions="Auto, *">
+                        <Border Background="#202020"
+                                BorderBrush="#333"
+                                BorderThickness="0,0,0,1"
+                                Padding="0"
+                                HorizontalAlignment="Stretch">
+                            <ContentPresenter Content="{Binding ElementName=Root, Path=HeaderContent}"
+                                              ContentTemplate="{Binding ElementName=Root, Path=HeaderTemplate}"
+                                              HorizontalAlignment="Stretch"
+                                              HorizontalContentAlignment="Stretch"/>
+                        </Border>
+
+                        <ListBox Name="ItemsListBox"
+                                 Grid.Row="1"
+                                 ItemsSource="{Binding ElementName=Root, Path=ItemsSource}"
+                                 SelectedItem="{Binding ElementName=Root, Path=ListSelectedItem, Mode=TwoWay}"
+                                 SelectedItems="{Binding ElementName=Root, Path=SelectedItems, Mode=TwoWay}"
+                                 SelectionMode="{Binding ElementName=Root, Path=SelectionMode}"
+                                 ItemTemplate="{Binding ElementName=Root, Path=ItemsTemplate}"
+                                 Classes="MultiSelectionList"
+                                 Background="Transparent"
+                                 MaxHeight="240"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 SelectionChanged="OnListBoxSelectionChanged">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.Styles>
+                                <Style Selector="ListBox">
+                                    <Setter Property="Padding" Value="8"/>
+                                </Style>
+                            </ListBox.Styles>
+                        </ListBox>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Canvas>
+    </Grid>
+</UserControl>

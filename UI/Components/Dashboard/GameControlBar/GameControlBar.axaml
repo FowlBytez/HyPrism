@@ -1,0 +1,101 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HyPrism.UI.Components.Dashboard.GameControlBar"
+             xmlns:btn="using:HyPrism.UI.Components.Buttons.IconButton"
+             xmlns:primaryBtn="using:HyPrism.UI.Components.Buttons.PrimaryButton"
+             xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Avalonia.Svg.Skia"
+             mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="100"
+             x:Class="HyPrism.UI.Components.Dashboard.GameControlBar.GameControlBar"
+             x:DataType="vm:GameControlViewModel"
+             x:CompileBindings="True">
+
+    <UserControl.Styles>
+        <StyleInclude Source="GameControlBarStyles.axaml"/>
+    </UserControl.Styles>
+    
+    <Grid>
+        <!-- BOTTOM LEFT: Action Buttons -->
+        <StackPanel VerticalAlignment="Bottom" 
+                    HorizontalAlignment="Left"
+                    Orientation="Horizontal" 
+                    Spacing="10">
+            <!-- Mods (Disabled pending rewrite) -->
+            <!--
+            <btn:IconButton Command="{Binding ToggleModsCommand}"
+                            ButtonBackground="#2a2a2a"
+                            Width="50" Height="50"
+                            IconPath="/Assets/Icons/package.svg"
+                            IconSize="24"/>
+            -->
+            
+            <!-- Folder -->
+            <btn:IconButton Command="{Binding OpenFolderCommand}"
+                            ButtonBackground="#2a2a2a"
+                            Width="50" Height="50"
+                            IconPath="/Assets/Icons/folder.svg"
+                            IconSize="24"/>
+            
+            <!-- Settings -->
+            <btn:IconButton Command="{Binding ToggleSettingsCommand}"
+                            ButtonBackground="#2a2a2a"
+                            Width="50" Height="50"
+                            IconPath="/Assets/Icons/settings.svg"
+                            IconSize="24"/>
+            
+            <!-- Network/WiFi -->
+            <btn:IconButton ButtonBackground="#2a2a2a"
+                            Width="50" Height="50"
+                            IconPath="/Assets/Icons/wifi.svg"
+                            IconSize="24"/>
+        </StackPanel>
+        
+        <!-- BOTTOM CENTER: Educational Text -->
+        <TextBlock VerticalAlignment="Bottom" 
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,8">
+            <Run Text="{Binding MainEducational^}" Foreground="#999" FontSize="12"/>
+            <Run Text=" "/>
+            <Run Text="{Binding MainBuyIt^}" Foreground="{DynamicResource SystemAccentBrush}" FontSize="12" FontWeight="Bold"/>
+        </TextBlock>
+        
+        <!-- BOTTOM RIGHT: Play Button with Version Selector -->
+        <Grid VerticalAlignment="Bottom" HorizontalAlignment="Right">
+            <Border x:Name="PlaySplitButtonContainer"
+                    CornerRadius="10"
+                    ClipToBounds="True">
+                <Grid ColumnDefinitions="Auto, Auto" Height="50">
+                    <Button Classes="VersionAreaButton"
+                            Command="{Binding OpenInstancesCommand}"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <svg:Svg Path="/Assets/Icons/git-branch.svg" Width="16" Height="16">
+                                <svg:Svg.Css>* { stroke: #ddd !important; fill: #ddd !important; }</svg:Svg.Css>
+                            </svg:Svg>
+                            <TextBlock Text="{Binding SelectedBranchVersionLabel}" 
+                                       FontSize="13" 
+                                       Foreground="#ddd"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <primaryBtn:PrimaryButton Grid.Column="1"
+                                       Command="{Binding LaunchCommand}"
+                                       Height="50"
+                                       Padding="18,0"
+                                       CornerRadius="0,10,10,0"
+                                       FontSize="18">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <svg:Svg Path="/Assets/Icons/play.svg" Width="20" Height="20">
+                                <svg:Svg.Css>* { stroke: #111 !important; fill: #111 !important; }</svg:Svg.Css>
+                            </svg:Svg>
+                            <TextBlock Text="{Binding MainPlay^}" VerticalAlignment="Center" Foreground="#111"/>
+                        </StackPanel>
+                    </primaryBtn:PrimaryButton>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

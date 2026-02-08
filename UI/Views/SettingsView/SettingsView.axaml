@@ -1,0 +1,814 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HyPrism.UI.Views.SettingsView"
+             xmlns:pe="using:HyPrism.UI.Views.ProfileEditorView"
+             xmlns:nav="using:HyPrism.UI.Components.Navigation.SidebarItem"
+             xmlns:actionInput="using:HyPrism.UI.Components.Inputs.ActionInput"
+             xmlns:selectionInput="using:HyPrism.UI.Components.Inputs.SelectionInput"
+             xmlns:checkboxInput="using:HyPrism.UI.Components.Inputs.CheckboxInput"
+             xmlns:multiSelectionInput="using:HyPrism.UI.Components.Inputs.MultiSelectionInput"
+             xmlns:iconButton="using:HyPrism.UI.Components.Buttons.IconButton"
+             xmlns:closeButton="using:HyPrism.UI.Components.Buttons.CloseButton"
+             xmlns:noticeCard="using:HyPrism.UI.Components.Cards.NoticeCard"
+             xmlns:cv="using:HyPrism.UI.Converters"
+             xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Avalonia.Svg.Skia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="HyPrism.UI.Views.SettingsView.SettingsView"
+             x:DataType="vm:SettingsViewModel"
+             x:CompileBindings="True"
+             x:Name="Root"
+             UseLayoutRounding="True">
+
+    <UserControl.Resources>
+        <cv:StringEqualityConverter x:Key="StringEqualityConverter"/>
+        <cv:FileSizeConverter x:Key="FileSizeConverter"/>
+        <cv:CollectionEmptyToBoolConverter x:Key="CollectionEmptyToBoolConverter"/>
+        <cv:VersionDisplayConverter x:Key="VersionDisplayConverter"/>
+        <SolidColorBrush x:Key="HytaleOrangeBrush" Color="#FFA845"/>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="Border.ProfileCard">
+            <Setter Property="Background" Value="#252525"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Transitions">
+                 <Transitions>
+                     <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                 </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.ProfileCard:pointerover">
+            <Setter Property="Background" Value="#333333"/>
+        </Style>
+
+        <!-- Hover Visibility for buttons -->
+        <Style Selector="Border.ProfileCard StackPanel.HoverActions">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+            <Setter Property="Transitions">
+                 <Transitions>
+                     <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+                 </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.ProfileCard:pointerover StackPanel.HoverActions">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="True"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Background="#F2111111" CornerRadius="12" BorderBrush="#33FFFFFF" BorderThickness="1" ClipToBounds="True" BoxShadow="0 10 30 5 #000000">
+        <Grid ColumnDefinitions="240, *">
+            
+            <!-- Sidebar -->
+            <Border Grid.Column="0" Background="#111111">
+                <Grid RowDefinitions="Auto, *">
+                    <TextBlock Text="{Binding SettingsTitle^}" Grid.Row="0" Margin="30,30,30,30" FontSize="28" FontWeight="SemiBold" Foreground="White" FontFamily="{StaticResource Poppins}"/>
+                    
+                    <ScrollViewer Grid.Row="1">
+                        <StackPanel Spacing="4" Margin="10,0">
+                            
+                            <nav:SidebarItem Text="{Binding MyProfile^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="profile"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='profile'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/user.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+                            
+                            <nav:SidebarItem Text="{Binding General^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="general"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='general'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/settings.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+
+                            <nav:SidebarItem Text="{Binding Visuals^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="visual"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='visual'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/image.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+
+                            <nav:SidebarItem Text="{Binding Data^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="data"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='data'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/database.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+
+                            <nav:SidebarItem Text="{Binding InstancesTabTitle^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="instances"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='instances'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/hard-drive.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+
+                            <nav:SidebarItem Text="{Binding About^}" 
+                                             Command="{Binding SwitchTabCommand}" 
+                                             CommandParameter="about"
+                                             IsSelected="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter='about'}">
+                                <nav:SidebarItem.Icon>
+                                    <svg:Svg Path="/Assets/Icons/info.svg" Width="18" Height="18"/>
+                                </nav:SidebarItem.Icon>
+                            </nav:SidebarItem>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Content Area -->
+            <Grid Grid.Column="1" Background="#1E1E1E">
+                
+                <!-- Tab Contents -->
+                <ScrollViewer Padding="30,30,30,30" HorizontalScrollBarVisibility="Disabled">
+                    <Panel>
+                        
+                        <!-- Profile Tab -->
+                        <StackPanel IsVisible="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter=profile}" Spacing="30">
+                            <!-- Header -->
+                            <TextBlock Text="Profiles" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="{StaticResource Poppins}" Margin="0,0,0,10"/>
+
+                            <!-- Active Profile Card -->
+                            <StackPanel Spacing="10" 
+                                        IsVisible="{Binding ActiveProfileItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <Border Background="#252525" CornerRadius="16" Padding="24" BoxShadow="0 8 30 4 #15000000" BorderThickness="1" BorderBrush="#333">
+                                    <Grid ColumnDefinitions="Auto, *, Auto">
+                                        <!-- Avatar -->
+                                        <Border Width="80" Height="80" CornerRadius="40" Background="#333" ClipToBounds="True" VerticalAlignment="Top">
+                                            <Panel>
+                                                <svg:Svg Path="/Assets/Icons/user.svg" Width="40" Height="40"/>
+                                            </Panel>
+                                        </Border>
+                                        
+                                        <!-- Info -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="24,0,24,0" Spacing="8">
+                                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                                <TextBlock Text="{Binding ActiveProfileItem.Name}" FontWeight="Bold" Foreground="White" FontSize="20"/>
+                                                
+                                                <Border Background="#2E7D32" CornerRadius="6" Padding="8,4" VerticalAlignment="Center">
+                                                    <TextBlock Text="Active" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                                                </Border>
+                                                
+                                                <Border Background="#0078D4" 
+                                                        CornerRadius="6" 
+                                                        Padding="8,4" 
+                                                        VerticalAlignment="Center" 
+                                                        IsVisible="{Binding ActiveProfileItem.IsOfficial}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                         <svg:Svg Path="/Assets/Icons/check.svg" Width="10" Height="10"/>
+                                                         <TextBlock Text="Official" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                            
+                                            <!-- Stats -->
+                                            <StackPanel Orientation="Horizontal" Spacing="20">
+                                                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                     <svg:Svg Path="/Assets/Icons/clock.svg" Width="14" Height="14" Opacity="0.5"/>
+                                                     <TextBlock Text="{Binding ActiveProfileItem.PlaytimeString}" Foreground="#CCC" FontSize="13"/>
+                                                 </StackPanel>
+                                                 
+                                                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                     <svg:Svg Path="/Assets/Icons/calendar.svg" Width="14" Height="14" Opacity="0.5"/>
+                                                     <TextBlock Text="{Binding ActiveProfileItem.CreatedAtString}" Foreground="#CCC" FontSize="13"/>
+                                                 </StackPanel>
+                                            </StackPanel>
+
+                                            <TextBlock Text="{Binding ActiveProfileItem.UUID}" FontSize="12" Foreground="#666" FontFamily="Consolas" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Edit Button (Active) -->
+                                        <iconButton:IconButton Grid.Column="2" 
+                                                               Command="{Binding ActiveProfileItem.EditCommand}" 
+                                                               IconPath="/Assets/Icons/edit.svg" 
+                                                               IconSize="20"
+                                                               Width="44" Height="44"
+                                                               ButtonBackground="Transparent"
+                                                               VerticalAlignment="Top"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Other Profiles -->
+                            <StackPanel Spacing="10">
+                                <Grid ColumnDefinitions="*, Auto" Margin="0,10,0,5">
+                                    <TextBlock Text="Other Profiles" FontSize="16" Foreground="#999" FontWeight="Medium" VerticalAlignment="Center"/>
+                                    <iconButton:IconButton Grid.Column="1" 
+                                                           Command="{Binding CreateProfileCommand}" 
+                                                           IconPath="/Assets/Icons/plus.svg" 
+                                                           IconSize="18"/>
+                                </Grid>
+                                
+                                <ScrollViewer MaxHeight="250" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding OtherProfiles}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Spacing="8" Margin="0,0,10,0"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ProfileItemViewModel">
+                                            <Border Classes="ProfileCard">
+                                                 <Grid ColumnDefinitions="Auto, *, Auto">
+                                                     <!-- Avatar -->
+                                                     <Border Width="40" Height="40" CornerRadius="20" Background="#333" ClipToBounds="True">
+                                                         <Panel>
+                                                              <svg:Svg Path="/Assets/Icons/user.svg" Width="20" Height="20"/>
+                                                         </Panel>
+                                                     </Border>
+                                                     
+                                                     <!-- Name -->
+                                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="15,0,15,0">
+                                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="White" FontSize="15"/>
+                                                         <TextBlock Text="{Binding ShortUUID}" FontSize="12" Foreground="#666" FontFamily="Consolas"/>
+                                                     </StackPanel>
+                                                     
+                                                     <!-- Hover Actions -->
+                                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Classes="HoverActions" VerticalAlignment="Center">
+                                                         <Button Command="{Binding ActivateCommand}" Background="Transparent" CornerRadius="6" Padding="8" Cursor="Hand" ToolTip.Tip="Use this profile">
+                                                             <svg:Svg Path="/Assets/Icons/check.svg" Width="16" Height="16"/>
+                                                         </Button>
+                                                         
+                                                         <Button Command="{Binding EditCommand}" Background="Transparent" CornerRadius="6" Padding="8" Cursor="Hand" ToolTip.Tip="Edit">
+                                                             <svg:Svg Path="/Assets/Icons/edit.svg" Width="16" Height="16"/>
+                                                         </Button>
+                                                         <Button Command="{Binding DeleteCommand}" Background="Transparent" CornerRadius="6" Padding="8" Cursor="Hand" ToolTip.Tip="Delete">
+                                                             <svg:Svg Path="/Assets/Icons/trash-2.svg" Width="16" Height="16"/>
+                                                         </Button>
+                                                     </StackPanel>
+                                                 </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>                                </ScrollViewer>                                
+                                <!-- Empty State -->
+                                <StackPanel IsVisible="{Binding OtherProfiles, Converter={StaticResource CollectionEmptyToBoolConverter}}"
+                                            HorizontalAlignment="Center" Margin="0,10">
+                                    <TextBlock Text="No other profiles" Foreground="#555" FontSize="14"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                        
+                        <!-- General Tab -->
+                        <StackPanel IsVisible="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter=general}" Spacing="30">
+                            <TextBlock Text="{Binding GeneralHeader^}" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="{StaticResource Poppins}"/>
+                            
+                            <!-- Language Settings -->
+                            <StackPanel Spacing="8">
+                                <selectionInput:SelectionInput Label="{Binding LanguageInterface^}" 
+                                                       ItemsSource="{Binding LanguageItems}"
+                                                       SelectedItem="{Binding SelectedLanguageItem}"
+                                                       Width="300"
+                                                       HorizontalAlignment="Left">
+                                    <selectionInput:SelectionInput.ItemTemplate>
+                                        <DataTemplate x:CompileBindings="False">
+                                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                                <Border CornerRadius="2" ClipToBounds="True" VerticalAlignment="Center">
+                                                     <svg:Svg Path="{Binding FlagIconPath}" Width="22" Height="16" Css=""/>
+                                                </Border>
+                                                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </selectionInput:SelectionInput.ItemTemplate>
+                                </selectionInput:SelectionInput>
+                                <TextBlock Text="{Binding LanguageInterfaceHint^}" FontSize="13" Foreground="Gray"/>
+                                
+                                <Border MaxWidth="600" HorizontalAlignment="Left" Margin="0,15,0,0">
+                                    <noticeCard:NoticeCard Text="{Binding LanguageNote^}" 
+                                                      IconPath="/Assets/Icons/info.svg" 
+                                                      ThemeColor="#3B82F6"/>
+                                </Border>
+                            </StackPanel>
+                            
+                            <!-- Update Channel -->
+                            <StackPanel Spacing="8">
+                                <selectionInput:SelectionInput Label="{Binding GeneralUpdateChannel^}" 
+                                                       ItemsSource="{Binding BranchItems}"
+                                                       SelectedItem="{Binding SelectedBranchItem}">
+                                    <selectionInput:SelectionInput.ItemTemplate>
+                                        <DataTemplate x:CompileBindings="False">
+                                            <TextBlock Text="{Binding DisplayName}"/>
+                                        </DataTemplate>
+                                    </selectionInput:SelectionInput.ItemTemplate>
+                                </selectionInput:SelectionInput>
+                                <TextBlock Text="{Binding GeneralUpdateChannelHint^}" FontSize="12" Foreground="Gray"/>
+                            </StackPanel>
+                            
+                            <!-- Toggles -->
+                            <Border Background="#252525" CornerRadius="12" Padding="20">
+                                <StackPanel Spacing="20">
+                                    <Grid ColumnDefinitions="*, Auto">
+                                        <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,20,0">
+                                            <TextBlock Text="{Binding GeneralCloseLauncher^}" FontWeight="Bold" Foreground="White"/>
+                                            <TextBlock Text="{Binding GeneralCloseLauncherHint^}" FontSize="13" Foreground="Gray" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <checkboxInput:CheckboxInput Grid.Column="1" IsChecked="{Binding CloseAfterLaunch}"/>
+                                    </Grid>
+                                    
+                                    <Rectangle Height="1" Fill="#333333"/>
+                                    
+                                    <Grid ColumnDefinitions="*, Auto">
+                                        <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,20,0">
+                                            <TextBlock Text="{Binding GeneralDisableNews^}" FontWeight="Bold" Foreground="White"/>
+                                            <TextBlock Text="{Binding GeneralDisableNewsHint^}" FontSize="13" Foreground="Gray" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <checkboxInput:CheckboxInput Grid.Column="1" IsChecked="{Binding DisableNews}"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                        
+                        <!-- Visual Tab -->
+                        <StackPanel IsVisible="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter=visual}" Spacing="30">
+                            <TextBlock Text="{Binding VisualHeader^}" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="{StaticResource Poppins}"/>
+                            
+                            <!-- Accent Color -->
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="{Binding VisualAccentColor^}" FontWeight="Medium" Foreground="#CCCCCC"/>
+                                <ItemsControl ItemsSource="{Binding AccentColors}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:CompileBindings="False">
+                                            <Button Classes="AccentColorCard"
+                                                    Classes.Selected="{Binding IsSelected}"
+                                                    Command="{ReflectionBinding DataContext.SetAccentColorCommand, ElementName=Root}" 
+                                                    CommandParameter="{Binding}">
+                                                <Button.Background>
+                                                    <SolidColorBrush Color="{Binding Color}"/>
+                                                </Button.Background>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                            </StackPanel>
+                            
+                            <!-- Background -->
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="{Binding VisualBackground^}" FontWeight="Medium" Foreground="#CCCCCC"/>
+                                <ScrollViewer MaxHeight="300" HorizontalScrollBarVisibility="Disabled" Padding="0,0,20,0">
+                                     <ItemsControl ItemsSource="{Binding Backgrounds}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:BackgroundItem">
+                                                <Button Classes="BackgroundCard"
+                                                        Classes.Selected="{Binding IsSelected}"
+                                                        Command="{ReflectionBinding DataContext.SetBackgroundCommand, ElementName=Root}" 
+                                                        CommandParameter="{Binding Filename}"
+                                                        Content="{Binding Thumbnail}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                                
+                                <Button Content="{Binding VisualAutoShuffle^}" 
+                                        Command="{Binding SetBackgroundCommand}" 
+                                        CommandParameter="auto" 
+                                        HorizontalAlignment="Left"
+                                        Classes="TabButton"
+                                        Background="#333"
+                                        Foreground="White"/>
+                            </StackPanel>
+                        </StackPanel>
+                        
+                        <!-- Data Tab -->
+                        <StackPanel IsVisible="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter=data}" Spacing="30">
+                            <TextBlock Text="{Binding DataHeader^}" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="{StaticResource Poppins}"/>
+                            
+                            <!-- Game Directory -->
+                            <StackPanel Spacing="8">
+                                <actionInput:ActionInput Label="{Binding DataGameDir^}" Text="{Binding InstanceDirectory}" IsReadOnly="True">
+                                    <actionInput:ActionInput.RightContent>
+                                        <Button Command="{ReflectionBinding OpenFolderCommand}" 
+                                                CommandParameter="{Binding InstanceDirectory}"
+                                                Background="#404040" 
+                                                Foreground="White" 
+                                                CornerRadius="6" 
+                                                Padding="12,8">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <svg:Svg Path="/Assets/Icons/folder-open.svg" Width="16" Height="16"/>
+                                                <TextBlock Text="{Binding GeneralBrowse^}" VerticalAlignment="Center" FontSize="13"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </actionInput:ActionInput.RightContent>
+                                </actionInput:ActionInput>
+                                <TextBlock Text="{Binding DataGameDirHint^}" FontSize="12" Foreground="Gray"/>
+                            </StackPanel>
+
+                            <!-- Launcher Directory -->
+                            <StackPanel Spacing="8">
+                                <actionInput:ActionInput Label="{Binding DataLauncherDir^}" Text="{Binding LauncherDataDirectory}" IsReadOnly="True">
+                                    <actionInput:ActionInput.RightContent>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Command="{ReflectionBinding OpenFolderCommand}" 
+                                                    CommandParameter="{Binding LauncherDataDirectory}"
+                                                    Background="#404040" 
+                                                    Foreground="White" 
+                                                    CornerRadius="6" 
+                                                    Padding="12,8">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <svg:Svg Path="/Assets/Icons/folder-open.svg" Width="16" Height="16"/>
+                                                    <TextBlock Text="{Binding DataOpen^}" VerticalAlignment="Center" FontSize="13"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Command="{Binding BrowseLauncherDataCommand}" 
+                                                    Background="#404040" 
+                                                    Foreground="White" 
+                                                    CornerRadius="6" 
+                                                    Padding="12,8">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <svg:Svg Path="/Assets/Icons/hard-drive.svg" Width="16" Height="16"/>
+                                                    <TextBlock Text="{Binding GeneralBrowse^}" VerticalAlignment="Center" FontSize="13"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </actionInput:ActionInput.RightContent>
+                                </actionInput:ActionInput>
+                                <TextBlock Text="{Binding DataLauncherDirHint^}" FontSize="12" Foreground="Gray"/>
+                            </StackPanel>
+
+                           <!-- Clean Data -->
+                           <Border Background="#252525" CornerRadius="12" Padding="20">
+                                <StackPanel Grid.Column="0" Spacing="5">
+                                    <TextBlock Text="{Binding DataClean^}" FontWeight="Bold" Foreground="White"/>
+                                    <TextBlock Text="{Binding DataCleanHint^}" FontSize="13" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                                    <Button Content="{Binding DataCleanAction^}" 
+                                            IsEnabled="False"
+                                            Background="#33FF4444" 
+                                            Foreground="#FF8888" 
+                                            HorizontalAlignment="Left"
+                                            Padding="15,8"
+                                            CornerRadius="6"/>
+                                </StackPanel>
+                           </Border>
+
+                        </StackPanel>
+                        
+                        <!-- Instances Tab -->
+                        <StackPanel IsVisible="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter=instances}" Spacing="24">
+                            <TextBlock Text="{Binding InstancesHeader^}" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="{StaticResource Poppins}"/>
+                            <multiSelectionInput:MultiSelectionInput Label="{Binding InstancesLaunchBranch^}"
+                                                       ItemsSource="{Binding LaunchVersions}"
+                                                       SelectedItem="{Binding AppliedLaunchVersion}"
+                                                       ListSelectedItem="{Binding SelectedLaunchVersion}"
+                                                       SelectionMode="Single"
+                                                       MinWidth="300"
+                                                       HorizontalAlignment="Left">
+                                <multiSelectionInput:MultiSelectionInput.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                            <svg:Svg Width="18" Height="18"
+                                                     Path="{ReflectionBinding DataContext.SelectedBranchIconPath, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            <TextBlock Text="{ReflectionBinding DataContext.AppliedLaunchBranchItem.DisplayName, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                       Foreground="White"
+                                                       FontSize="15"
+                                                       FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding ., Converter={StaticResource VersionDisplayConverter}}"
+                                                       Foreground="#888" FontSize="14"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </multiSelectionInput:MultiSelectionInput.ItemTemplate>
+
+                                <multiSelectionInput:MultiSelectionInput.ItemsTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <TextBlock Text="{Binding ., Converter={StaticResource VersionDisplayConverter}}"
+                                                   Foreground="White" FontSize="14"/>
+                                    </DataTemplate>
+                                </multiSelectionInput:MultiSelectionInput.ItemsTemplate>
+                                <multiSelectionInput:MultiSelectionInput.HeaderContent>
+                                    <Grid ColumnDefinitions="*,*" Background="#202020">
+                                        <!-- Release Button -->
+                                        <ToggleButton Grid.Column="0"
+                                                      IsChecked="{Binding IsReleaseBranchSelected}"
+                                                      IsEnabled="{Binding !IsReleaseBranchSelected}"
+                                                      Command="{Binding SelectReleaseBranchCommand}"
+                                                      Height="42"
+                                                      Padding="0"
+                                                      Background="Transparent"
+                                                      BorderBrush="#333"
+                                                      BorderThickness="0,0,1,0"
+                                                      CornerRadius="0"
+                                                      HorizontalContentAlignment="Center"
+                                                      VerticalContentAlignment="Center"
+                                                      Cursor="Hand">
+                                            <TextBlock Text="{Binding BranchReleaseLabel^}"
+                                                       FontSize="13"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Center"/>
+                                        </ToggleButton>
+                                        
+                                        <!-- Pre-release Button -->
+                                        <ToggleButton Grid.Column="1"
+                                                      IsChecked="{Binding IsPreReleaseBranchSelected}"
+                                                      IsEnabled="{Binding !IsPreReleaseBranchSelected}"
+                                                      Command="{Binding SelectPreReleaseBranchCommand}"
+                                                      Height="42"
+                                                      Padding="0"
+                                                      Background="Transparent"
+                                                      BorderThickness="0"
+                                                      CornerRadius="0"
+                                                      HorizontalContentAlignment="Center"
+                                                      VerticalContentAlignment="Center"
+                                                      Cursor="Hand">
+                                            <TextBlock Text="{Binding BranchPreReleaseLabel^}"
+                                                       FontSize="13"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Center"/>
+                                        </ToggleButton>
+                                        
+                                        <Grid.Styles>
+                                            <Style Selector="ToggleButton">
+                                                <Setter Property="Template">
+                                                    <ControlTemplate>
+                                                        <Border Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                Padding="{TemplateBinding Padding}">
+                                                            <ContentPresenter Content="{TemplateBinding Content}"
+                                                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter>
+                                                <Setter Property="Transitions">
+                                                    <Transitions>
+                                                        <BrushTransition Property="Background" Duration="0:0:0.1"/>
+                                                    </Transitions>
+                                                </Setter>
+                                            </Style>
+                                            
+                                            <Style Selector="ToggleButton:pointerover">
+                                                <Setter Property="Background" Value="#282828"/>
+                                            </Style>
+                                            
+                                            <Style Selector="ToggleButton:pressed">
+                                                <Setter Property="Background" Value="#1a1a1a"/>
+                                            </Style>
+                                            
+                                            <Style Selector="ToggleButton:disabled">
+                                                <Setter Property="Cursor" Value="Arrow"/>
+                                                <Setter Property="Background" Value="Transparent"/>
+                                            </Style>
+                                            
+                                            <Style Selector="ToggleButton:disabled:pointerover">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                            </Style>
+                                            
+                                            <Style Selector="ToggleButton TextBlock">
+                                                <Setter Property="Foreground" Value="#AAAAAA"/>
+                                                <Setter Property="FontWeight" Value="Normal"/>
+                                                <Setter Property="Transitions">
+                                                    <Transitions>
+                                                        <BrushTransition Property="Foreground" Duration="0:0:0.15"/>
+                                                    </Transitions>
+                                                </Setter>
+                                            </Style>
+                                            
+                                            <Style Selector="ToggleButton:checked TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource SystemAccentBrush}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </Style>
+                                        </Grid.Styles>
+                                    </Grid>
+                                </multiSelectionInput:MultiSelectionInput.HeaderContent>
+                            </multiSelectionInput:MultiSelectionInput>
+
+                            <!-- Instance List -->
+                            <ItemsControl ItemsSource="{Binding Instances}"
+                                          IsVisible="{Binding Instances, Converter={StaticResource CollectionEmptyToBoolConverter}, ConverterParameter=invert}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <Border Background="#252525" CornerRadius="12" Padding="16" Margin="0,0,0,10">
+                                            <Grid ColumnDefinitions="Auto, *, Auto" ColumnSpacing="14">
+                                                <!-- Icon -->
+                                                <Border Grid.Column="0" Width="44" Height="44" CornerRadius="8" Background="#333">
+                                                    <svg:Svg Path="/Assets/Icons/box.svg" Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                
+                                                <!-- Info -->
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                                                    <TextBlock Text="{Binding Version, StringFormat=v{0}}" FontWeight="Bold" Foreground="White"/>
+                                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Branch}" Foreground="Gray" FontSize="12"/>
+                                                        <TextBlock Text="•" Foreground="#444" FontSize="12"/>
+                                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                                                                    IsVisible="{Binding HasUserData}">
+                                                            <svg:Svg Path="/Assets/Icons/archive.svg" Width="12" Height="12"
+                                                                     Css="* { stroke: #999 !important; fill: none !important; }"/>
+                                                            <TextBlock Text="{Binding UserDataSize, Converter={StaticResource FileSizeConverter}}"
+                                                                       Foreground="Gray" FontSize="12"/>
+                                                        </StackPanel>
+                                                        <TextBlock Text="•" Foreground="#444" FontSize="12"
+                                                                   IsVisible="{Binding HasUserData}"/>
+                                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                            <svg:Svg Path="/Assets/Icons/hard-drive.svg" Width="12" Height="12"
+                                                                     Css="* { stroke: #999 !important; fill: none !important; }"/>
+                                                            <TextBlock Text="{Binding TotalSize, Converter={StaticResource FileSizeConverter}}"
+                                                                       Foreground="Gray" FontSize="12"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                                
+                                                <!-- Actions -->
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                    <Button Command="{Binding DataContext.OpenInstanceFolderCommand, ElementName=Root}" 
+                                                            CommandParameter="{Binding}"
+                                                            Background="Transparent" 
+                                                            Padding="8"
+                                                            CornerRadius="6"
+                                                            ToolTip.Tip="{Binding DataContext.InstancesOpenFolder^, ElementName=Root}">
+                                                        <svg:Svg Path="/Assets/Icons/folder.svg" Width="16" Height="16"/>
+                                                    </Button>
+                                                    <Button Command="{Binding DataContext.DeleteInstanceCommand, ElementName=Root}" 
+                                                            CommandParameter="{Binding}"
+                                                            Background="Transparent" 
+                                                            Padding="8"
+                                                            CornerRadius="6"
+                                                            Foreground="#FF5555"
+                                                            ToolTip.Tip="{Binding DataContext.InstancesDelete^, ElementName=Root}">
+                                                        <svg:Svg Path="/Assets/Icons/trash-2.svg" Width="16" Height="16"/>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Empty State -->
+                            <StackPanel IsVisible="{Binding Instances, Converter={StaticResource CollectionEmptyToBoolConverter}}"
+                                        HorizontalAlignment="Center"
+                                        Spacing="8"
+                                        Margin="0,10,0,0">
+                                <TextBlock Text=":(" FontSize="40" Foreground="#444" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding InstancesEmpty^}" FontSize="13" Foreground="Gray" HorizontalAlignment="Center" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </StackPanel>
+                        
+                        <!-- About Tab -->
+                        <StackPanel IsVisible="{Binding ActiveTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter=about}" Spacing="5">
+                            <!-- Header / Logo -->
+                            <StackPanel HorizontalAlignment="Center" Spacing="8" Margin="0,0,0,15">
+                                <Image Source="/Assets/logo.png" Width="80" Height="80" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                
+                                <TextBlock Text="{Binding AboutTitle^}" FontWeight="Bold" FontSize="22" HorizontalAlignment="Center" Foreground="White"/>
+                                <TextBlock Text="{Binding AboutDescription^}" Foreground="Gray" FontSize="13" HorizontalAlignment="Center"/>
+                                
+                                <!-- Social Icons -->
+                                <StackPanel Orientation="Horizontal" Spacing="15" HorizontalAlignment="Center" Margin="0,15">
+                                    <iconButton:IconButton Command="{Binding OpenGithubCommand}" 
+                                                        IconPath="/Assets/Icons/github.svg" 
+                                                        IconSize="22"
+                                                        Width="44" Height="44"
+                                                        ButtonBackground="#252525"
+                                                        ToolTip.Tip="GitHub"/>
+                                                        
+                                    <iconButton:IconButton Command="{Binding OpenDiscordCommand}" 
+                                                        IconPath="/Assets/Icons/discord.svg" 
+                                                        IconSize="22"
+                                                        Width="44" Height="44"
+                                                        ButtonBackground="#252525"
+                                                        ToolTip.Tip="Discord"/>
+
+                                    <iconButton:IconButton Command="{Binding ReportBugCommand}" 
+                                                        IconPath="/Assets/Icons/bug.svg" 
+                                                        IconSize="22"
+                                                        Width="44" Height="44"
+                                                        ButtonBackground="#252525"
+                                                        ToolTip.Tip="Report Bug"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Maintainers -->
+                            <ItemsControl ItemsSource="{Binding Maintainers}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="40"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <Button Command="{Binding OpenCommand}" Padding="0" BorderThickness="0" CornerRadius="8" Cursor="Hand" Classes="ProfileCard">
+                                            <StackPanel Orientation="Horizontal" Spacing="15" VerticalAlignment="Center" Margin="15">
+                                                <!-- Avatar -->
+                                                <Border Width="48" Height="48" CornerRadius="24" ClipToBounds="True" Background="#333">
+                                                     <Panel>
+                                                         <svg:Svg Path="/Assets/Icons/user.svg" Width="20" Height="20" Opacity="0.5" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNull}}"/>
+                                                         <Image Source="{Binding Avatar}" Stretch="UniformToFill" RenderOptions.BitmapInterpolationMode="HighQuality" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                                     </Panel>
+                                                </Border>
+                                                
+                                                <!-- Info -->
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" Foreground="White" FontSize="14"/>
+                                                    <TextBlock Text="{Binding Role}" FontSize="11" Foreground="#888"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Separator Text -->
+                            <TextBlock Text="{Binding AboutContributorsDescription^}" 
+                                       HorizontalAlignment="Center" 
+                                       Foreground="#555" 
+                                       FontSize="12" 
+                                       Margin="0,5,0,15"/>
+
+                            <!-- Contributors -->
+                            <ItemsControl ItemsSource="{Binding Contributors}" HorizontalAlignment="Center">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" MaxWidth="600" HorizontalAlignment="Center"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <Button Command="{Binding OpenCommand}" Padding="0" BorderThickness="0" Margin="4" CornerRadius="8" Cursor="Hand" Classes="ProfileCard">
+                                            <StackPanel Width="75" Margin="0,10">
+                                                <!-- Avatar Loop -->
+                                                <Panel>
+                                                     <!-- Real User -->
+                                                     <Border Width="40" Height="40" CornerRadius="20" ClipToBounds="True" Background="#252525" Margin="0,0,0,6" IsVisible="{Binding !IsOverflow}">
+                                                         <Panel>
+                                                             <svg:Svg Path="/Assets/Icons/user.svg" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.3" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNull}}"/>
+                                                             <Image Source="{Binding Avatar}" Stretch="UniformToFill" RenderOptions.BitmapInterpolationMode="HighQuality" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                                         </Panel>
+                                                     </Border>
+                                                     
+                                                     <!-- Overflow -->
+                                                     <Border Width="40" Height="40" CornerRadius="20" ClipToBounds="True" Background="#333" Margin="0,0,0,6" IsVisible="{Binding IsOverflow}">
+                                                         <TextBlock Text="{Binding OverflowCount, StringFormat='+{0}'}" 
+                                                                    Foreground="White" 
+                                                                    VerticalAlignment="Center" 
+                                                                    HorizontalAlignment="Center"
+                                                                    FontWeight="Bold"
+                                                                    FontSize="12"/>
+                                                     </Border>
+                                                </Panel>
+                                                
+                                                <TextBlock Text="{Binding Name}" 
+                                                           FontSize="11" 
+                                                           Foreground="#BBB" 
+                                                           HorizontalAlignment="Center" 
+                                                           TextAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            
+                            <!-- Disclaimer Footer -->
+                            <TextBlock Text="{Binding AboutDisclaimer^}" HorizontalAlignment="Center" FontSize="12" Foreground="#373737" Margin="0,20,0,0" TextWrapping="Wrap" TextAlignment="Center"/>
+
+                        </StackPanel>
+
+                    </Panel>
+                </ScrollViewer>
+                
+                <!-- Header / Close -->
+                <closeButton:CloseButton Command="{Binding CloseCommand}"
+                                     HorizontalAlignment="Right"
+                                     VerticalAlignment="Top"
+                                     Margin="20,20,20,0"/>
+
+                <!-- Profile Editor Overlay -->
+                <Grid Background="#99000000" IsVisible="{Binding IsProfileEditorOpen}">
+                    <ContentControl Content="{Binding CurrentProfileEditor}">
+                        <ContentControl.DataTemplates>
+                             <DataTemplate DataType="pe:ProfileEditorViewModel">
+                                  <pe:ProfileEditorView />
+                             </DataTemplate>
+                        </ContentControl.DataTemplates>
+                    </ContentControl>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+
+</UserControl>
