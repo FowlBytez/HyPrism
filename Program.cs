@@ -57,30 +57,20 @@ class Program
 
         try
         {
-            Console.WriteLine("""
-
- .-..-.      .---.       _                
- : :; :      : .; :     :_;               
- :    :.-..-.:  _.'.--. .-. .--. ,-.,-.,-.
- : :: :: :; :: :   : ..': :`._-.': ,. ,. :
- :_;:_;`._. ;:_;   :_;  :_;`.__.':_;:_;:_;
-        .-. :                             
-        `._.'                     launcher
-
-""");
+            // Intercept Console.Out/Error FIRST to route Electron.NET framework
+            // messages through our Logger instead of raw stdout/stderr.
+            // This must happen before any Console.Write/Logger calls to avoid
+            // "stdout: ..." noise in the Electron terminal.
+            var originalOut = Console.Out;
+            var originalErr = Console.Error;
+            Console.SetOut(new ElectronLogInterceptor(originalOut, isError: false));
+            Console.SetError(new ElectronLogInterceptor(originalErr, isError: true));
 
             Logger.Info("Boot", "Starting HyPrism (Electron.NET)...");
             Logger.Info("Boot", $"App Directory: {appDir}");
 
             // Initialize DI container
             var services = Bootstrapper.Initialize();
-
-            // Intercept Console.Out/Error to route Electron.NET framework
-            // messages through our Logger instead of raw stdout/stderr
-            var originalOut = Console.Out;
-            var originalErr = Console.Error;
-            Console.SetOut(new ElectronLogInterceptor(originalOut, isError: false));
-            Console.SetError(new ElectronLogInterceptor(originalErr, isError: true));
 
             // Start Electron runtime and wait for socket bridge
             Logger.Info("Boot", "Starting Electron runtime...");
