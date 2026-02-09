@@ -618,6 +618,7 @@
     "pause": "Pause",
     "next": "Nächster",
     "previous": "Vorheriger",
-    "volume": "Lautstärke"
+    "volume": "Lautstärke",
+    "on": "Musik"
   }
 }

@@ -610,6 +610,7 @@
     "mute": "Mute",
     "nowPlaying": "Reproduciendo",
     "play": "Reproducir",
-    "pause": "Pausa"
+    "pause": "Pausa",
+    "on": "Música"
   }
 }

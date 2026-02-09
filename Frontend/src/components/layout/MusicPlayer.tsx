@@ -23,15 +23,14 @@ const musicTracks = [
 import { ipc } from '@/lib/ipc';
 
 interface MusicPlayerProps {
-  className?: string;
+  className?: string; // Kept for compatibility but unused
+  muted?: boolean;
   forceMuted?: boolean;
 }
 
-export const MusicPlayer: React.FC<MusicPlayerProps> = memo(({ className = '', forceMuted = false }) => {
+export const MusicPlayer: React.FC<MusicPlayerProps> = memo(({ className = '', muted = false, forceMuted = false }) => {
   const { t } = useTranslation();
-  const { accentColor } = useAccentColor();
-  const [isMuted, setIsMuted] = useState(true);
-  const [configLoaded, setConfigLoaded] = useState(false);
+  // Internal isMuted state removed - controlled by prop
   const [currentTrack, setCurrentTrack] = useState(() => 
     Math.floor(Math.random() * musicTracks.length)
   );
@@ -50,34 +49,18 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = memo(({ className = '', f
     return next;
   }, []);
 
-  // Load saved music preference from backend config on mount
-  useEffect(() => {
-    ipc.settings.get().then((s) => {
-      setIsMuted(!(s.musicEnabled ?? true));
-      setConfigLoaded(true);
-    }).catch(() => {
-      setIsMuted(false);
-      setConfigLoaded(true);
-    });
-  }, []);
-
-  // Save mute preference to backend when it changes (after initial load)
-  useEffect(() => {
-    if (configLoaded) {
-      ipc.settings.update({ musicEnabled: !isMuted }).catch(console.error);
-    }
-  }, [isMuted, configLoaded]);
-
-  // Handle forceMuted prop with smooth fade
+  // Handle forceMuted or muted prop change with smooth fade
   useEffect(() => {
     if (!audioRef.current) return;
+
+    const shouldBeSilent = muted || forceMuted;
 
     if (fadeIntervalRef.current) {
       clearInterval(fadeIntervalRef.current);
       fadeIntervalRef.current = null;
     }
 
-    if (forceMuted && !isFading) {
+    if (shouldBeSilent && !isFading) {
       setIsFading(true);
       const startVolume = audioRef.current.volume;
       const steps = 20;
@@ -99,7 +82,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = memo(({ className = '', f
           setIsFading(false);
         }
       }, stepTime);
-    } else if (!forceMuted && audioRef.current.paused && !isMuted) {
+    } else if (!shouldBeSilent && audioRef.current.paused) {
       setIsFading(true);
       const targetVolume = targetVolumeRef.current;
       audioRef.current.volume = 0;
@@ -130,7 +113,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = memo(({ className = '', f
     return () => {
       if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
     };
-  }, [forceMuted, isMuted]);
+  }, [forceMuted, muted]);
 
   // Handle track ending - play next random track
   const handleEnded = useCallback(() => {
@@ -138,70 +121,35 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = memo(({ className = '', f
     setCurrentTrack(nextTrack);
   }, [currentTrack, getNextRandomTrack]);
 
-  // Play audio when track changes or config loads
+  // Play audio when track changes
   useEffect(() => {
-    if (!configLoaded || !audioRef.current) return;
+    if (!audioRef.current) return;
 
     const audio = audioRef.current;
     audio.volume = targetVolumeRef.current;
 
     // Play if not muted and not force muted
-    if (!isMuted && !forceMuted) {
+    if (!muted && !forceMuted) {
       audio.play().catch(err => {
         console.log('Auto-play blocked:', err);
-        
         const handleUserInteraction = async () => {
-          try {
-            await audio.play();
+            try { await audio.play(); } catch {}
             document.removeEventListener('click', handleUserInteraction);
             document.removeEventListener('keydown', handleUserInteraction);
-          } catch {}
         };
-
         document.addEventListener('click', handleUserInteraction);
         document.addEventListener('keydown', handleUserInteraction);
       });
     }
-  }, [currentTrack, configLoaded, isMuted, forceMuted]);
-
-  const toggleMute = () => {
-    if (audioRef.current) {
-      const newMutedState = !isMuted;
-      setIsMuted(newMutedState);
-      
-      if (!newMutedState && audioRef.current.paused) {
-        audioRef.current.play().catch(() => {
-          console.log('Auto-play prevented after unmute');
-        });
-      } else if (newMutedState && !audioRef.current.paused) {
-        audioRef.current.pause();
-      }
-    }
-  };
+  }, [currentTrack, muted, forceMuted]);
 
   return (
-    <>
-      <audio
-        ref={audioRef}
-        src={musicTracks[currentTrack]}
-        onEnded={handleEnded}
-        preload="auto"
-      />
-      <button
-        onClick={toggleMute}
-        disabled={forceMuted}
-        className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${forceMuted ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
-        title={forceMuted ? t('music.mutedWhilePlaying') : isMuted ? t('music.unmute') : t('music.mute')}
-      >
-        {forceMuted ? (
-          <VolumeX size={20} className="text-gray-500" />
-        ) : isMuted ? (
-          <VolumeX size={20} className="text-gray-400" />
-        ) : (
-          <Volume2 size={20} style={{ color: accentColor }} />
-        )}
-      </button>
-    </>
+    <audio
+      ref={audioRef}
+      src={musicTracks[currentTrack]}
+      onEnded={handleEnded}
+      preload="auto"
+    />
   );
 });
 

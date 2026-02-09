@@ -56,6 +56,26 @@ public interface ISettingsService
     bool SetLauncherBranch(string branch);
     
     /// <summary>
+    /// Gets the game version branch type (e.g. "release", "beta").
+    /// </summary>
+    string GetVersionType();
+
+    /// <summary>
+    /// Sets the game version branch type.
+    /// </summary>
+    bool SetVersionType(string type);
+
+    /// <summary>
+    /// Gets the selected game version number.
+    /// </summary>
+    int GetSelectedVersion();
+
+    /// <summary>
+    /// Sets the selected game version number.
+    /// </summary>
+    bool SetSelectedVersion(int version);
+
+    /// <summary>
     /// Gets whether the launcher should close after launching the game.
     /// </summary>
     /// <returns><c>true</c> if launcher closes after launch; otherwise, <c>false</c>.</returns>

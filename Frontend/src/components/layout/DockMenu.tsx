@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Home, Newspaper, Package, Users, HardDrive, Settings, type LucideIcon } from 'lucide-react';
+import { Home, Newspaper, Package, Users, HardDrive, Settings, Volume2, VolumeX, type LucideIcon } from 'lucide-react';
 import { useAccentColor } from '../../contexts/AccentColorContext';
 import { useTranslation } from 'react-i18next';
 
@@ -24,14 +24,17 @@ const dockItems: DockItem[] = [
 interface DockMenuProps {
   activePage: PageType;
   onPageChange: (page: PageType) => void;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
 }
 
-export const DockMenu: React.FC<DockMenuProps> = ({ activePage, onPageChange }) => {
+export const DockMenu: React.FC<DockMenuProps> = ({ activePage, onPageChange, isMuted = false, onToggleMute }) => {
   const { accentColor } = useAccentColor();
   const { t } = useTranslation();
 
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50">
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3">
+      {/* Main Menu */}
       <motion.div
         initial={{ y: 60, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -90,6 +93,45 @@ export const DockMenu: React.FC<DockMenuProps> = ({ activePage, onPageChange }) 
           );
         })}
       </motion.div>
+
+      {/* Mute Button Block */}
+      {onToggleMute && (
+        <motion.div
+          initial={{ y: 60, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: 'spring', damping: 22, stiffness: 180, delay: 0.4 }}
+          className="flex items-center px-1.5 py-1.5 rounded-2xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%)',
+            backdropFilter: 'blur(40px) saturate(200%)',
+            WebkitBackdropFilter: 'blur(40px) saturate(200%)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08)',
+          }}
+        >
+          <button
+            onClick={onToggleMute}
+            className="relative flex flex-col items-center gap-0.5 px-3.5 py-1.5 rounded-xl transition-colors duration-200 group cursor-pointer select-none"
+          >
+            <motion.div
+              whileHover={{ scale: 1.15, y: -1 }}
+              whileTap={{ scale: 0.9 }}
+              className="relative z-10 transition-colors duration-200"
+            >
+              {isMuted ? <VolumeX size={20} className="text-red-500" /> : <Volume2 size={20} className="text-green-500" />}
+            </motion.div>
+            <span
+              className="text-[10px] font-medium relative z-10 transition-colors duration-200 text-white/35 group-hover:text-white/60"
+            >
+              {t('music.on')}
+            </span>
+            <div
+              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+              style={{ background: 'rgba(255,255,255,0.05)' }}
+            />
+          </button>
+        </motion.div>
+      )}
     </div>
   );
 };

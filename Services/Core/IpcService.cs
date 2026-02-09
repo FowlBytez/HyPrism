@@ -223,7 +223,7 @@ public class IpcService
         {
             try
             {
-                var isRunning = gameProcessService.IsGameRunning();
+                var isRunning = gameProcessService.CheckForRunningGame();
                 Logger.Info("IPC", $"Game running check: {isRunning}");
                 Reply("hyprism:game:isRunning:reply", isRunning);
             }
@@ -342,6 +342,8 @@ public class IpcService
                 language = settings.GetLanguage(),
                 musicEnabled = settings.GetMusicEnabled(),
                 launcherBranch = settings.GetLauncherBranch(),
+                versionType = settings.GetVersionType(),
+                selectedVersion = settings.GetSelectedVersion(),
                 closeAfterLaunch = settings.GetCloseAfterLaunch(),
                 showDiscordAnnouncements = settings.GetShowDiscordAnnouncements(),
                 disableNews = settings.GetDisableNews(),
@@ -382,6 +384,8 @@ public class IpcService
             case "language": s.SetLanguage(val.GetString() ?? "en-US"); break;
             case "musicEnabled": s.SetMusicEnabled(val.GetBoolean()); break;
             case "launcherBranch": s.SetLauncherBranch(val.GetString() ?? "release"); break;
+            case "versionType": s.SetVersionType(val.GetString() ?? "release"); break;
+            case "selectedVersion": s.SetSelectedVersion(val.ValueKind == JsonValueKind.Number ? val.GetInt32() : 0); break;
             case "closeAfterLaunch": s.SetCloseAfterLaunch(val.GetBoolean()); break;
             case "showDiscordAnnouncements": s.SetShowDiscordAnnouncements(val.GetBoolean()); break;
             case "disableNews": s.SetDisableNews(val.GetBoolean()); break;

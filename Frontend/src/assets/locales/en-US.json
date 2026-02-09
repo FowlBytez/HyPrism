@@ -601,6 +601,7 @@
   "music": {
     "mutedWhilePlaying": "Music muted while game is running",
     "unmute": "Unmute",
-    "mute": "Mute"
+    "mute": "Mute",
+    "on": "Music"
   }
 }

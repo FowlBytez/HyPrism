@@ -97,6 +97,32 @@ public class SettingsService : ISettingsService
         return true;
     }
 
+    // ========== Version & Branch Settings ==========
+
+    /// <inheritdoc/>
+    public string GetVersionType() => _configService.Configuration.VersionType;
+
+    /// <inheritdoc/>
+    public bool SetVersionType(string type)
+    {
+        if (_configService.Configuration.VersionType == type) return false;
+        _configService.Configuration.VersionType = type;
+        _configService.SaveConfig();
+        return true;
+    }
+
+    /// <inheritdoc/>
+    public int GetSelectedVersion() => _configService.Configuration.SelectedVersion;
+
+    /// <inheritdoc/>
+    public bool SetSelectedVersion(int version)
+    {
+        if (_configService.Configuration.SelectedVersion == version) return false;
+        _configService.Configuration.SelectedVersion = version;
+        _configService.SaveConfig();
+        return true;
+    }
+
     // ========== Close After Launch Setting ==========
     
     /// <inheritdoc/>

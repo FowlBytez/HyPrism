@@ -7,7 +7,6 @@ import { ipc } from '@/lib/ipc';
 import { GameBranch } from '../constants/enums';
 import { DiscordIcon } from '../components/icons/DiscordIcon';
 import { formatBytes } from '../utils/format';
-import hytaleLogo from '../assets/images/logo.png';
 
 // VersionStatus type
 export type VersionStatus = {
@@ -71,6 +70,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
   const [localAvatar, setLocalAvatar] = useState<string | null>(null);
   const [isBranchOpen, setIsBranchOpen] = useState(false);
   const [isVersionOpen, setIsVersionOpen] = useState(false);
+  const [versionDropdownLeft, setVersionDropdownLeft] = useState(0);
   const [showCancelButton, setShowCancelButton] = useState(false);
   const branchRef = useRef<HTMLDivElement>(null);
   const versionRef = useRef<HTMLDivElement>(null);
@@ -343,7 +343,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
           transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
           className="flex flex-col items-center gap-3"
         >
-          <img src={hytaleLogo} alt="Hytale" className="h-28 drop-shadow-2xl" />
+          <div className="flex flex-col items-center select-none">
+            <h1 className="text-8xl tracking-tighter leading-tight font-black drop-shadow-xl" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+              <span className="text-white">Hy</span>
+              <motion.span 
+                className="bg-clip-text text-transparent bg-[length:200%_auto]" 
+                style={{ 
+                  backgroundImage: `linear-gradient(90deg, ${accentColor}, #22d3ee, #e879f9, ${accentColor})`,
+                  filter: `drop-shadow(0 0 30px ${accentColor}66)`
+                }}
+                animate={{ backgroundPosition: ['0%', '200%'] }}
+                transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+              >Prism</motion.span>
+            </h1>
+          </div>
         </motion.div>
 
         {/* Merged Branch/Version/Play Button */}
@@ -401,7 +414,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
                         className="h-full px-4 flex items-center gap-2 text-white/60 hover:text-white hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
                       >
                         <GitBranch size={14} className="text-white/70" />
-                        <span className="text-sm font-medium">{branchLabel}</span>
+                        <span className="text-sm font-medium whitespace-nowrap">{branchLabel}</span>
                         <ChevronDown size={11} className={`text-white/40 transition-transform ${isBranchOpen ? 'rotate-180' : ''}`} />
                       </button>
                     </div>
@@ -411,11 +424,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
                     {/* Version Selector Button */}
                     <div ref={versionRef} className="h-full">
                       <button
-                        onClick={() => { setIsVersionOpen(!isVersionOpen); setIsBranchOpen(false); }}
+                        onClick={() => { 
+                          if (versionRef.current) setVersionDropdownLeft(versionRef.current.offsetLeft);
+                          setIsVersionOpen(!isVersionOpen); 
+                          setIsBranchOpen(false); 
+                        }}
                         disabled={props.isLoadingVersions}
                         className="h-full px-4 flex items-center gap-2 text-white/60 hover:text-white hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
                       >
-                        <span className="text-sm font-medium">
+                        <span className="text-sm font-medium whitespace-nowrap">
                           {props.isLoadingVersions ? '...' : props.currentVersion === 0 ? t('main.latest') : `v${props.currentVersion}`}
                         </span>
                         <ChevronDown size={11} className={`text-white/40 transition-transform ${isVersionOpen ? 'rotate-180' : ''}`} />
@@ -469,7 +486,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute top-full left-0 mt-2 z-[100] min-w-[140px] max-h-[168px] overflow-y-auto bg-[#1a1a1a] backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-black/50 p-1"
+                  className="absolute top-full mt-2 z-[100] min-w-[140px] max-h-[168px] overflow-y-auto bg-[#1a1a1a] backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-black/50 p-1"
+                  style={{ left: versionDropdownLeft }}
                 >
                   {props.availableVersions.length > 0 ? (
                     props.availableVersions.map((version) => {
@@ -502,11 +520,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
             <AnimatePresence>
               {props.isDownloading && props.launchState !== 'complete' && (
                 <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 8, x: '-50%' }}
+                  animate={{ opacity: 1, y: 0, x: '-50%' }}
+                  exit={{ opacity: 0, y: 8, x: '-50%' }}
                   transition={{ duration: 0.2 }}
-                  className="absolute top-full mt-2 w-full"
+                  className="absolute top-full mt-2 w-[350px] left-1/2"
                 >
                   <div className="bg-black/60 backdrop-blur-md rounded-xl px-3 py-2 border border-white/5">
                     {/* Progress bar container */}

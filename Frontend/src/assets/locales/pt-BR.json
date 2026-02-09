@@ -607,6 +607,7 @@
     "mute": "Mute",
     "nowPlaying": "Tocando agora",
     "play": "Tocar",
-    "pause": "Pausar"
+    "pause": "Pausar",
+    "on": "Música"
   }
 }

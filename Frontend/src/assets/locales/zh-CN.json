@@ -615,6 +615,7 @@
     "pause": "暂停",
     "next": "下一首",
     "previous": "上一首",
-    "volume": "音量"
+    "volume": "音量",
+    "on": "音乐"
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence } from 'framer-motion';
 import { ipc, on, NewsItem } from '@/lib/ipc';
@@ -50,6 +50,7 @@ function EventsOn(event: string, cb: (...args: any[]) => void): () => void {
 
 // Settings-backed getters
 async function GetBackgroundMode(): Promise<string> { return (await ipc.settings.get()).backgroundMode ?? 'image'; }
+async function GetMusicEnabled(): Promise<boolean> { return (await ipc.settings.get()).musicEnabled ?? true; }
 async function GetAccentColor(): Promise<string> { return (await ipc.settings.get()).accentColor ?? '#FF6B2B'; }
 async function GetCloseAfterLaunch(): Promise<boolean> { return (await ipc.settings.get()).closeAfterLaunch ?? false; }
 async function GetDisableNews(): Promise<boolean> { return (await ipc.settings.get()).disableNews ?? false; }
@@ -77,9 +78,17 @@ const DeleteGame = stub('DeleteGame', false);
 const Update = stub('Update', undefined as void);
 const ExitGame = stub('ExitGame', undefined as void);
 const GetRecentLogs = stub<string[]>('GetRecentLogs', []);
-const GetVersionType = stub('GetVersionType', 'release');
-const SetVersionType = stub<void>('SetVersionType', undefined as void);
-const SetSelectedVersion = stub<void>('SetSelectedVersion', undefined as void);
+
+// Real IPC implementation for Version Persistence
+async function GetVersionType(): Promise<string> { 
+  return (await ipc.settings.get()).versionType as string ?? 'release'; 
+}
+async function SetVersionType(type: string): Promise<void> { 
+  await ipc.settings.update({ versionType: type });
+}
+async function SetSelectedVersion(version: number): Promise<void> {
+  await ipc.settings.update({ selectedVersion: version });
+}
 
 // Real IPC call to check if game is running
 async function IsGameRunning(): Promise<boolean> {
@@ -269,6 +278,15 @@ const App: React.FC = () => {
   const [backgroundMode, setBackgroundMode] = useState<string>('slideshow');
   const [newsDisabled, setNewsDisabled] = useState<boolean>(false);
   const [_accentColor, setAccentColor] = useState<string>('#FFA845'); // Used only for SettingsModal callback
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  
+  const handleToggleMute = useCallback(() => {
+     setIsMuted(prev => {
+       const newState = !prev;
+       ipc.settings.update({ musicEnabled: !newState });
+       return newState;
+     });
+  }, []);
 
   // Keep refs in sync with state for event listeners
   useEffect(() => {
@@ -429,6 +447,23 @@ const App: React.FC = () => {
     await SetSelectedVersion(version);
   };
 
+  // Check for existing game process on startup
+  useEffect(() => {
+    const checkExistingGame = async () => {
+      try {
+        const running = await IsGameRunning();
+        if (running) {
+          console.log('[App] Found existing game process, connecting...');
+          setIsGameRunning(true);
+          setLaunchState('running');
+        }
+      } catch (e) {
+        console.error('[App] Failed to check existing game process:', e);
+      }
+    };
+    checkExistingGame();
+  }, []);
+
   // Game state polling with launch timeout detection
   useEffect(() => {
     if (!isGameRunning) {
@@ -521,6 +556,7 @@ const App: React.FC = () => {
     GetBackgroundMode().then((mode: string) => setBackgroundMode(mode || 'slideshow'));
     GetDisableNews().then((disabled: boolean) => setNewsDisabled(disabled));
     GetAccentColor().then((color: string) => setAccentColor(color || '#FFA845'));
+    GetMusicEnabled().then((enabled: boolean) => setIsMuted(!enabled));
 
     // Load saved branch and version - must load branch first, then version
     const loadSettings = async () => {
@@ -1159,10 +1195,8 @@ const App: React.FC = () => {
     <div className="relative w-screen h-screen bg-[#090909] text-white overflow-hidden font-sans select-none">
       <BackgroundImage mode={backgroundMode} />
 
-      {/* Music Player - positioned in top right */}
-      <div className="absolute top-4 right-4 z-20">
-        <MusicPlayer forceMuted={isGameRunning} />
-      </div>
+      {/* Music Player - invisible, controlled by DockMenu */}
+      <MusicPlayer muted={isMuted} forceMuted={isGameRunning} />
 
       {isUpdatingLauncher && (
         <UpdateOverlay
@@ -1268,7 +1302,12 @@ const App: React.FC = () => {
       </main>
 
       {/* Floating Dock Menu */}
-      <DockMenu activePage={currentPage} onPageChange={setCurrentPage} />
+      <DockMenu 
+        activePage={currentPage} 
+        onPageChange={setCurrentPage} 
+        isMuted={isMuted}
+        onToggleMute={handleToggleMute}
+      />
 
       {/* Modals - only essential overlays */}
       <Suspense fallback={<ModalFallback />}>
