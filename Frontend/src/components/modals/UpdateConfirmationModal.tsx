@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, HardDrive, AlertTriangle, Copy, SkipForward } from 'lucide-react';
-import { useAccentColor } from '../contexts/AccentColorContext';
+import { useAccentColor } from '../../contexts/AccentColorContext';
 
 interface UpdateConfirmationModalProps {
     oldVersion: number;

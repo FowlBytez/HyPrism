@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Minus, Square, X } from 'lucide-react';
 import { ipc } from '@/lib/ipc';
-import appIcon from '../assets/appicon.svg';
+import appIcon from '../../assets/appicon.svg';
 
 export const Titlebar: React.FC = () => {
   const [version, setVersion] = useState<string>('');

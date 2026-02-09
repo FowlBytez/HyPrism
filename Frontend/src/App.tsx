@@ -1,25 +1,27 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AnimatePresence } from 'framer-motion';
 import { ipc, on, NewsItem } from '@/lib/ipc';
 import { GameBranch } from './constants/enums';
-import { BackgroundImage } from './components/BackgroundImage';
-import { ProfileSection } from './components/ProfileSection';
-import { ControlSection } from './components/ControlSection';
-import { MusicPlayer } from './components/MusicPlayer';
-import { UpdateOverlay } from './components/UpdateOverlay';
-import { DiscordIcon } from './components/DiscordIcon';
+import { BackgroundImage } from './components/layout/BackgroundImage';
+import { MusicPlayer } from './components/layout/MusicPlayer';
+import { UpdateOverlay } from './components/layout/UpdateOverlay';
+import { DockMenu } from './components/layout/DockMenu';
+import type { PageType } from './components/layout/DockMenu';
+import { DashboardPage } from './pages/DashboardPage';
+import { NewsPage } from './pages/NewsPage';
+import { ModManagerPage } from './pages/ModManagerPage';
+import { ProfilesPage } from './pages/ProfilesPage';
+import { InstancesPage } from './pages/InstancesPage';
+import { SettingsPage } from './pages/SettingsPage';
 // Controller detection removed - not using floating indicator
-import hytaleLogo from './assets/logo.png';
 
 // Lazy load heavy modals for better initial load performance
-const ErrorModal = lazy(() => import('./components/ErrorModal').then(m => ({ default: m.ErrorModal })));
-const DeleteConfirmationModal = lazy(() => import('./components/DeleteConfirmationModal').then(m => ({ default: m.DeleteConfirmationModal })));
-const ModManager = lazy(() => import('./components/ModManager').then(m => ({ default: m.ModManager })));
-const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
-const UpdateConfirmationModal = lazy(() => import('./components/UpdateConfirmationModal').then(m => ({ default: m.UpdateConfirmationModal })));
 const NewsPreview = lazy(() => import('./components/NewsPreview').then(m => ({ default: m.NewsPreview })));
-const ProfileEditor = lazy(() => import('./components/ProfileEditor').then(m => ({ default: m.ProfileEditor })));
-const OnboardingModal = lazy(() => import('./components/OnboardingModal').then(m => ({ default: m.OnboardingModal })));
+const ErrorModal = lazy(() => import('./components/modals/ErrorModal').then(m => ({ default: m.ErrorModal })));
+const DeleteConfirmationModal = lazy(() => import('./components/modals/DeleteConfirmationModal').then(m => ({ default: m.DeleteConfirmationModal })));
+const UpdateConfirmationModal = lazy(() => import('./components/modals/UpdateConfirmationModal').then(m => ({ default: m.UpdateConfirmationModal })));
+const OnboardingModal = lazy(() => import('./components/modals/OnboardingModal').then(m => ({ default: m.OnboardingModal })));
 
 // VersionStatus type (was in api/backend)
 type VersionStatus = {
@@ -28,9 +30,8 @@ type VersionStatus = {
   latestVersion?: number;
 };
 
-// ── IPC-backed helpers ──────────────────────────────────────────
 // Functions that map to real IPC channels
-const BrowserOpenURL = (url: string) => ipc.browser.open(url);
+const _BrowserOpenURL = (url: string) => ipc.browser.open(url);
 const WindowClose = () => ipc.windowCtl.close();
 const CancelDownload = () => ipc.game.cancel();
 const GetNews = (_count: number): Promise<NewsItem[]> => ipc.news.get();
@@ -71,7 +72,7 @@ const stub = <T,>(name: string, fallback: T) => async (..._args: any[]): Promise
   console.warn(`[IPC] ${name}: no IPC channel yet`);
   return fallback;
 };
-const OpenInstanceFolder = stub('OpenInstanceFolder', undefined as void);
+const _OpenInstanceFolder = stub('OpenInstanceFolder', undefined as void);
 const DeleteGame = stub('DeleteGame', false);
 const Update = stub('Update', undefined as void);
 const ExitGame = stub('ExitGame', undefined as void);
@@ -95,7 +96,7 @@ const WrapperInstallLatest = stub('WrapperInstallLatest', true);
 const WrapperLaunch = stub('WrapperLaunch', true);
 const SetLauncherBranch = stub<void>('SetLauncherBranch', undefined as void);
 const CheckRosettaStatus = stub<{ NeedsInstall: boolean; Message: string; Command: string; TutorialUrl?: string } | null>('CheckRosettaStatus', null);
-const GetDiscordLink = stub('GetDiscordLink', 'https://discord.gg/hyprism');
+const _GetDiscordLink = stub('GetDiscordLink', 'https://discord.gg/hyprism');
 import appIcon from './assets/appicon.png';
 
 // Modal loading fallback - minimal spinner
@@ -180,13 +181,13 @@ const App: React.FC = () => {
 
   // Modal state
   const [showDelete, setShowDelete] = useState<boolean>(false);
-  const [showModManager, setShowModManager] = useState<boolean>(false);
   const [modManagerSearchQuery, setModManagerSearchQuery] = useState<string>('');
-  const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [showProfileEditor, setShowProfileEditor] = useState<boolean>(false);
   const [error, setError] = useState<any>(null);
   const [launchTimeoutError, setLaunchTimeoutError] = useState<{ message: string; logs: string[] } | null>(null);
   const [avatarRefreshTrigger, setAvatarRefreshTrigger] = useState<number>(0);
+
+  // Page navigation state
+  const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
 
   // Settings state
   const [launcherBranch, setLauncherBranch] = useState<string>('release');
@@ -870,7 +871,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCustomDirChange = async () => {
+  const _handleCustomDirChange = async () => {
     try {
       const input = window.prompt(
         t('Enter the full path where you want HyPrism instances stored:'),
@@ -1016,6 +1017,36 @@ const App: React.FC = () => {
     );
   }
 
+  // Helper to get combined news
+  const getCombinedNews = async (count: number) => {
+    const releases = await fetchLauncherReleases(i18n.language);
+    const hytale = await GetNews(Math.max(0, count));
+    const hytaleItems = (hytale || []).map((item: any) => {
+      const dateMs = parseDateMs(item?.publishedAt || item?.date);
+      return {
+        item: { ...item, source: 'hytale' as const, date: formatDateConsistent(dateMs, i18n.language) },
+        dateMs
+      };
+    });
+    return [...releases, ...hytaleItems]
+      .sort((a, b) => b.dateMs - a.dateMs)
+      .map((x) => x.item);
+  };
+
+  const handleInstanceDeleted = async () => {
+    const installed = await GetInstalledVersionsForBranch(currentBranch);
+    const latestInstalled = await IsVersionInstalled(currentBranch, 0);
+    const installedWithLatest = [...(installed || [])];
+    if (latestInstalled && !installedWithLatest.includes(0)) installedWithLatest.unshift(0);
+    setInstalledVersions(installedWithLatest);
+    const stillInstalled = await IsVersionInstalled(currentBranch, currentVersion);
+    setIsVersionInstalled(stillInstalled);
+    if (currentVersion === 0) {
+      const status = await GetLatestVersionStatus(currentBranch);
+      setVersionStatus(status);
+    }
+  };
+
   return (
     <div className="relative w-screen h-screen bg-[#090909] text-white overflow-hidden font-sans select-none">
       <BackgroundImage mode={backgroundMode} />
@@ -1033,123 +1064,103 @@ const App: React.FC = () => {
         />
       )}
 
-      <main className="relative z-10 h-full p-10 flex flex-col justify-between pt-[60px]">
-        <div className="flex justify-between items-start">
-          <ProfileSection
-            username={username}
-            uuid={uuid}
-            isEditing={isEditing}
-            onEditToggle={setIsEditing}
-            onUserChange={handleNickChange}
-            updateAvailable={!!updateAsset}
-            onUpdate={handleUpdate}
-            launcherVersion={launcherVersion}
-            onOpenProfileEditor={() => setShowProfileEditor(true)}
-            refreshTrigger={avatarRefreshTrigger}
-          />
-          {/* Hytale Logo & News - Right Side */}
-          <div className="flex flex-col items-end gap-3">
-            <img src={hytaleLogo} alt="Hytale" className="h-24 drop-shadow-2xl" />
-            {/* Social Buttons Row */}
-            <div className="flex items-center gap-3">
-              {/* Discord Button */}
-              <button
-                onClick={async () => {
-                  const link = await GetDiscordLink();
-                  BrowserOpenURL(link);
-                }}
-                className="p-2 rounded-xl hover:bg-[#5865F2]/20 transition-all duration-150 cursor-pointer active:scale-95"
-                title={t('Join Discord')}
-              >
-                <DiscordIcon size={28} className="drop-shadow-lg" />
-              </button>
-              {/* GitHub Button */}
-              <button
-                onClick={() => BrowserOpenURL('https://github.com/yyyumeniku/HyPrism')}
-                className="w-10 h-10 rounded-xl bg-transparent flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 active:scale-95 transition-all duration-150"
-                title={t('GitHub Repository')}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-              </button>
-              {/* Bug Report Button */}
-              <button
-                onClick={() => BrowserOpenURL('https://github.com/yyyumeniku/HyPrism/issues/new')}
-                className="w-10 h-10 rounded-xl bg-transparent flex items-center justify-center text-white/60 hover:text-red-400 hover:bg-red-400/10 active:scale-95 transition-all duration-150"
-                title={t('Report a Bug')}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
-              </button>
-            </div>
-            {!newsDisabled && (
-              <Suspense fallback={<div className="w-80 h-32 animate-pulse bg-white/5 rounded-xl" />}>
-                <NewsPreview
-                  isPaused={isDownloading}
-                  getNews={async (count) => {
-                    const releases = await fetchLauncherReleases(i18n.language);
-                    const hytale = await GetNews(Math.max(0, count));
+      {/* Page Content with Transitions */}
+      <main className="relative z-10 h-full">
+        <AnimatePresence mode="wait">
+          {currentPage === 'dashboard' && (
+            <DashboardPage
+              key="dashboard"
+              username={username}
+              uuid={uuid}
+              isEditing={isEditing}
+              launcherVersion={launcherVersion}
+              updateAvailable={!!updateAsset}
+              avatarRefreshTrigger={avatarRefreshTrigger}
+              onEditToggle={setIsEditing}
+              onUserChange={handleNickChange}
+              onOpenProfileEditor={() => setCurrentPage('profiles')}
+              onLauncherUpdate={handleUpdate}
+              isDownloading={isDownloading}
+              downloadState={downloadState}
+              canCancel={isDownloading && !isGameRunning && (downloadState === 'downloading' || downloadState === 'extracting')}
+              isGameRunning={isGameRunning}
+              isVersionInstalled={isVersionInstalled}
+              isCheckingInstalled={isCheckingInstalled}
+              versionStatus={versionStatus}
+              progress={progress}
+              downloaded={downloaded}
+              total={total}
+              currentBranch={currentBranch}
+              currentVersion={currentVersion}
+              availableVersions={availableVersions}
+              installedVersions={installedVersions}
+              isLoadingVersions={isLoadingVersions}
+              onBranchChange={handleBranchChange}
+              onVersionChange={handleVersionChange}
+              onPlay={handlePlay}
+              onDownload={handlePlay}
+              onUpdate={handleGameUpdate}
+              onDuplicate={handleGameDuplicate}
+              onExit={handleExit}
+              onCancelDownload={handleCancelDownload}
+            />
+          )}
 
-                    const hytaleItems = (hytale || []).map((item: any) => {
-                      const dateMs = parseDateMs(item?.publishedAt || item?.date);
-                      return {
-                        item: { 
-                          ...item, 
-                          source: 'hytale' as const,
-                          date: formatDateConsistent(dateMs, i18n.language)
-                        },
-                        dateMs
-                      };
-                    });
+          {currentPage === 'news' && (
+            <NewsPage
+              key="news"
+              getNews={getCombinedNews}
+              newsDisabled={newsDisabled}
+            />
+          )}
 
-                    const combined = [...releases, ...hytaleItems]
-                      .sort((a, b) => b.dateMs - a.dateMs)
-                      .map((x) => x.item);
+          {currentPage === 'mods' && (
+            <ModManagerPage
+              key="mods"
+              currentBranch={currentBranch}
+              currentVersion={currentVersion}
+              currentProfileName={username}
+              initialSearchQuery={modManagerSearchQuery}
+            />
+          )}
 
-                    return combined;
-                  }}
-                />
-              </Suspense>
-            )}
-          </div>
-        </div>
+          {currentPage === 'profiles' && (
+            <ProfilesPage
+              key="profiles"
+              onProfileUpdate={reloadProfile}
+            />
+          )}
 
-        <ControlSection
-          onPlay={handlePlay}
-          onDownload={handlePlay}
-          onUpdate={handleGameUpdate}
-          onDuplicate={handleGameDuplicate}
-          onExit={handleExit}
-          onCancelDownload={handleCancelDownload}
-          isDownloading={isDownloading}
-          downloadState={downloadState}
-          canCancel={isDownloading && !isGameRunning && (downloadState === 'downloading' || downloadState === 'extracting')}
-          isGameRunning={isGameRunning}
-          isVersionInstalled={isVersionInstalled}
-          isCheckingInstalled={isCheckingInstalled}
-          progress={progress}
-          downloaded={downloaded}
-          total={total}
-          currentBranch={currentBranch}
-          currentVersion={currentVersion}
-          availableVersions={availableVersions}
-          installedVersions={installedVersions}
-          isLoadingVersions={isLoadingVersions}
-          versionStatus={versionStatus}
-          onBranchChange={handleBranchChange}
-          onVersionChange={handleVersionChange}
-          onCustomDirChange={handleCustomDirChange}
-          onOpenSettings={() => setShowSettings(true)}
-          actions={{
-            openFolder: () => OpenInstanceFolder(currentBranch, currentVersion),
-            showDelete: () => setShowDelete(true),
-            showModManager: (query?: string) => {
-              setModManagerSearchQuery(query || '');
-              setShowModManager(true);
-            }
-          }}
-        />
+          {currentPage === 'instances' && (
+            <InstancesPage
+              key="instances"
+              onInstanceDeleted={handleInstanceDeleted}
+            />
+          )}
+
+          {currentPage === 'settings' && (
+            <SettingsPage
+              key="settings"
+              launcherBranch={launcherBranch}
+              onLauncherBranchChange={handleLauncherBranchChange}
+              rosettaWarning={rosettaWarning}
+              onBackgroundModeChange={(mode) => setBackgroundMode(mode)}
+              onNewsDisabledChange={(disabled) => setNewsDisabled(disabled)}
+              onAccentColorChange={(color) => setAccentColor(color)}
+              onInstanceDeleted={handleInstanceDeleted}
+              onNavigateToMods={(query) => {
+                setModManagerSearchQuery(query || '');
+                setCurrentPage('mods');
+              }}
+            />
+          )}
+        </AnimatePresence>
       </main>
 
-      {/* Modals - wrapped in Suspense for lazy loading */}
+      {/* Floating Dock Menu */}
+      <DockMenu activePage={currentPage} onPageChange={setCurrentPage} />
+
+      {/* Modals - only essential overlays */}
       <Suspense fallback={<ModalFallback />}>
         {showDelete && (
           <DeleteConfirmationModal
@@ -1193,58 +1204,6 @@ const App: React.FC = () => {
             onClose={() => setLaunchTimeoutError(null)}
           />
         )}
-
-        {showModManager && (
-          <ModManager
-            onClose={() => setShowModManager(false)}
-            currentBranch={currentBranch}
-            currentVersion={currentVersion}
-            initialSearchQuery={modManagerSearchQuery}
-            currentProfileName={username}
-          />
-        )}
-
-        {showSettings && (
-          <SettingsModal
-            onClose={() => setShowSettings(false)}
-            launcherBranch={launcherBranch}
-            onLauncherBranchChange={handleLauncherBranchChange}
-            onShowModManager={(query) => {
-              setModManagerSearchQuery(query || '');
-              setShowModManager(true);
-            }}
-            rosettaWarning={rosettaWarning}
-            onBackgroundModeChange={(mode) => setBackgroundMode(mode)}
-            onNewsDisabledChange={(disabled) => setNewsDisabled(disabled)}
-            onAccentColorChange={(color) => setAccentColor(color)}
-            onInstanceDeleted={async () => {
-              // Refresh installed versions for current branch after deletion
-              const installed = await GetInstalledVersionsForBranch(currentBranch);
-              const latestInstalled = await IsVersionInstalled(currentBranch, 0);
-              const installedWithLatest = [...(installed || [])];
-              if (latestInstalled && !installedWithLatest.includes(0)) installedWithLatest.unshift(0);
-              setInstalledVersions(installedWithLatest);
-              // Also refresh if current version was the one deleted
-              const stillInstalled = await IsVersionInstalled(currentBranch, currentVersion);
-              setIsVersionInstalled(stillInstalled);
-              // Refresh version status check
-              if (currentVersion === 0) {
-                const status = await GetLatestVersionStatus(currentBranch);
-                setVersionStatus(status);
-              }
-            }}
-          />
-        )}
-
-        {/* Profile Editor */}
-        {showProfileEditor && (
-          <ProfileEditor
-            isOpen={showProfileEditor}
-            onClose={() => setShowProfileEditor(false)}
-            onProfileUpdate={reloadProfile}
-          />
-        )}
-
       </Suspense>
     </div>
   );

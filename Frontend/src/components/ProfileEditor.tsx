@@ -4,7 +4,7 @@ import { X, RefreshCw, Check, User, Edit3, Copy, CheckCircle, Plus, Trash2, Dice
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccentColor } from '../contexts/AccentColorContext';
 import { ipc, Profile, ProfileSnapshot } from '@/lib/ipc';
-import { DeleteProfileConfirmationModal } from './DeleteProfileConfirmationModal';
+import { DeleteProfileConfirmationModal } from './modals/DeleteProfileConfirmationModal';
 
 // TODO: These functions need IPC channels in IpcService.cs
 // For now they use ipc.profile.* where possible and stubs elsewhere
@@ -65,10 +65,10 @@ interface ProfileEditorProps {
     isOpen: boolean;
     onClose: () => void;
     onProfileUpdate?: () => void;
+    pageMode?: boolean;
 }
 
-// Generate random usernames - ensures max 16 characters
-const generateRandomName = () => {
+function generateRandomName(): string {
     // Short adjectives (max 5 chars) + short nouns (max 6 chars) + 4-digit number = max 15 chars
     const adjectives = [
         'Happy', 'Swift', 'Brave', 'Noble', 'Quiet', 'Bold', 'Lucky', 'Epic',
@@ -88,9 +88,9 @@ const generateRandomName = () => {
     const name = `${adj}${noun}${num}`;
     // Safety check - truncate to 16 if somehow still too long
     return name.length <= 16 ? name : name.substring(0, 16);
-};
+}
 
-export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, onProfileUpdate }) => {
+export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, onProfileUpdate, pageMode: isPageMode = false }) => {
     const { t } = useTranslation();
     const { accentColor } = useAccentColor();
     const [uuid, setUuid] = useState<string>('');
@@ -469,7 +469,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
         }
     };
 
-    if (!isOpen) return null;
+    if (!isOpen && !isPageMode) return null;
 
     return (
         <AnimatePresence>
@@ -477,18 +477,21 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-                onClick={(e) => e.target === e.currentTarget && onClose()}
+                className={isPageMode
+                    ? "w-full h-full"
+                    : "fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                }
+                onClick={(e) => !isPageMode && e.target === e.currentTarget && onClose()}
             >
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden flex max-h-[80vh]"
+                    className={`bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex ${isPageMode ? 'w-full h-full' : 'w-full max-w-3xl mx-4 max-h-[80vh]'}`}
                 >
                     {/* Left Sidebar - Profiles List */}
                     <div className="w-48 bg-[#151515] border-r border-white/5 flex flex-col py-4 overflow-y-auto">
-                        <h2 className="text-lg font-bold text-white px-4 mb-4">{t('Saved Profiles')}</h2>
+                        {!isPageMode && <h2 className="text-lg font-bold text-white px-4 mb-4">{t('Saved Profiles')}</h2>}
                         
                         {/* Profile Navigation - All Profiles */}
                         <nav className="flex-1 space-y-1 px-2 overflow-y-auto">
@@ -592,16 +595,18 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
 
                     {/* Right Content - Profile Details */}
                     <div className="flex-1 flex flex-col min-w-0">
-                        {/* Header */}
-                        <div className="flex items-center justify-between p-4 border-b border-white/5">
-                            <h3 className="text-white font-medium">{t('Profile Editor')}</h3>
-                            <button
-                                onClick={onClose}
-                                className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
+                        {/* Header - only in modal mode */}
+                        {!isPageMode && (
+                            <div className="flex items-center justify-between p-4 border-b border-white/5">
+                                <h3 className="text-white font-medium">{t('Profile Editor')}</h3>
+                                <button
+                                    onClick={onClose}
+                                    className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                        )}
 
                         {/* Content */}
                         <div className="flex-1 p-6 overflow-y-auto">

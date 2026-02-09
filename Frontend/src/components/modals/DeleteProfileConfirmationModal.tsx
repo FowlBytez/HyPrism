@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Trash2, AlertTriangle, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useAccentColor } from '../contexts/AccentColorContext';
+import { useAccentColor } from '../../contexts/AccentColorContext';
 
 interface DeleteProfileConfirmationModalProps {
   profileName: string;

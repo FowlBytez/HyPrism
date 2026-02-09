@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useAccentColor } from '../contexts/AccentColorContext';
+import { useAccentColor } from '../../contexts/AccentColorContext';
 
 // Import music tracks
-import menu01 from '../assets/menu_01.ogg';
-import menu02 from '../assets/menu_02.ogg';
-import menu03 from '../assets/menu_03.ogg';
-import menu04 from '../assets/menu_04.ogg';
-import menu05 from '../assets/menu_05.ogg';
-import menu06 from '../assets/menu_06.ogg';
-import menu07 from '../assets/menu_07.ogg';
-import menu08 from '../assets/menu_08.ogg';
-import menu09 from '../assets/menu_09.ogg';
-import menu10 from '../assets/menu_10.ogg';
+import menu01 from '../../assets/menu_01.ogg';
+import menu02 from '../../assets/menu_02.ogg';
+import menu03 from '../../assets/menu_03.ogg';
+import menu04 from '../../assets/menu_04.ogg';
+import menu05 from '../../assets/menu_05.ogg';
+import menu06 from '../../assets/menu_06.ogg';
+import menu07 from '../../assets/menu_07.ogg';
+import menu08 from '../../assets/menu_08.ogg';
+import menu09 from '../../assets/menu_09.ogg';
+import menu10 from '../../assets/menu_10.ogg';
 
 const musicTracks = [
   menu01, menu02, menu03, menu04, menu05,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, Loader2, Languages, FlaskConical, RotateCcw, Monitor, Zap, Download, HardDrive, Package, RefreshCw, Pin, Box } from 'lucide-react';
+import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, Loader2, Languages, FlaskConical, RotateCcw, Monitor, Zap, Download, HardDrive, Package, RefreshCw, Pin, Box, Wifi } from 'lucide-react';
 import { ipc } from '@/lib/ipc';
 
 // Alias for compatibility — maps to ipc.browser.open
@@ -59,7 +59,7 @@ const ImportInstanceFromZip = _stub('ImportInstanceFromZip', true);
 const InstallOptimizationMods = _stub('InstallOptimizationMods', true);
 const GetLastExportPath = _stub('GetLastExportPath', '');
 import { useAccentColor } from '../contexts/AccentColorContext';
-import { DiscordIcon } from './DiscordIcon';
+import { DiscordIcon } from './icons/DiscordIcon';
 import { Language } from '../constants/enums';
 import { LANGUAGE_CONFIG } from '../constants/languages';
 import { ACCENT_COLORS, SOLID_COLORS } from '../constants/colors';
@@ -97,6 +97,7 @@ interface SettingsModalProps {
     onNewsDisabledChange?: (disabled: boolean) => void;
     onAccentColorChange?: (color: string) => void;
     onInstanceDeleted?: () => void;
+    pageMode?: boolean;
 }
 
 type SettingsTab = 'general' | 'visual' | 'graphics' | 'language' | 'data' | 'instances' | 'about' | 'developer';
@@ -113,7 +114,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onBackgroundModeChange,
     onNewsDisabledChange,
     onAccentColorChange,
-    onInstanceDeleted
+    onInstanceDeleted,
+    pageMode: isPageMode = false
 }) => {
     const { i18n, t } = useTranslation();
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -129,6 +131,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [disableNews, setDisableNews] = useState(false);
     const [showAlphaMods, setShowAlphaModsState] = useState(false);
+    const [onlineMode, setOnlineMode] = useState(true);
     const [backgroundMode, setBackgroundModeState] = useState('slideshow');
     const [showAllBackgrounds, setShowAllBackgrounds] = useState(false);
     const [launcherDataDir, setLauncherDataDir] = useState('');
@@ -182,6 +185,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 
                 const showAlpha = await GetShowAlphaMods();
                 setShowAlphaModsState(showAlpha);
+
+                const online = (await ipc.settings.get()).onlineMode ?? true;
+                setOnlineMode(online);
                 
                 const bgMode = await GetBackgroundMode();
                 setBackgroundModeState(bgMode);
@@ -642,10 +648,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const maintainer = contributors.find(c => c.login.toLowerCase() === 'yyyumeniku');
     const otherContributors = contributors.filter(c => c.login.toLowerCase() !== 'yyyumeniku');
 
+
     return (
         <>
-            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl flex overflow-hidden mx-4" style={{ width: '800px', height: '600px' }}>
+            <div className={isPageMode
+                ? "w-full h-full"
+                : "fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            }>
+                <div className={`bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl flex overflow-hidden ${isPageMode ? 'w-full h-full' : 'mx-4'}`} style={isPageMode ? undefined : { width: '800px', height: '600px' }}>
                     {/* Sidebar */}
                     <div className="w-48 bg-[#151515] border-r border-white/5 flex flex-col py-4">
                         <h2 className="text-lg font-bold text-white px-4 mb-4">{t('Settings')}</h2>
@@ -694,12 +704,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         {/* Header */}
                         <div className="flex items-center justify-between p-4 border-b border-white/5">
                             <h3 className="text-white font-medium">{tabs.find(t => t.id === activeTab)?.label}</h3>
-                            <button
-                                onClick={onClose}
-                                className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
-                            >
-                                <X size={20} />
-                            </button>
+                            {!isPageMode && (
+                                <button
+                                    onClick={onClose}
+                                    className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            )}
                         </div>
 
                         {/* Scrollable Content */}
@@ -890,6 +902,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                                 <div 
                                                     className={`w-4 h-4 rounded-full shadow-md transform transition-transform ${showAlphaMods ? 'translate-x-5' : 'translate-x-1'}`}
                                                     style={{ backgroundColor: showAlphaMods ? accentTextColor : 'white' }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Online Mode Toggle */}
+                                        <div 
+                                            className="flex items-center justify-between p-3 rounded-xl bg-[#151515] border border-white/10 cursor-pointer hover:border-white/20 transition-colors"
+                                            onClick={async () => {
+                                                const newValue = !onlineMode;
+                                                setOnlineMode(newValue);
+                                                await ipc.settings.update({ onlineMode: newValue });
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <Wifi size={18} className="text-white/60" />
+                                                <div>
+                                                    <span className="text-white text-sm">{t('Online Mode')}</span>
+                                                    <p className="text-xs text-white/40">{t('Connect to authentication servers when launching')}</p>
+                                                </div>
+                                            </div>
+                                            <div 
+                                                className="w-10 h-6 rounded-full flex items-center transition-colors"
+                                                style={{ backgroundColor: onlineMode ? accentColor : 'rgba(255,255,255,0.2)' }}
+                                            >
+                                                <div 
+                                                    className={`w-4 h-4 rounded-full shadow-md transform transition-transform ${onlineMode ? 'translate-x-5' : 'translate-x-1'}`}
+                                                    style={{ backgroundColor: onlineMode ? accentTextColor : 'white' }}
                                                 />
                                             </div>
                                         </div>

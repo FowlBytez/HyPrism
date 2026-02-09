@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, Search, Download, Trash2, FolderOpen,
   Package, Loader2, AlertCircle,
@@ -94,6 +95,8 @@ interface ModManagerProps {
   currentVersion: number;
   initialSearchQuery?: string;
   currentProfileName?: string;
+  pageMode?: boolean;
+  headerActionsRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 type DownloadJobStatus = {
@@ -159,7 +162,9 @@ export const ModManager: React.FC<ModManagerProps> = ({
   currentBranch,
   currentVersion,
   initialSearchQuery = '',
-  currentProfileName
+  currentProfileName,
+  pageMode: isPageMode = false,
+  headerActionsRef
 }) => {
   const { t } = useTranslation();
   const { accentColor, accentTextColor } = useAccentColor();
@@ -1143,14 +1148,18 @@ export const ModManager: React.FC<ModManagerProps> = ({
     (selectedMod as any).screenshots || (selectedMod as any).Screenshots || []
   ) : [];
 
+
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-8"
+      className={isPageMode
+        ? "w-full h-full"
+        : "fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-8"
+      }
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className={`w-full max-w-6xl h-[85vh] bg-[#1a1a1a] rounded-2xl border flex flex-col overflow-hidden transition-colors ${isDragging ? 'border-2' : 'border-white/10'}`} style={isDragging ? { borderColor: accentColor } : undefined}>
+      <div className={`w-full ${isPageMode ? 'h-full' : 'max-w-6xl h-[85vh]'} bg-[#1a1a1a] rounded-2xl border flex flex-col overflow-hidden transition-colors ${isDragging ? 'border-2' : 'border-white/10'}`} style={isDragging ? { borderColor: accentColor } : undefined}>
         {/* Drag overlay */}
         {isDragging && (
           <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 rounded-2xl pointer-events-none">
@@ -1179,96 +1188,114 @@ export const ModManager: React.FC<ModManagerProps> = ({
           </div>
         )}
         
-        {/* Header */}
-        <div className="p-4 border-b border-white/10 flex items-center justify-between flex-shrink-0">
-          {/* Left side - Instance info */}
-          <div className="flex items-center gap-3">
-            <Package size={24} style={{ color: accentColor }} />
-            <div>
-              <h2 className="text-lg font-bold text-white">{t('Mod Manager')} <span className="text-white/50 font-normal">({instanceName})</span></h2>
-              {currentProfileName && (
-                <p className="text-xs text-white/40 flex items-center gap-1">
-                  <span style={{ color: accentColor }}>●</span> {t('Profile')}: {currentProfileName}
-                </p>
-              )}
-            </div>
-          </div>
+        {/* Action buttons - shared between header (modal) and portal (page mode) */}
+        {(() => {
+          const actionButtons = (
+            <>
+              <button
+                onClick={handleCheckUpdates}
+                disabled={isLoadingUpdates || isDownloading}
+                className="p-2 rounded-xl hover:bg-white/10 text-green-400 hover:text-green-300 disabled:opacity-50 relative"
+                title={updateCount > 0 ? t('{{count}} updates available').replace('{{count}}', updateCount.toString()) : t('Check for updates')}
+              >
+                <RefreshCw size={20} className={isLoadingUpdates ? 'animate-spin' : ''} />
+                {updateCount > 0 && !isLoadingUpdates && (
+                  <span 
+                    className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-xs font-bold rounded-full"
+                    style={{ backgroundColor: accentColor, color: accentTextColor }}
+                  >
+                    {updateCount > 99 ? '99+' : updateCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={(activeTab === 'browse' && selectedBrowseMods.size > 0) || (activeTab === 'installed' && selectedInstalledMods.size > 0) ? showDownloadConfirmation : undefined}
+                disabled={isDownloading || !((activeTab === 'browse' && selectedBrowseMods.size > 0) || (activeTab === 'installed' && selectedInstalledMods.size > 0))}
+                className={`p-2 rounded-xl ${(activeTab === 'browse' && selectedBrowseMods.size > 0) || (activeTab === 'installed' && selectedInstalledMods.size > 0)
+                  ? ''
+                  : 'text-white/20 cursor-not-allowed'
+                  }`}
+                style={(activeTab === 'browse' && selectedBrowseMods.size > 0) || (activeTab === 'installed' && selectedInstalledMods.size > 0) ? { color: accentColor } : undefined}
+                title={
+                  activeTab === 'browse' && selectedBrowseMods.size > 0
+                    ? t(`Download {{count}} mod(s)`).replace('{{count}}', selectedBrowseMods.size.toString())
+                    : activeTab === 'installed' && selectedInstalledMods.size > 0
+                      ? t(`Re-download {{count}} mod(s)`).replace('{{count}}', selectedInstalledMods.size.toString())
+                      : t('Select mods to download')
+                }
+              >
+                <Download size={20} />
+              </button>
+              <button
+                onClick={activeTab === 'installed' && (selectedInstalledMods.size > 0 || highlightedInstalledMods.size > 0) ? showDeleteConfirmation : undefined}
+                disabled={activeTab !== 'installed' || (selectedInstalledMods.size === 0 && highlightedInstalledMods.size === 0)}
+                className={`p-2 rounded-xl  ${activeTab === 'installed' && (selectedInstalledMods.size > 0 || highlightedInstalledMods.size > 0)
+                  ? 'text-red-400 hover:bg-red-500/10'
+                  : 'text-white/20 cursor-not-allowed'
+                  }`}
+                title={(selectedInstalledMods.size > 0 || highlightedInstalledMods.size > 0) ? t(`Delete {{count}} mod(s)`).replace('{{count}}', (selectedInstalledMods.size + highlightedInstalledMods.size).toString()) : t('Select mods to delete')}
+              >
+                <Trash2 size={20} />
+              </button>
+              <button
+                onClick={handleBrowseModFiles}
+                disabled={isImporting}
+                className={`p-2 rounded-xl hover:bg-white/10 ${isImporting ? 'text-white/20 cursor-not-allowed' : 'text-white/60 hover:text-white'}`}
+                title={t('Add Mods')}
+              >
+                <FilePlus2 size={20} />
+              </button>
+              <button
+                onClick={handleOpenExportModal}
+                disabled={installedMods.length === 0}
+                className={`p-2 rounded-xl hover:bg-white/10 ${installedMods.length > 0 ? 'text-white/60 hover:text-white' : 'text-white/20 cursor-not-allowed'}`}
+                title={t('Export Mods')}
+              >
+                <Upload size={20} />
+              </button>
+              <button
+                onClick={handleOpenFolder}
+                className="p-2 rounded-xl hover:bg-white/10 text-white/60 hover:text-white"
+                title={t('Open Mods Folder')}
+              >
+                <FolderOpen size={20} />
+              </button>
+            </>
+          );
 
-          {/* Right side - Action buttons */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleCheckUpdates}
-              disabled={isLoadingUpdates || isDownloading}
-              className="p-2 rounded-xl hover:bg-white/10 text-green-400 hover:text-green-300 disabled:opacity-50 relative"
-              title={updateCount > 0 ? t('{{count}} updates available').replace('{{count}}', updateCount.toString()) : t('Check for updates')}
-            >
-              <RefreshCw size={20} className={isLoadingUpdates ? 'animate-spin' : ''} />
-              {updateCount > 0 && !isLoadingUpdates && (
-                <span 
-                  className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-xs font-bold rounded-full"
-                  style={{ backgroundColor: accentColor, color: accentTextColor }}
-                >
-                  {updateCount > 99 ? '99+' : updateCount}
-                </span>
+          return (
+            <>
+              {/* Portal action buttons to page header in pageMode */}
+              {isPageMode && headerActionsRef?.current && createPortal(
+                <div className="flex items-center gap-1">{actionButtons}</div>,
+                headerActionsRef.current
               )}
-            </button>
-            <button
-              onClick={(activeTab === 'browse' && selectedBrowseMods.size > 0) || (activeTab === 'installed' && selectedInstalledMods.size > 0) ? showDownloadConfirmation : undefined}
-              disabled={isDownloading || !((activeTab === 'browse' && selectedBrowseMods.size > 0) || (activeTab === 'installed' && selectedInstalledMods.size > 0))}
-              className={`p-2 rounded-xl ${(activeTab === 'browse' && selectedBrowseMods.size > 0) || (activeTab === 'installed' && selectedInstalledMods.size > 0)
-                ? ''
-                : 'text-white/20 cursor-not-allowed'
-                }`}
-              style={(activeTab === 'browse' && selectedBrowseMods.size > 0) || (activeTab === 'installed' && selectedInstalledMods.size > 0) ? { color: accentColor } : undefined}
-              title={
-                activeTab === 'browse' && selectedBrowseMods.size > 0
-                  ? t(`Download {{count}} mod(s)`).replace('{{count}}', selectedBrowseMods.size.toString())
-                  : activeTab === 'installed' && selectedInstalledMods.size > 0
-                    ? t(`Re-download {{count}} mod(s)`).replace('{{count}}', selectedInstalledMods.size.toString())
-                    : t('Select mods to download')
-              }
-            >
-              <Download size={20} />
-            </button>
-            <button
-              onClick={activeTab === 'installed' && (selectedInstalledMods.size > 0 || highlightedInstalledMods.size > 0) ? showDeleteConfirmation : undefined}
-              disabled={activeTab !== 'installed' || (selectedInstalledMods.size === 0 && highlightedInstalledMods.size === 0)}
-              className={`p-2 rounded-xl  ${activeTab === 'installed' && (selectedInstalledMods.size > 0 || highlightedInstalledMods.size > 0)
-                ? 'text-red-400 hover:bg-red-500/10'
-                : 'text-white/20 cursor-not-allowed'
-                }`}
-              title={(selectedInstalledMods.size > 0 || highlightedInstalledMods.size > 0) ? t(`Delete {{count}} mod(s)`).replace('{{count}}', (selectedInstalledMods.size + highlightedInstalledMods.size).toString()) : t('Select mods to delete')}
-            >
-              <Trash2 size={20} />
-            </button>
-            <button
-              onClick={handleBrowseModFiles}
-              disabled={isImporting}
-              className={`p-2 rounded-xl hover:bg-white/10 ${isImporting ? 'text-white/20 cursor-not-allowed' : 'text-white/60 hover:text-white'}`}
-              title={t('Add Mods')}
-            >
-              <FilePlus2 size={20} />
-            </button>
-            <button
-              onClick={handleOpenExportModal}
-              disabled={installedMods.length === 0}
-              className={`p-2 rounded-xl hover:bg-white/10 ${installedMods.length > 0 ? 'text-white/60 hover:text-white' : 'text-white/20 cursor-not-allowed'}`}
-              title={t('Export Mods')}
-            >
-              <Upload size={20} />
-            </button>
-            <button
-              onClick={handleOpenFolder}
-              className="p-2 rounded-xl hover:bg-white/10 text-white/60 hover:text-white"
-              title={t('Open Mods Folder')}
-            >
-              <FolderOpen size={20} />
-            </button>
-            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/10 text-white/60 hover:text-white">
-              <X size={20} />
-            </button>
-          </div>
-        </div>
+
+              {/* Full header in modal mode */}
+              {!isPageMode && (
+                <div className="p-4 border-b border-white/10 flex items-center justify-between flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <Package size={24} style={{ color: accentColor }} />
+                    <div>
+                      <h2 className="text-lg font-bold text-white">{t('Mod Manager')} <span className="text-white/50 font-normal">({instanceName})</span></h2>
+                      {currentProfileName && (
+                        <p className="text-xs text-white/40 flex items-center gap-1">
+                          <span style={{ color: accentColor }}>●</span> {t('Profile')}: {currentProfileName}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {actionButtons}
+                    <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/10 text-white/60 hover:text-white">
+                      <X size={20} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* Tabs */}
         <div className="flex border-b border-white/10 flex-shrink-0">

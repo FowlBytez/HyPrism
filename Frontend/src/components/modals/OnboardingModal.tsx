@@ -32,16 +32,16 @@ async function GetRandomUsername(): Promise<string> { console.warn('[IPC] GetRan
 async function GetLauncherVersion(): Promise<string> { return (await ipc.settings.get()).launcherBranch ?? ''; }
 async function SetBackgroundModeBackend(v: string): Promise<void> { await ipc.settings.update({ backgroundMode: v }); }
 async function GetDiscordLink(): Promise<string> { return 'https://discord.gg/hyprism'; }
-import { useAccentColor } from '../contexts/AccentColorContext';
-import { Language } from '../constants/enums';
-import { LANGUAGE_CONFIG } from '../constants/languages';
-import { ACCENT_COLORS } from '../constants/colors';
-import appIcon from '../assets/appicon.png';
-import { SOLID_COLORS } from '../constants/colors';
+import { useAccentColor } from '../../contexts/AccentColorContext';
+import { Language } from '../../constants/enums';
+import { LANGUAGE_CONFIG } from '../../constants/languages';
+import { ACCENT_COLORS } from '../../constants/colors';
+import appIcon from '../../assets/appicon.png';
+import { SOLID_COLORS } from '../../constants/colors';
 
 // Background images (matching SettingsModal) - using the correct path
-const backgroundModulesJpg = import.meta.glob('../assets/bg_*.jpg', { query: '?url', import: 'default', eager: true });
-const backgroundModulesPng = import.meta.glob('../assets/bg_*.png', { query: '?url', import: 'default', eager: true });
+const backgroundModulesJpg = import.meta.glob('../../assets/bg_*.jpg', { query: '?url', import: 'default', eager: true });
+const backgroundModulesPng = import.meta.glob('../../assets/bg_*.png', { query: '?url', import: 'default', eager: true });
 const allBackgrounds = { ...backgroundModulesJpg, ...backgroundModulesPng };
 const backgroundImages = Object.entries(allBackgrounds)
   .sort(([a], [b]) => {

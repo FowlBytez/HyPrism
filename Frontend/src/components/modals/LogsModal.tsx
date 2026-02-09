@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { X, Terminal, Loader2, Download, Copy, Check } from 'lucide-react';
-import { useAccentColor } from '../contexts/AccentColorContext';
+import { useAccentColor } from '../../contexts/AccentColorContext';
 
 interface LogsModalProps {
   onClose: () => void;

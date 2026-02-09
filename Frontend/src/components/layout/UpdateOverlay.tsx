@@ -2,8 +2,8 @@ import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { DownloadCloud } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useAccentColor } from '../contexts/AccentColorContext';
-import { formatBytes } from '../utils/format';
+import { useAccentColor } from '../../contexts/AccentColorContext';
+import { formatBytes } from '../../utils/format';
 
 interface UpdateOverlayProps {
   progress: number;

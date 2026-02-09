@@ -17,11 +17,11 @@ namespace HyPrism.Services.Core;
 /// Structured @ipc annotations are parsed by Scripts/generate-ipc.mjs
 /// to auto-generate Frontend/src/lib/ipc.ts (the ONLY IPC file).
 ///
-/// ─── Type annotations ─────────────────────────────────────────
 /// These @type blocks define TypeScript interfaces emitted into the
 /// generated ipc.ts. The C# code never reads them — they are only
 /// consumed by the codegen script.
-///
+/// </summary>
+/// 
 /// @type ProgressUpdate { state: string; progress: number; messageKey: string; args?: unknown[]; downloadedBytes: number; totalBytes: number; }
 /// @type GameState { state: 'starting' | 'running' | 'stopped'; exitCode: number; }
 /// @type GameError { type: string; message: string; technical?: string; }
@@ -34,7 +34,6 @@ namespace HyPrism.Services.Core;
 /// @type AppConfig { language: string; dataDirectory: string; [key: string]: unknown; }
 /// @type InstalledInstance { id: string; name: string; version: string; path: string; }
 /// @type LanguageInfo { code: string; name: string; }
-/// </summary>
 public class IpcService
 {
     private readonly IServiceProvider _services;
@@ -102,8 +101,6 @@ public class IpcService
         Electron.IpcMain.Send(win, channel, raw);
     }
 
-    // ─── Register All ──────────────────────────────────────────────
-
     public void RegisterAll()
     {
         Logger.Info("IPC", "Registering IPC handlers...");
@@ -121,7 +118,7 @@ public class IpcService
         Logger.Success("IPC", "All IPC handlers registered");
     }
 
-    // ─── Config ────────────────────────────────────────────────────
+    // #region Config
     // @ipc invoke hyprism:config:get -> AppConfig
     // @ipc invoke hyprism:config:save -> { success: boolean }
 
@@ -149,7 +146,9 @@ public class IpcService
         });
     }
 
-    // ─── Game Session ──────────────────────────────────────────────
+    // #endregion
+
+    // #region Game Session
     // @ipc send hyprism:game:launch
     // @ipc send hyprism:game:cancel
     // @ipc invoke hyprism:game:instances -> InstalledInstance[]
@@ -204,8 +203,9 @@ public class IpcService
             }
         });
     }
+    // #endregion
 
-    // ─── News ──────────────────────────────────────────────────────
+    // #region News
     // @ipc invoke hyprism:news:get -> NewsItem[]
 
     private void RegisterNewsHandlers()
@@ -227,7 +227,9 @@ public class IpcService
         });
     }
 
-    // ─── Profiles ──────────────────────────────────────────────────
+    // #endregion
+
+    // #region Profiles
     // @ipc invoke hyprism:profile:get -> ProfileSnapshot
     // @ipc invoke hyprism:profile:list -> Profile[]
     // @ipc invoke hyprism:profile:switch -> { success: boolean }
@@ -265,7 +267,9 @@ public class IpcService
         });
     }
 
-    // ─── Settings ──────────────────────────────────────────────────
+    // #endregion
+
+    // #region Settings
     // @ipc invoke hyprism:settings:get -> SettingsSnapshot
     // @ipc invoke hyprism:settings:update -> { success: boolean }
 
@@ -330,8 +334,10 @@ public class IpcService
             default: Logger.Warning("IPC", $"Unknown setting key: {key}"); break;
         }
     }
+    
+    // #endregion
 
-    // ─── Localization ──────────────────────────────────────────────
+    // #region Localization
     // @ipc invoke hyprism:i18n:get -> Record<string, string>
     // @ipc invoke hyprism:i18n:current -> string
     // @ipc invoke hyprism:i18n:set -> { success: boolean, language: string }
@@ -364,8 +370,10 @@ public class IpcService
             Reply("hyprism:i18n:languages:reply", LocalizationService.GetAvailableLanguages());
         });
     }
+    
+    // #endregion
 
-    // ─── Window Controls ───────────────────────────────────────────
+    // #region Window Controls
     // @ipc send hyprism:window:minimize
     // @ipc send hyprism:window:maximize
     // @ipc send hyprism:window:close
@@ -392,8 +400,10 @@ public class IpcService
                 Electron.Shell.OpenExternalAsync(url);
         });
     }
+    
+    // #endregion
 
-    // ─── Mods ──────────────────────────────────────────────────────
+    // #region Mods
     // @ipc invoke hyprism:mods:list -> ModItem[]
     // @ipc invoke hyprism:mods:search -> ModSearchResult
 
@@ -432,7 +442,7 @@ public class IpcService
         });
     }
 
-    // ─── Console (Electron renderer → .NET Logger) ─────────────────
+    // #region Console (Electron renderer → .NET Logger)
     // @ipc send hyprism:console:log
     // @ipc send hyprism:console:warn
     // @ipc send hyprism:console:error
@@ -448,4 +458,6 @@ public class IpcService
         Electron.IpcMain.On("hyprism:console:error", (args) =>
             Logger.Error("Renderer", ArgsToString(args)));
     }
+
+    // #endregion
 }

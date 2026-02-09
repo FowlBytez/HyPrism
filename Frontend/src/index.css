@@ -139,3 +139,99 @@ button:focus-visible {
   background-size: 400% 400%;
   animation: gradient 15s ease infinite;
 }
+
+/* ── Page Layout ─────────────────────────────────────────── */
+
+/* Page content container - accounts for dock at bottom */
+.page-container {
+  position: absolute;
+  inset: 0;
+  padding-bottom: 80px; /* space for dock */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Page with no scrolling (e.g. Dashboard) */
+.page-container-fixed {
+  position: absolute;
+  inset: 0;
+  padding-bottom: 80px;
+  overflow: hidden;
+}
+
+/* ── Dock Glass Effect ───────────────────────────────────── */
+
+.dock-glass {
+  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+/* ── News Card Hover Effect ──────────────────────────────── */
+
+.news-card-image {
+  transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.news-card:hover .news-card-image {
+  transform: scale(1.05);
+}
+
+/* ── Accent-aware glow (uses CSS vars) ───────────────────── */
+
+.glow-accent {
+  box-shadow: 0 0 20px rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.3);
+}
+
+.glow-accent-strong {
+  box-shadow: 0 0 30px rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.45),
+              0 0 60px rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.15);
+}
+
+/* ── Floating label animation ────────────────────────────── */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* ── Scroll fade edges ───────────────────────────────────── */
+
+.scroll-fade-y {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 24px, black calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 24px, black calc(100% - 24px), transparent 100%);
+}
+
+/* ── Dashboard glass bar (smooth blur entrance) ──────────── */
+
+@keyframes glass-bar-enter {
+  0% {
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    background: rgba(255,255,255,0);
+    border-color: rgba(255,255,255,0);
+    box-shadow: 0 4px 24px rgba(0,0,0,0);
+  }
+  100% {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.1);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  }
+}
+
+.glass-bar-dashboard {
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  animation: glass-bar-enter 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.35s both;
+}
