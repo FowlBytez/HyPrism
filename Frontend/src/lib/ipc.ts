@@ -3,33 +3,21 @@
 // Source: Services/Core/IpcService.cs (@type + @ipc annotations)
 // ═══════════════════════════════════════════════════════════════════
 
-declare global {
-  interface Window {
-    electron?: {
-      ipcRenderer: {
-        send: (channel: string, data?: unknown) => void;
-        on: (channel: string, callback: (data: unknown) => void) => () => void;
-        invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
-      };
-    };
-  }
-}
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { ipcRenderer } = (window as any).require('electron');
 
 // ─── Core IPC helpers ───────────────────────────────────────────
 
 export function send(channel: string, data?: unknown): void {
-  if (window.electron?.ipcRenderer) {
-    window.electron.ipcRenderer.send(channel, data);
-  } else {
-    console.warn(`[IPC] No electron bridge — channel: ${channel}`);
-  }
+  ipcRenderer.send(channel, data != null ? JSON.stringify(data) : undefined);
 }
 
 export function on(channel: string, callback: (data: unknown) => void): () => void {
-  if (window.electron?.ipcRenderer) {
-    return window.electron.ipcRenderer.on(channel, callback);
-  }
-  return () => {};
+  const listener = (_event: unknown, ...args: unknown[]) => {
+    callback(args.length === 1 ? args[0] : args);
+  };
+  ipcRenderer.on(channel, listener);
+  return () => { ipcRenderer.removeListener(channel, listener); };
 }
 
 export function invoke<T = unknown>(channel: string, data?: unknown, timeout = 10000): Promise<T> {

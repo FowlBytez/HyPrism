@@ -13,6 +13,24 @@ public static class Logger
     private const int MaxLogEntries = 100;
     
     /// <summary>
+    /// The original stdout TextWriter, captured before Console.Out is replaced by
+    /// ElectronLogInterceptor. Logger writes directly to this stream so output is
+    /// visible even when Console.IsOutputRedirected is true.
+    /// Call <see cref="CaptureOriginalConsole"/> early in Program.Main, before
+    /// Console.SetOut is invoked.
+    /// </summary>
+    private static TextWriter _originalOut = Console.Out;
+    
+    /// <summary>
+    /// Saves a reference to the current Console.Out so that Logger can continue
+    /// writing colored output after the stream is replaced.
+    /// </summary>
+    public static void CaptureOriginalConsole()
+    {
+        _originalOut = Console.Out;
+    }
+    
+    /// <summary>
     /// Logs an informational message.
     /// </summary>
     /// <param name="category">The log category or source context (e.g., "Download", "Config").</param>
@@ -123,18 +141,16 @@ public static class Logger
         {
             try 
             {
-                if (Console.IsOutputRedirected) return;
-
                 var timestamp = DateTime.Now.ToString("HH:mm:ss");
                 
-                Console.Write($"{timestamp} ");
+                _originalOut.Write($"{timestamp} ");
                 
                 var originalColor = Console.ForegroundColor;
                 Console.ForegroundColor = color;
-                Console.Write(level);
+                _originalOut.Write(level);
                 Console.ForegroundColor = originalColor;
                 
-                Console.WriteLine($" {category}: {message}");
+                _originalOut.WriteLine($" {category}: {message}");
             }
             catch { /* Ignore */ }
         }
@@ -173,13 +189,10 @@ public static class Logger
         lock (_lock)
         {
             try {
-                if (!Console.IsOutputRedirected)
+                _originalOut.Write($"\r[{category}] {message,-40} [{ProgressBar(percent, 20)}] {percent,3}%");
+                if (percent >= 100)
                 {
-                    Console.Write($"\r[{category}] {message,-40} [{ProgressBar(percent, 20)}] {percent,3}%");
-                    if (percent >= 100)
-                    {
-                        Console.WriteLine();
-                    }
+                    _originalOut.WriteLine();
                 }
             }
             catch { /* Ignore */ }

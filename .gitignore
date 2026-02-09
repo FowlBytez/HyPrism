@@ -25,6 +25,8 @@ obj/
 
 # Frontend Build outputs
 Packaging/flatpak/bundle
+wwwroot/
+node_modules/
 
 # IMPORTANT folder (backup)
 IMPORTANT/

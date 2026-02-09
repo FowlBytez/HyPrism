@@ -52,20 +52,20 @@ class Program
             )
             .CreateLogger();
 
-        // Get the runtime controller for Console App mode
+        // Intercept Console.Out/Error FIRST — before anything touches
+        // ElectronNetRuntime, because the RuntimeController getter itself
+        // writes diagnostic messages (GatherBuildInfo, Probe scored, etc.)
+        var originalOut = Console.Out;
+        var originalErr = Console.Error;
+        Logger.CaptureOriginalConsole();
+        Console.SetOut(new ElectronLogInterceptor(originalOut, isError: false));
+        Console.SetError(new ElectronLogInterceptor(originalErr, isError: true));
+
+        // Now safe to access the runtime controller
         var runtimeController = ElectronNetRuntime.RuntimeController;
 
         try
         {
-            // Intercept Console.Out/Error FIRST to route Electron.NET framework
-            // messages through our Logger instead of raw stdout/stderr.
-            // This must happen before any Console.Write/Logger calls to avoid
-            // "stdout: ..." noise in the Electron terminal.
-            var originalOut = Console.Out;
-            var originalErr = Console.Error;
-            Console.SetOut(new ElectronLogInterceptor(originalOut, isError: false));
-            Console.SetError(new ElectronLogInterceptor(originalErr, isError: true));
-
             Logger.Info("Boot", "Starting HyPrism (Electron.NET)...");
             Logger.Info("Boot", $"App Directory: {appDir}");
 
@@ -112,15 +112,9 @@ class Program
                 Height = 800,
                 MinWidth = 1024,
                 MinHeight = 700,
-                Frame = false,
+                Frame = true,
                 Show = false,
                 Center = true,
-                WebPreferences = new WebPreferences
-                {
-                    NodeIntegration = false,
-                    ContextIsolation = true,
-                    Preload = Path.Combine(wwwroot, "preload.js")
-                },
                 Title = "HyPrism",
                 AutoHideMenuBar = true,
                 BackgroundColor = "#0D0D10"
@@ -161,6 +155,10 @@ file sealed class ElectronLogInterceptor : TextWriter
         "gpu_channel_manager",
         "sandboxed_process_launcher",
         "Fontconfig error",
+        "Mesa warning",
+        "MESA-LOADER",
+        "libEGL warning",
+        "DRI driver",
     ];
 
     // Patterns that indicate debug-level info
@@ -172,6 +170,14 @@ file sealed class ElectronLogInterceptor : TextWriter
         "Socket.IO",
         "engine.io",
         "DevTools listening",
+        "GatherBuildInfo",
+        "Probe scored",
+        "launch origin",
+        "testhost",
+        "RuntimeController",
+        "Evaluated StartupMethod",
+        "package mode",
+        "UnpackedDotnetFirst",
     ];
 
     // Patterns that indicate warnings

@@ -102,25 +102,25 @@
   <Target Name="BuildFrontend"
           BeforeTargets="Build"
           Inputs="Frontend/src/**/*;Frontend/index.html;Frontend/vite.config.ts;Frontend/tsconfig.json;Frontend/tsconfig.app.json"
-          Outputs="Frontend/dist/index.html"
+          Outputs="wwwroot/index.html"
           Condition="Exists('Frontend/package.json')">
     <Message Importance="high" Text="→ Building Frontend (Vite)" />
     <Exec Command="npm run build" WorkingDirectory="Frontend" />
   </Target>
 
-  <!-- Copy Frontend/dist → wwwroot in output dir -->
-  <Target Name="CopyFrontendDist" AfterTargets="Build" Condition="Exists('Frontend/dist/index.html')">
+  <!-- Copy wwwroot → $(OutputPath)/wwwroot so dotnet run finds it -->
+  <Target Name="CopyFrontendDist" AfterTargets="Build" Condition="Exists('wwwroot/index.html')">
     <ItemGroup>
-      <FrontendFiles Include="Frontend/dist/**/*" />
+      <FrontendFiles Include="wwwroot/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(FrontendFiles)"
           DestinationFiles="@(FrontendFiles->'$(OutputPath)/wwwroot/%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyFrontendDistPublish" AfterTargets="Publish" Condition="Exists('Frontend/dist/index.html')">
+  <Target Name="CopyFrontendDistPublish" AfterTargets="Publish" Condition="Exists('wwwroot/index.html')">
     <ItemGroup>
-      <FrontendFilesPublish Include="Frontend/dist/**/*" />
+      <FrontendFilesPublish Include="wwwroot/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(FrontendFilesPublish)"
           DestinationFiles="@(FrontendFilesPublish->'$(PublishDir)/wwwroot/%(RecursiveDir)%(Filename)%(Extension)')"

@@ -73,36 +73,24 @@ L.push(`// Source: Services/Core/IpcService.cs (@type + @ipc annotations)`);
 L.push(`// ═══════════════════════════════════════════════════════════════════`);
 L.push(``);
 
-// 1. Window augmentation
-L.push(`declare global {`);
-L.push(`  interface Window {`);
-L.push(`    electron?: {`);
-L.push(`      ipcRenderer: {`);
-L.push(`        send: (channel: string, data?: unknown) => void;`);
-L.push(`        on: (channel: string, callback: (data: unknown) => void) => () => void;`);
-L.push(`        invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;`);
-L.push(`      };`);
-L.push(`    };`);
-L.push(`  }`);
-L.push(`}`);
+// 1. Electron require + ipcRenderer
+L.push(`// eslint-disable-next-line @typescript-eslint/no-require-imports`);
+L.push(`const { ipcRenderer } = (window as any).require('electron');`);
 L.push(``);
 
 // 2. Core helpers
 L.push(`// ─── Core IPC helpers ───────────────────────────────────────────`);
 L.push(``);
 L.push(`export function send(channel: string, data?: unknown): void {`);
-L.push(`  if (window.electron?.ipcRenderer) {`);
-L.push(`    window.electron.ipcRenderer.send(channel, data);`);
-L.push(`  } else {`);
-L.push('    console.warn(`[IPC] No electron bridge — channel: ${channel}`);');
-L.push(`  }`);
+L.push(`  ipcRenderer.send(channel, data != null ? JSON.stringify(data) : undefined);`);
 L.push(`}`);
 L.push(``);
 L.push(`export function on(channel: string, callback: (data: unknown) => void): () => void {`);
-L.push(`  if (window.electron?.ipcRenderer) {`);
-L.push(`    return window.electron.ipcRenderer.on(channel, callback);`);
-L.push(`  }`);
-L.push(`  return () => {};`);
+L.push(`  const listener = (_event: unknown, ...args: unknown[]) => {`);
+L.push(`    callback(args.length === 1 ? args[0] : args);`);
+L.push(`  };`);
+L.push(`  ipcRenderer.on(channel, listener);`);
+L.push(`  return () => { ipcRenderer.removeListener(channel, listener); };`);
 L.push(`}`);
 L.push(``);
 L.push(`export function invoke<T = unknown>(channel: string, data?: unknown, timeout = 10000): Promise<T> {`);
