@@ -9,11 +9,6 @@
   [![Discord](https://img.shields.io/discord/1334547926839365733?style=for-the-badge&logo=discord&label=Discord&color=5865F2)](https://discord.gg/ekZqTtynjp)
   [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/yyyumeniku)
 
-
-<img src="Assets/preview.png" alt="HyPrism Screenshot" width="800" style="border-radius: 10px; box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);" />
-
-
-
 > ⚠️ Disclaimer: HyPrism has no any connection to [PrismLauncher](https://github.com/PrismLauncher/PrismLauncher). HyPrism is an application that is being developed **INDEPENDENTLY** of the PrismLauncher project or its team. Thank you for your understanding
 
 ## ✨ Features
@@ -23,7 +18,6 @@
 - **Profile System**: Manage multiple profiles and configurations.
 - **Instance Management**: Support for Release, Pre-Release, and custom instances.
 - **Localization**: Available in multiple languages.
-- **Modern UI**: Clean and responsive interface built with Avalonia UI.
 
 ## 📥 Installation
 
