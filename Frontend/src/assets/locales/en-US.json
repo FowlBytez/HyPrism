@@ -337,6 +337,7 @@
     "duplicateProfile": "Duplicate Profile",
     "deleteProfile": "Delete Profile",
     "noProfiles": "No saved profiles yet",
+    "officialLocked": "Official Hytale profiles cannot be edited",
     "createNew": "Create New Profile",
     "editor": "Profile Editor",
     "yourAvatar": "Your player avatar",
@@ -350,7 +351,32 @@
     "editUuid": "Edit UUID",
     "saveUuid": "Save UUID",
     "openFolder": "Open Profile Folder",
-    "saved": "Profile saved!"
+    "saved": "Profile saved!",
+    "wizard": {
+      "title": "Create New Profile",
+      "chooseType": "Choose how you want to create your profile",
+      "official": "Official Hytale Account",
+      "officialDesc": "Sign in with your Hytale account to play on official servers",
+      "unofficial": "Offline Profile",
+      "unofficialDesc": "Create a local profile with a custom name and UUID",
+      "authTitle": "Sign in with Hytale",
+      "authDesc": "You'll be redirected to the Hytale login page in your browser. After signing in, your profile will be created automatically.",
+      "loginHytale": "Sign in with Hytale",
+      "waitingAuth": "Waiting for sign-in...",
+      "browserHint": "Complete the sign-in in your browser. This window will update automatically.",
+      "authFailed": "Sign-in was not completed. Please try again.",
+      "authError": "An error occurred during sign-in. Please try again.",
+      "noHytaleProfile": "Your Hytale account has no game profiles yet. A game profile will be created when you first access the game.",
+      "nameTitle": "Choose a Nickname",
+      "nameDesc": "Pick a name for your offline profile (3-13 characters, English letters, digits, - and _)",
+      "namePlaceholder": "Enter nickname...",
+      "characters": "characters",
+      "nickRules": "A-Z, 0-9, - and _ only",
+      "nickInvalid": "Nickname must be 3-13 characters: English letters, digits, dash or underscore.",
+      "create": "Create Profile",
+      "createFailed": "Failed to create profile. Please try again.",
+      "createError": "An error occurred while creating the profile."
+    }
   },
   "launch": {
     "state": {

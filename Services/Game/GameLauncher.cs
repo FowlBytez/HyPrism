@@ -27,6 +27,7 @@ public class GameLauncher : IGameLauncher
     private readonly IUserIdentityService _userIdentityService;
     private readonly AvatarService _avatarService;
     private readonly HttpClient _httpClient;
+    private readonly HytaleAuthService _hytaleAuthService;
     
     private Config _config => _configService.Configuration;
 
@@ -43,6 +44,7 @@ public class GameLauncher : IGameLauncher
     /// <param name="userIdentityService">Service for user identity management.</param>
     /// <param name="avatarService">Service for avatar backup.</param>
     /// <param name="httpClient">HTTP client for authentication requests.</param>
+    /// <param name="hytaleAuthService">Service for official Hytale OAuth authentication.</param>
     public GameLauncher(
         IConfigService configService,
         ILaunchService launchService,
@@ -53,7 +55,8 @@ public class GameLauncher : IGameLauncher
         ISkinService skinService,
         IUserIdentityService userIdentityService,
         AvatarService avatarService,
-        HttpClient httpClient)
+        HttpClient httpClient,
+        HytaleAuthService hytaleAuthService)
     {
         _configService = configService;
         _launchService = launchService;
@@ -65,6 +68,7 @@ public class GameLauncher : IGameLauncher
         _userIdentityService = userIdentityService;
         _avatarService = avatarService;
         _httpClient = httpClient;
+        _hytaleAuthService = hytaleAuthService;
         _gameProcessService.ProcessExited += OnGameProcessExited;
     }
 
@@ -95,6 +99,21 @@ public class GameLauncher : IGameLauncher
     {
         Logger.Info("Game", $"Preparing to launch from {versionPath}");
 
+        // Validate profile/server compatibility before proceeding
+        string sessionUuid = _userIdentityService.GetUuidForUser(_config.Nick);
+        var currentProfile = _config.Profiles?.FirstOrDefault(p => p.UUID == sessionUuid);
+        bool isOfficialProfile = currentProfile?.IsOfficial == true;
+        bool isOfficialServer = string.IsNullOrWhiteSpace(_config.AuthDomain) || 
+                                _config.AuthDomain.Contains("hytale.com", StringComparison.OrdinalIgnoreCase);
+
+        if (isOfficialServer && !isOfficialProfile && _config.OnlineMode)
+        {
+            Logger.Error("Game", "Cannot use official Hytale servers with an unofficial profile");
+            throw new InvalidOperationException(
+                "Official Hytale servers require an official Hytale profile. " +
+                "Please switch to an official profile or change the auth server in settings.");
+        }
+
         var (executable, workingDir) = ResolveExecutablePaths(versionPath);
 
         if (!File.Exists(executable))
@@ -118,7 +137,6 @@ public class GameLauncher : IGameLauncher
 
         _progressService.ReportDownloadProgress("launching", 0, "launch.detail.authenticating_generic", null, 0, 0);
 
-        string sessionUuid = _userIdentityService.GetUuidForUser(_config.Nick);
         Logger.Info("Game", $"Using UUID for user '{_config.Nick}': {sessionUuid}");
 
         var (identityToken, sessionToken) = await AuthenticateAsync(sessionUuid);
@@ -241,6 +259,55 @@ public class GameLauncher : IGameLauncher
         string? identityToken = null;
         string? sessionToken = null;
 
+        // Check if the active profile is an official Hytale account
+        var currentProfile = _config.Profiles?.FirstOrDefault(p => p.UUID == sessionUuid);
+        bool isOfficialProfile = currentProfile?.IsOfficial == true;
+
+        if (isOfficialProfile)
+        {
+            // Official Hytale account — use HytaleAuthService for OAuth tokens
+            _progressService.ReportDownloadProgress("launching", 20, "launch.detail.authenticating_official", null, 0, 0);
+            Logger.Info("Game", "Official profile detected — using Hytale OAuth authentication");
+
+            try
+            {
+                var session = await _hytaleAuthService.GetValidSessionAsync();
+                if (session == null)
+                {
+                    Logger.Error("Game", "No valid Hytale session — user must re-authenticate");
+                    throw new Exception("Official Hytale session expired. Please re-login in the profile settings.");
+                }
+
+                identityToken = session.IdentityToken;
+                sessionToken = session.SessionToken;
+
+                if (string.IsNullOrEmpty(identityToken) || string.IsNullOrEmpty(sessionToken))
+                {
+                    // Session tokens might be stale — try to create a new game session
+                    Logger.Info("Game", "Session tokens empty, creating new game session...");
+                    var newSession = await _hytaleAuthService.LoginAsync();
+                    if (newSession != null)
+                    {
+                        identityToken = newSession.IdentityToken;
+                        sessionToken = newSession.SessionToken;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(identityToken))
+                    Logger.Success("Game", "Official Hytale identity token obtained");
+                else
+                    Logger.Warning("Game", "Could not obtain Hytale session tokens");
+            }
+            catch (Exception ex) when (ex is not InvalidOperationException)
+            {
+                Logger.Error("Game", $"Hytale auth error: {ex.Message}");
+                throw;
+            }
+
+            return (identityToken, sessionToken);
+        }
+
+        // Non-official profile — use custom auth domain if configured
         if (!_config.OnlineMode || string.IsNullOrWhiteSpace(_config.AuthDomain))
             return (identityToken, sessionToken);
 

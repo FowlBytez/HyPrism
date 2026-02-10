@@ -144,7 +144,8 @@ public static class Bootstrapper
                     sp.GetRequiredService<ISkinService>(),
                     sp.GetRequiredService<IUserIdentityService>(),
                     sp.GetRequiredService<AvatarService>(),
-                    sp.GetRequiredService<HttpClient>()));
+                    sp.GetRequiredService<HttpClient>(),
+                    sp.GetRequiredService<HytaleAuthService>()));
             services.AddSingleton<IGameLauncher>(sp => sp.GetRequiredService<GameLauncher>());
 
             services.AddSingleton(sp =>
@@ -184,6 +185,12 @@ public static class Bootstrapper
                     sp.GetRequiredService<InstanceService>(),
                     sp.GetRequiredService<UserIdentityService>()));
             services.AddSingleton<IProfileManagementService>(sp => sp.GetRequiredService<ProfileManagementService>());
+
+            services.AddSingleton(sp =>
+                new HytaleAuthService(
+                    sp.GetRequiredService<HttpClient>(),
+                    sp.GetRequiredService<AppPathConfiguration>().AppDir,
+                    sp.GetRequiredService<IBrowserService>()));
 
             #endregion
 

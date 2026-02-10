@@ -95,7 +95,18 @@ export interface NewsItem {
 export interface Profile {
   id: string;
   name: string;
+  uuid?: string;
+  isOfficial?: boolean;
   avatar?: string;
+  folderName?: string;
+}
+
+export interface HytaleAuthStatus {
+  loggedIn: boolean;
+  username?: string;
+  uuid?: string;
+  error?: string;
+  errorType?: string;
 }
 
 export interface ProfileSnapshot {
@@ -119,7 +130,6 @@ export interface SettingsSnapshot {
   authDomain: string;
   dataDirectory: string;
   gpuPreference?: string;
-  animatedGlassEffects?: boolean;
   launchOnStartup?: boolean;
   minimizeToTray?: boolean;
   animations?: boolean;
@@ -217,6 +227,21 @@ const _profile = {
   get: () => invoke<ProfileSnapshot>('hyprism:profile:get'),
   list: () => invoke<Profile[]>('hyprism:profile:list'),
   switch: (data?: unknown) => invoke<{ success: boolean }>('hyprism:profile:switch', data),
+  setNick: (data?: unknown) => invoke<{ success: boolean }>('hyprism:profile:setNick', data),
+  setUuid: (data?: unknown) => invoke<{ success: boolean }>('hyprism:profile:setUuid', data),
+  create: (data?: unknown) => invoke<Profile>('hyprism:profile:create', data),
+  delete: (data?: unknown) => invoke<{ success: boolean }>('hyprism:profile:delete', data),
+  activeIndex: (data?: unknown) => invoke<number>('hyprism:profile:activeIndex', data),
+  save: (data?: unknown) => invoke<{ success: boolean }>('hyprism:profile:save', data),
+  duplicate: (data?: unknown) => invoke<Profile>('hyprism:profile:duplicate', data),
+  openFolder: () => send('hyprism:profile:openFolder'),
+  avatarForUuid: (data?: unknown) => invoke<string>('hyprism:profile:avatarForUuid', data),
+};
+
+const _auth = {
+  status: (data?: unknown) => invoke<HytaleAuthStatus>('hyprism:auth:status', data),
+  login: (data?: unknown) => invoke<HytaleAuthStatus>('hyprism:auth:login', data),
+  logout: (data?: unknown) => invoke<{ success: boolean }>('hyprism:auth:logout', data),
 };
 
 const _settings = {
@@ -266,6 +291,7 @@ export const ipc = {
   instance: _instance,
   news: _news,
   profile: _profile,
+  auth: _auth,
   settings: _settings,
   i18n: _i18n,
   windowCtl: _window,

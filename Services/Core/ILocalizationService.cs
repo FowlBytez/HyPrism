@@ -2,21 +2,23 @@ namespace HyPrism.Services.Core;
 
 /// <summary>
 /// Provides localization with event-based notifications for dynamic language switching.
-/// Supports loading translations from embedded JSON resources and format string interpolation.
+/// Translations are handled by the React frontend (i18next); the backend only
+/// tracks the current language preference and validates language codes.
 /// </summary>
 public interface ILocalizationService
 {
     /// <summary>
     /// Gets or sets the current UI language code (e.g., "en-US", "ru-RU").
-    /// Setting this property triggers language reload and notifies all subscribers.
+    /// Setting this property notifies all subscribers.
     /// </summary>
     string CurrentLanguage { get; set; }
     
     /// <summary>
     /// Gets a translated string for the specified key using the current language.
+    /// Returns the key as-is since translations are handled by the frontend.
     /// </summary>
     /// <param name="key">The translation key (e.g., "dashboard.play").</param>
-    /// <returns>The translated string, or the key itself if translation not found.</returns>
+    /// <returns>The key itself (frontend handles actual translations).</returns>
     string this[string key] { get; }
 
     /// <summary>
@@ -26,16 +28,11 @@ public interface ILocalizationService
     event Action<string>? LanguageChanged;
     
     /// <summary>
-    /// Translates a key with optional format arguments for string interpolation.
+    /// Returns the key as-is. Translations are handled by the frontend.
+    /// Kept for interface compatibility.
     /// </summary>
-    /// <param name="key">The translation key containing format placeholders.</param>
-    /// <param name="args">Arguments to substitute into format placeholders.</param>
-    /// <returns>The formatted translated string.</returns>
+    /// <param name="key">The translation key.</param>
+    /// <param name="args">Ignored — kept for interface compatibility.</param>
+    /// <returns>The key itself.</returns>
     string Translate(string key, params object[] args);
-    
-    /// <summary>
-    /// Preloads all available language translations into memory for faster switching.
-    /// Call during application startup for better UX.
-    /// </summary>
-    void PreloadAllLanguages();
 }

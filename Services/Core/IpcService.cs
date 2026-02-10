@@ -28,7 +28,8 @@ namespace HyPrism.Services.Core;
 /// @type GameState { state: 'starting' | 'started' | 'running' | 'stopped'; exitCode: number; }
 /// @type GameError { type: string; message: string; technical?: string; }
 /// @type NewsItem { title: string; excerpt?: string; url?: string; date?: string; publishedAt?: string; author?: string; imageUrl?: string; source?: string; }
-/// @type Profile { id: string; name: string; avatar?: string; }
+/// @type Profile { id: string; name: string; uuid?: string; isOfficial?: boolean; avatar?: string; folderName?: string; }
+/// @type HytaleAuthStatus { loggedIn: boolean; username?: string; uuid?: string; error?: string; errorType?: string; }
 /// @type ProfileSnapshot { nick: string; uuid: string; avatarPath?: string; }
 /// @type SettingsSnapshot { language: string; musicEnabled: boolean; launcherBranch: string; closeAfterLaunch: boolean; showDiscordAnnouncements: boolean; disableNews: boolean; backgroundMode: string; availableBackgrounds: string[]; accentColor: string; hasCompletedOnboarding: boolean; onlineMode: boolean; authDomain: string; dataDirectory: string; gpuPreference?: string; launchOnStartup?: boolean; minimizeToTray?: boolean; animations?: boolean; transparency?: boolean; resolution?: string; ramMb?: number; sound?: boolean; closeOnLaunch?: boolean; developerMode?: boolean; verboseLogging?: boolean; preRelease?: boolean; [key: string]: unknown; }
 /// @type ModItem { id: string; name: string; description?: string; version?: string; author?: string; iconUrl?: string; isInstalled: boolean; featured?: boolean; downloads?: number; }
@@ -113,6 +114,7 @@ public class IpcService
         RegisterInstanceHandlers();
         RegisterNewsHandlers();
         RegisterProfileHandlers();
+        RegisterAuthHandlers();
         RegisterSettingsHandlers();
         RegisterLocalizationHandlers();
         RegisterWindowHandlers();
@@ -650,10 +652,20 @@ public class IpcService
     // @ipc invoke hyprism:profile:get -> ProfileSnapshot
     // @ipc invoke hyprism:profile:list -> Profile[]
     // @ipc invoke hyprism:profile:switch -> { success: boolean }
+    // @ipc invoke hyprism:profile:setNick -> { success: boolean }
+    // @ipc invoke hyprism:profile:setUuid -> { success: boolean }
+    // @ipc invoke hyprism:profile:create -> Profile
+    // @ipc invoke hyprism:profile:delete -> { success: boolean }
+    // @ipc invoke hyprism:profile:activeIndex -> number
+    // @ipc invoke hyprism:profile:save -> { success: boolean }
+    // @ipc invoke hyprism:profile:duplicate -> Profile
+    // @ipc send hyprism:profile:openFolder
+    // @ipc invoke hyprism:profile:avatarForUuid -> string
 
     private void RegisterProfileHandlers()
     {
         var profileService = _services.GetRequiredService<IProfileService>();
+        var profileMgmt = _services.GetRequiredService<IProfileManagementService>();
 
         Electron.IpcMain.On("hyprism:profile:get", (_) =>
         {
@@ -667,20 +679,146 @@ public class IpcService
 
         Electron.IpcMain.On("hyprism:profile:list", (_) =>
         {
-            Reply("hyprism:profile:list:reply", profileService.GetProfiles());
+            Reply("hyprism:profile:list:reply", profileMgmt.GetProfiles());
         });
 
         Electron.IpcMain.On("hyprism:profile:switch", (args) =>
         {
             try
             {
-                var profileId = ArgsToString(args);
-                Reply("hyprism:profile:switch:reply", new { success = profileService.SwitchProfile(profileId) });
+                var json = ArgsToJson(args);
+                using var doc = JsonDocument.Parse(json);
+                var index = doc.RootElement.GetProperty("index").GetInt32();
+                Reply("hyprism:profile:switch:reply", new { success = profileMgmt.SwitchProfile(index) });
             }
             catch (Exception ex)
             {
                 Logger.Error("IPC", $"Profile switch failed: {ex.Message}");
+                Reply("hyprism:profile:switch:reply", new { success = false });
             }
+        });
+
+        Electron.IpcMain.On("hyprism:profile:setNick", (args) =>
+        {
+            var nick = ArgsToString(args);
+            var success = profileService.SetNick(nick);
+            Reply("hyprism:profile:setNick:reply", new { success });
+        });
+
+        Electron.IpcMain.On("hyprism:profile:setUuid", (args) =>
+        {
+            var uuid = ArgsToString(args);
+            var success = profileService.SetUUID(uuid);
+            Reply("hyprism:profile:setUuid:reply", new { success });
+        });
+
+        Electron.IpcMain.On("hyprism:profile:create", (args) =>
+        {
+            try
+            {
+                var json = ArgsToJson(args);
+                using var doc = JsonDocument.Parse(json);
+                var name = doc.RootElement.GetProperty("name").GetString() ?? "";
+                var uuid = doc.RootElement.GetProperty("uuid").GetString() ?? "";
+                var isOfficial = doc.RootElement.TryGetProperty("isOfficial", out var officialProp) && officialProp.GetBoolean();
+                
+                var profile = profileMgmt.CreateProfile(name, uuid);
+                if (profile != null)
+                {
+                    profile.IsOfficial = isOfficial;
+                    _services.GetRequiredService<ConfigService>().SaveConfig();
+                }
+                Reply("hyprism:profile:create:reply", profile != null ? (object)profile : new { error = "Failed to create profile" });
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Profile create failed: {ex.Message}");
+                Reply("hyprism:profile:create:reply", new { error = ex.Message });
+            }
+        });
+
+        Electron.IpcMain.On("hyprism:profile:delete", (args) =>
+        {
+            var id = ArgsToString(args);
+            var success = profileMgmt.DeleteProfile(id);
+            Reply("hyprism:profile:delete:reply", new { success });
+        });
+
+        Electron.IpcMain.On("hyprism:profile:activeIndex", (_) =>
+        {
+            Reply("hyprism:profile:activeIndex:reply", profileMgmt.GetActiveProfileIndex());
+        });
+
+        Electron.IpcMain.On("hyprism:profile:save", (_) =>
+        {
+            var profile = profileMgmt.SaveCurrentAsProfile();
+            Reply("hyprism:profile:save:reply", new { success = profile != null });
+        });
+
+        Electron.IpcMain.On("hyprism:profile:duplicate", (args) =>
+        {
+            var id = ArgsToString(args);
+            var profile = profileMgmt.DuplicateProfileWithoutData(id);
+            Reply("hyprism:profile:duplicate:reply", profile != null ? (object)profile : new { error = "Failed to duplicate" });
+        });
+
+        Electron.IpcMain.On("hyprism:profile:openFolder", (_) =>
+        {
+            profileMgmt.OpenCurrentProfileFolder();
+        });
+
+        Electron.IpcMain.On("hyprism:profile:avatarForUuid", (args) =>
+        {
+            var uuid = ArgsToString(args);
+            var path = profileService.GetAvatarPreviewForUUID(uuid);
+            Reply("hyprism:profile:avatarForUuid:reply", path ?? "");
+        });
+    }
+
+    // #endregion
+
+    // #region Hytale Auth
+    // @ipc invoke hyprism:auth:status -> HytaleAuthStatus
+    // @ipc invoke hyprism:auth:login -> HytaleAuthStatus
+    // @ipc invoke hyprism:auth:logout -> { success: boolean }
+
+    private void RegisterAuthHandlers()
+    {
+        var authService = _services.GetRequiredService<HytaleAuthService>();
+
+        Electron.IpcMain.On("hyprism:auth:status", (_) =>
+        {
+            Reply("hyprism:auth:status:reply", authService.GetAuthStatus());
+        });
+
+        Electron.IpcMain.On("hyprism:auth:login", async (_) =>
+        {
+            try
+            {
+                var session = await authService.LoginAsync();
+                Reply("hyprism:auth:login:reply", authService.GetAuthStatus());
+            }
+            catch (HytaleNoProfileException)
+            {
+                Logger.Warning("IPC", "Auth login: no Hytale game profile found");
+                Reply("hyprism:auth:login:reply", new { loggedIn = false, errorType = "no_profile", error = "No game profiles found in this Hytale account" });
+            }
+            catch (HytaleAuthException ex)
+            {
+                Logger.Error("IPC", $"Auth login error ({ex.ErrorType}): {ex.Message}");
+                Reply("hyprism:auth:login:reply", new { loggedIn = false, errorType = ex.ErrorType, error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Auth login failed: {ex.Message}");
+                Reply("hyprism:auth:login:reply", new { loggedIn = false, errorType = "unknown", error = ex.Message });
+            }
+        });
+
+        Electron.IpcMain.On("hyprism:auth:logout", (_) =>
+        {
+            authService.Logout();
+            Reply("hyprism:auth:logout:reply", new { success = true });
         });
     }
 
@@ -773,12 +911,6 @@ public class IpcService
     {
         var localization = _services.GetRequiredService<LocalizationService>();
         var settings = _services.GetRequiredService<ISettingsService>();
-
-        Electron.IpcMain.On("hyprism:i18n:get", (args) =>
-        {
-            var code = ArgsToString(args);
-            Reply("hyprism:i18n:get:reply", localization.GetAllTranslations(string.IsNullOrEmpty(code) ? null : code));
-        });
 
         Electron.IpcMain.On("hyprism:i18n:current", (_) =>
         {

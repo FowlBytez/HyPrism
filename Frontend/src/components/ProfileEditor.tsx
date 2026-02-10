@@ -1,65 +1,63 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, RefreshCw, Check, User, Edit3, Copy, CheckCircle, Plus, Trash2, Dices, FolderOpen, CopyPlus } from 'lucide-react';
+import { X, RefreshCw, Check, User, Edit3, Copy, CheckCircle, Plus, Trash2, Dices, FolderOpen, CopyPlus, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccentColor } from '../contexts/AccentColorContext';
 import { useAnimatedGlass } from '../contexts/AnimatedGlassContext';
 import { ipc, Profile, ProfileSnapshot } from '@/lib/ipc';
 import { DeleteProfileConfirmationModal } from './modals/DeleteProfileConfirmationModal';
+import { ProfileCreationWizard } from './ProfileCreationWizard';
 
-// TODO: These functions need IPC channels in IpcService.cs
-// For now they use ipc.profile.* where possible and stubs elsewhere
+// ── IPC wrappers (all backed by real channels now) ──
+
 async function GetNick(): Promise<string> {
   const p = await ipc.profile.get();
   return p.nick ?? 'HyPrism';
 }
-async function SetNick(name: string): Promise<void> {
-  console.warn('[IPC] SetNick: no dedicated channel yet');
-  // Could be implemented via ipc.profile.switch or a future channel
+async function SetNick(name: string): Promise<boolean> {
+  const r = await ipc.profile.setNick(name);
+  return r.success;
 }
 async function GetUUID(): Promise<string> {
   const p = await ipc.profile.get();
   return p.uuid ?? '';
 }
-async function SetUUID(uuid: string): Promise<void> {
-  console.warn('[IPC] SetUUID: no dedicated channel yet');
+async function SetUUID(uuid: string): Promise<boolean> {
+  const r = await ipc.profile.setUuid(uuid);
+  return r.success;
 }
 async function GetAvatarPreview(): Promise<string | null> {
   const p = await ipc.profile.get();
   return p.avatarPath ?? null;
 }
-async function GetAvatarPreviewForUUID(_uuid: string): Promise<string | null> {
-  console.warn('[IPC] GetAvatarPreviewForUUID: no dedicated channel yet');
-  return null;
+async function GetAvatarPreviewForUUID(uuid: string): Promise<string | null> {
+  if (!uuid) return null;
+  const path = await ipc.profile.avatarForUuid(uuid);
+  return path || null;
 }
 async function GetProfiles(): Promise<Profile[]> {
   return ipc.profile.list();
 }
 async function GetActiveProfileIndex(): Promise<number> {
-  console.warn('[IPC] GetActiveProfileIndex: no dedicated channel yet');
-  return 0;
+  return ipc.profile.activeIndex();
 }
-async function CreateProfile(_name: string, _uuid: string): Promise<Profile | null> {
-  console.warn('[IPC] CreateProfile: no dedicated channel yet');
-  return null;
-}
-async function DeleteProfile(_id: string): Promise<boolean> {
-  console.warn('[IPC] DeleteProfile: no dedicated channel yet');
-  return false;
+async function DeleteProfile(id: string): Promise<boolean> {
+  const r = await ipc.profile.delete(id);
+  return r.success;
 }
 async function SwitchProfile(index: number): Promise<boolean> {
   const r = await ipc.profile.switch({ index });
   return r.success;
 }
 async function SaveCurrentAsProfile(): Promise<void> {
-  console.warn('[IPC] SaveCurrentAsProfile: no dedicated channel yet');
+  await ipc.profile.save();
 }
 async function OpenCurrentProfileFolder(): Promise<void> {
-  console.warn('[IPC] OpenCurrentProfileFolder: no dedicated channel yet');
+  ipc.profile.openFolder();
 }
-async function DuplicateProfileWithoutData(_id: string): Promise<Profile | null> {
-  console.warn('[IPC] DuplicateProfileWithoutData: no dedicated channel yet');
-  return null;
+async function DuplicateProfileWithoutData(id: string): Promise<Profile | null> {
+  const p = await ipc.profile.duplicate(id);
+  return (p && p.id) ? p : null;
 }
 
 interface ProfileEditorProps {
@@ -111,11 +109,17 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
     const [profileAvatars, setProfileAvatars] = useState<Record<string, string | null>>({});
     const [currentProfileIndex, setCurrentProfileIndex] = useState<number>(-1);
     
-    // New profile creation flow - directly opens name editor
+    // New profile creation flow - wizard mode
     const [isCreatingNewProfile, setIsCreatingNewProfile] = useState(false);
+    
+    // Wizard active = show wizard in right panel instead of profile details
+    const [showWizard, setShowWizard] = useState(false);
     
     // Delete confirmation modal state
     const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string } | null>(null);
+
+    // Whether the current profile is an official Hytale account (locked editing)
+    const isCurrentOfficial = profiles[currentProfileIndex]?.isOfficial === true;
 
     // Load profiles and their avatars
     const loadProfiles = useCallback(async () => {
@@ -170,6 +174,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                 }
                 await loadProfiles();
                 setIsCreatingNewProfile(false);
+                setShowWizard(false);
             };
             initializeEditor();
         }
@@ -414,46 +419,37 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
     };
     
     const handleCreateProfile = async () => {
-        // Generate new UUID and random name for the new profile
-        const newUuid = generateUUID();
-        const randomName = generateRandomName();
+        // Show the profile creation wizard in the right panel
+        setShowWizard(true);
+    };
+
+    const handleWizardComplete = async (profile: Profile) => {
+        setShowWizard(false);
+        console.log('[ProfileEditor] Wizard created profile:', profile);
         
-        console.log('[ProfileEditor] Creating new profile:', randomName, newUuid);
+        // Reload profiles list
+        await loadProfiles();
         
-        try {
-            // Create profile with random name and new UUID
-            const profile = await CreateProfile(randomName, newUuid);
-            console.log('[ProfileEditor] Created profile:', profile);
-            
-            if (profile) {
-                // Reload profiles list
-                await loadProfiles();
-                
-                // Find the new profile and switch to it
-                const updatedProfiles = await GetProfiles();
-                const newProfileIndex = updatedProfiles?.findIndex(p => p.uuid === newUuid);
-                if (newProfileIndex !== undefined && newProfileIndex >= 0) {
-                    console.log('[ProfileEditor] Switching to new profile at index:', newProfileIndex);
-                    await SwitchProfile(newProfileIndex);
-                    // Update UI with new profile data
-                    setUsernameState(randomName);
-                    setEditUsername(randomName);
-                    setUuid(newUuid);
-                    setEditUuid(newUuid);
-                    setLocalAvatar(null); // New profile has no avatar
-                }
-                
-                // Clear any cached avatar for the new UUID (it's a new identity with no skin)
-                setProfileAvatars(prev => ({
-                    ...prev,
-                    [newUuid]: null  // New profile has no avatar yet
-                }));
-                await loadProfiles();
-                onProfileUpdate?.();
-            }
-        } catch (err) {
-            console.error('Failed to create profile:', err);
+        // Find the new profile and switch to it
+        const updatedProfiles = await GetProfiles();
+        const newProfileIndex = updatedProfiles?.findIndex(p => p.id === profile.id);
+        if (newProfileIndex !== undefined && newProfileIndex >= 0) {
+            console.log('[ProfileEditor] Switching to new profile at index:', newProfileIndex);
+            await SwitchProfile(newProfileIndex);
+            setUsernameState(profile.name);
+            setEditUsername(profile.name);
+            setUuid(profile.uuid ?? '');
+            setEditUuid(profile.uuid ?? '');
+            setLocalAvatar(null);
+            setCurrentProfileIndex(newProfileIndex);
         }
+        
+        await loadProfiles();
+        onProfileUpdate?.();
+    };
+
+    const handleWizardCancel = () => {
+        setShowWizard(false);
     };
 
     const handleDuplicateProfile = async (profileId: string, e: React.MouseEvent) => {
@@ -595,12 +591,12 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
 
-                    {/* Right Content - Profile Details */}
+                    {/* Right Content - Profile Details or Wizard */}
                     <div className="flex-1 flex flex-col min-w-0">
                         {/* Header - only in modal mode */}
                         {!isPageMode && (
                             <div className="flex items-center justify-between p-4 border-b border-white/[0.04]">
-                                <h3 className="text-white font-medium">{t('profiles.editor')}</h3>
+                                <h3 className="text-white font-medium">{showWizard ? t('profiles.wizard.title') : t('profiles.editor')}</h3>
                                 <button
                                     onClick={onClose}
                                     className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
@@ -610,7 +606,13 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                             </div>
                         )}
 
-                        {/* Content */}
+                        {/* Content: Wizard or Profile Details */}
+                        {showWizard ? (
+                            <ProfileCreationWizard
+                                onComplete={handleWizardComplete}
+                                onCancel={handleWizardCancel}
+                            />
+                        ) : (
                         <div className="flex-1 p-6 overflow-y-auto">
                             {isLoading ? (
                                 <div className="flex items-center justify-center py-12">
@@ -674,33 +676,41 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                             ) : (
                                                 <>
                                                     <span className="text-2xl font-bold text-white">{username}</span>
-                                                    <motion.button
-                                                        whileHover={{ scale: 1.1 }}
-                                                        whileTap={{ scale: 0.9 }}
-                                                        onClick={async () => {
-                                                            const newName = generateRandomName();
-                                                            await SetNick(newName);
-                                                            setUsernameState(newName);
-                                                            setEditUsername(newName);
-                                                            onProfileUpdate?.();
-                                                        }}
-                                                        className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5"
-                                                        title={t('profiles.generateName')}
-                                                    >
-                                                        <Dices size={14} />
-                                                    </motion.button>
-                                                    <motion.button
-                                                        whileHover={{ scale: 1.1 }}
-                                                        whileTap={{ scale: 0.9 }}
-                                                        onClick={() => {
-                                                            setEditUsername(username);
-                                                            setIsEditingUsername(true);
-                                                        }}
-                                                        className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5"
-                                                        title={t('profiles.editUsername')}
-                                                    >
-                                                        <Edit3 size={14} />
-                                                    </motion.button>
+                                                    {isCurrentOfficial ? (
+                                                        <span className="p-1.5 rounded-lg text-white/20" title={t('profiles.officialLocked')}>
+                                                            <Lock size={14} />
+                                                        </span>
+                                                    ) : (
+                                                        <>
+                                                            <motion.button
+                                                                whileHover={{ scale: 1.1 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                                onClick={async () => {
+                                                                    const newName = generateRandomName();
+                                                                    await SetNick(newName);
+                                                                    setUsernameState(newName);
+                                                                    setEditUsername(newName);
+                                                                    onProfileUpdate?.();
+                                                                }}
+                                                                className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5"
+                                                                title={t('profiles.generateName')}
+                                                            >
+                                                                <Dices size={14} />
+                                                            </motion.button>
+                                                            <motion.button
+                                                                whileHover={{ scale: 1.1 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                                onClick={() => {
+                                                                    setEditUsername(username);
+                                                                    setIsEditingUsername(true);
+                                                                }}
+                                                                className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5"
+                                                                title={t('profiles.editUsername')}
+                                                            >
+                                                                <Edit3 size={14} />
+                                                            </motion.button>
+                                                        </>
+                                                    )}
                                                 </>
                                             )}
                                         </div>
@@ -727,33 +737,41 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                                 >
                                                     {copiedUuid ? <CheckCircle size={14} className="text-green-400" /> : <Copy size={14} />}
                                                 </motion.button>
-                                                <motion.button
-                                                    whileHover={{ scale: 1.05 }}
-                                                    whileTap={{ scale: 0.95 }}
-                                                    onClick={async () => {
-                                                        const newUuid = generateUUID();
-                                                        await SetUUID(newUuid);
-                                                        setUuid(newUuid);
-                                                        setEditUuid(newUuid);
-                                                        onProfileUpdate?.();
-                                                    }}
-                                                    className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10"
-                                                    title={t('profiles.randomUuid')}
-                                                >
-                                                    <Dices size={14} />
-                                                </motion.button>
-                                                <motion.button
-                                                    whileHover={{ scale: 1.05 }}
-                                                    whileTap={{ scale: 0.95 }}
-                                                    onClick={() => {
-                                                        setEditUuid(uuid);
-                                                        setIsEditingUuid(true);
-                                                    }}
-                                                    className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10"
-                                                    title={t('profiles.editUuid')}
-                                                >
-                                                    <Edit3 size={14} />
-                                                </motion.button>
+                                                {isCurrentOfficial ? (
+                                                    <span className="p-1.5 rounded-lg text-white/20" title={t('profiles.officialLocked')}>
+                                                        <Lock size={14} />
+                                                    </span>
+                                                ) : (
+                                                    <>
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.05 }}
+                                                            whileTap={{ scale: 0.95 }}
+                                                            onClick={async () => {
+                                                                const newUuid = generateUUID();
+                                                                await SetUUID(newUuid);
+                                                                setUuid(newUuid);
+                                                                setEditUuid(newUuid);
+                                                                onProfileUpdate?.();
+                                                            }}
+                                                            className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10"
+                                                            title={t('profiles.randomUuid')}
+                                                        >
+                                                            <Dices size={14} />
+                                                        </motion.button>
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.05 }}
+                                                            whileTap={{ scale: 0.95 }}
+                                                            onClick={() => {
+                                                                setEditUuid(uuid);
+                                                                setIsEditingUuid(true);
+                                                            }}
+                                                            className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10"
+                                                            title={t('profiles.editUuid')}
+                                                        >
+                                                            <Edit3 size={14} />
+                                                        </motion.button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                         
@@ -819,6 +837,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                 </div>
                             )}
                         </div>
+                        )}
                     </div>
                 </motion.div>
             </motion.div>
