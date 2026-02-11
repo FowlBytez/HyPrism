@@ -80,6 +80,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
   const [selectedCategory, setSelectedCategory] = useState(0);
   const [selectedSortField, setSelectedSortField] = useState(6);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
@@ -166,11 +167,12 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
       setCurrentPage(page);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Failed to search mods');
+      setError(e.message || t('modManager.searchFailed'));
       setSearchResults([]);
     }
 
     setIsSearching(false);
+    setHasSearched(true);
   }, [searchQuery, selectedCategory, selectedSortField]);
 
   // Debounced search on query/filter changes
@@ -275,7 +277,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
     if (items.length === 0) { setError(t('modManager.noDownloadableFiles')); return; }
 
     try { await runDownloadQueue(items); }
-    catch (err: unknown) { setError((err as Error)?.message || 'Download failed'); }
+    catch (err: unknown) { setError((err as Error)?.message || t('modManager.downloadFailed')); }
 
     setIsDownloading(false);
     setDownloadProgress(null);
@@ -334,7 +336,13 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
 
   // ------- Render -------
 
-  const getCategoryName = (id: number) => categories.find(c => c.id === id)?.name ?? t('modManager.allMods');
+  const getCategoryName = (id: number) => {
+    const cat = categories.find(c => c.id === id);
+    if (!cat) return t('modManager.allMods');
+    const key = `modManager.category.${cat.name.replace(/[\s\\/]+/g, '_').toLowerCase()}`;
+    const translated = t(key);
+    return translated !== key ? translated : cat.name;
+  };
   const getSortName = (id: number) => sortOptions.find(s => s.id === id)?.name ?? '';
 
   return (
@@ -391,7 +399,11 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
                     }`}
                     style={selectedCategory === cat.id ? { backgroundColor: `${accentColor}20` } : undefined}
                   >
-                    {cat.name}
+                    {(() => {
+                      const key = `modManager.category.${cat.name.replace(/[\s\\/]+/g, '_').toLowerCase()}`;
+                      const translated = t(key);
+                      return translated !== key ? translated : cat.name;
+                    })()}
                   </button>
                 ))}
               </div>
@@ -520,11 +532,15 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
           }}
         >
           {isSearching ? (
-            <div className="flex items-center justify-center py-16">
+            <div className="flex items-center justify-center h-full">
+              <Loader2 size={32} className="animate-spin" style={{ color: accentColor }} />
+            </div>
+          ) : !hasSearched ? (
+            <div className="flex items-center justify-center h-full">
               <Loader2 size={32} className="animate-spin" style={{ color: accentColor }} />
             </div>
           ) : searchResults.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-white/40">
+            <div className="flex flex-col items-center justify-center h-full text-white/40">
               <Package size={48} className="mb-4 opacity-40" />
               <p className="text-lg font-medium">{t('modManager.noModsFound')}</p>
               <p className="text-sm mt-1 text-white/30">{t('modManager.noMatch')}</p>
@@ -577,9 +593,14 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
                             {t('modManager.installedBadge')}
                           </span>
                         )}
-                        {mod.categories?.length > 0 && (
+                        {mod.categories?.length > 0 && typeof mod.categories[0] === 'string' && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] text-white/40 bg-white/5 flex-shrink-0">
-                            {typeof mod.categories[0] === 'string' ? mod.categories[0] : ''}
+                            {(() => {
+                              const raw = mod.categories[0] as string;
+                              const key = `modManager.category.${raw.replace(/[\s\\/]+/g, '_').toLowerCase()}`;
+                              const translated = t(key);
+                              return translated !== key ? translated : raw;
+                            })()}
                           </span>
                         )}
                       </div>

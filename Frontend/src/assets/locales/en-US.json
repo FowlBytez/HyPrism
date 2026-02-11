@@ -648,6 +648,24 @@
       "zipArchiveHint": "All mod files bundled",
       "exportFolder": "Export Folder",
       "selectFolder": "Select export folder..."
+    },
+    "searchFailed": "Failed to search mods",
+    "downloadFailed": "Download failed",
+    "category": {
+      "all_mods": "All Mods",
+      "blocks": "Blocks",
+      "cosmetics_armor": "Cosmetics / Armor",
+      "food_farming": "Food / Farming",
+      "furniture": "Furniture",
+      "gameplay": "Gameplay",
+      "library": "Library",
+      "miscellaneous": "Miscellaneous",
+      "mobs_characters": "Mobs / Characters",
+      "prefab": "Prefab",
+      "quality_of_life": "Quality of Life",
+      "resource_packs": "Resource Packs",
+      "utility": "Utility",
+      "world_gen": "World Gen"
     }
   },
   "onboarding": {

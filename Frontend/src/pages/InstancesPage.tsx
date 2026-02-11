@@ -719,31 +719,28 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
             <div className={`flex-1 flex flex-col overflow-hidden rounded-2xl ${animatedGlass ? 'glass-panel' : 'glass-panel-static-solid'}`}>
             {/* Tabs & Actions */}
             <div className="flex items-center justify-between gap-4 px-3 py-3 flex-shrink-0 border-b border-white/[0.06]">
-              {/* Left side: Tabs + Branch/Version Info */}
+              {/* Left side: Tabs */}
               <div className="flex items-center gap-3">
-                {/* Branch/Version Badge */}
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-black/30 rounded-xl border border-white/[0.06]">
-                  <span className="text-xs font-medium" style={{ color: accentColor }}>
-                    {selectedInstance.branch === GameBranch.RELEASE ? t('main.release') : t('main.preRelease')}
-                  </span>
-                  <span className="text-white/30 text-xs">•</span>
-                  <span className="text-white/70 text-xs font-medium">v{selectedInstance.version}</span>
-                </div>
-                
                 {/* Tabs */}
-                <div className="flex items-center gap-1 px-2 py-1 bg-black/20 rounded-xl border border-white/[0.06]">
+                <div className="relative flex items-center gap-1 px-1.5 py-1 bg-black/20 rounded-xl border border-white/[0.06]">
                   {(['content', 'browse', 'worlds', 'logs'] as InstanceTab[]).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    className={`relative z-10 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ${
                       activeTab === tab
-                        ? 'text-white shadow-sm'
+                        ? 'text-white'
                         : 'text-white/50 hover:text-white/70'
                     }`}
-                    style={activeTab === tab ? { backgroundColor: accentColor, color: accentTextColor } : undefined}
+                    style={activeTab === tab ? { color: accentTextColor } : undefined}
                   >
-                    {t(`instances.tab.${tab}`)}
+                    {activeTab === tab && (
+                      <div
+                        className="absolute inset-0 rounded-lg shadow-sm transition-all duration-200"
+                        style={{ backgroundColor: accentColor }}
+                      />
+                    )}
+                    <span className="relative z-10">{t(`instances.tab.${tab}`)}</span>
                   </button>
                 ))}
                 </div>
@@ -856,16 +853,13 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
             </div>
 
             {/* Tab Content */}
-            <div className="flex-1 overflow-hidden">              <AnimatePresence mode="popLayout">
-                {activeTab === 'content' && (
-                  <motion.div
-                    key="content"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.12, ease: 'easeOut' }}
-                    className="h-full flex flex-col"
-                  >
+            <div className="flex-1 overflow-hidden relative">
+                {/* Content tab */}
+                <div
+                  className={`absolute inset-0 flex flex-col transition-opacity duration-100 ${
+                    activeTab === 'content' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                  }`}
+                >
                   {/* Content Header */}
                   <div className="p-4 border-b border-white/[0.06] flex items-center gap-3">
                     {/* Search */}
@@ -880,8 +874,12 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                       />
                     </div>
 
-                    {/* Mods Badge */}
-                    <div className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ backgroundColor: accentColor, color: accentTextColor }}>
+                    {/* Mods Label */}
+                    <div
+                      className="h-10 px-4 rounded-xl text-sm font-medium flex items-center gap-2 flex-shrink-0"
+                      style={{ backgroundColor: accentColor, color: accentTextColor }}
+                    >
+                      <Package size={16} />
                       {t('modManager.mods')}
                     </div>
 
@@ -925,11 +923,11 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                   {/* Mods List */}
                   <div className="flex-1 overflow-y-auto">
                     {isLoadingMods ? (
-                      <div className="flex items-center justify-center py-12">
+                      <div className="flex items-center justify-center h-full">
                         <Loader2 size={32} className="animate-spin" style={{ color: accentColor }} />
                       </div>
                     ) : filteredMods.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-white/40">
+                      <div className="flex flex-col items-center justify-center h-full text-white/40">
                         <Package size={48} className="mb-4 opacity-40" />
                         <p className="text-lg font-medium text-white/60">{t('modManager.noModsInstalled')}</p>
                         <p className="text-sm mt-1">{t('modManager.clickInstallContent')}</p>
@@ -1066,18 +1064,15 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                       <span>{filteredMods.length} {t('modManager.modsInstalled')}</span>
                     </div>
                   )}
-                  </motion.div>
-                )}
+                </div>
 
-                {activeTab === 'browse' && selectedInstance && (
-                  <motion.div
-                    key="browse"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.12, ease: 'easeOut' }}
-                    className="h-full relative"
-                  >
+                {/* Browse tab — always mounted so downloads survive tab switches */}
+                <div
+                  className={`absolute inset-0 transition-opacity duration-100 ${
+                    activeTab === 'browse' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                  }`}
+                >
+                  {selectedInstance && (
                     <InlineModBrowser
                       currentBranch={selectedInstance.branch}
                       currentVersion={selectedInstance.version}
@@ -1086,18 +1081,15 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                       onModsInstalled={() => loadInstalledMods()}
                       onBack={() => setActiveTab('content')}
                     />
-                  </motion.div>
-                )}
+                  )}
+                </div>
 
-                {activeTab === 'worlds' && (
-                  <motion.div
-                    key="worlds"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.12, ease: 'easeOut' }}
-                    className="h-full flex flex-col"
-                  >
+                {/* Worlds tab */}
+                <div
+                  className={`absolute inset-0 flex flex-col transition-opacity duration-100 ${
+                    activeTab === 'worlds' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                  }`}
+                >
                   {/* Saves Header */}
                   <div className="p-4 border-b border-white/10 flex items-center justify-between">
                     <h3 className="text-white font-medium flex items-center gap-2">
@@ -1182,23 +1174,17 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                       </div>
                     )}
                   </div>
-                  </motion.div>
-                )}
+                </div>
 
-                {activeTab === 'logs' && (
-                  <motion.div
-                    key="logs"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.12, ease: 'easeOut' }}
-                    className="h-full flex flex-col items-center justify-center text-white/30"
-                  >
+                {/* Logs tab */}
+                <div
+                  className={`absolute inset-0 flex flex-col items-center justify-center text-white/30 transition-opacity duration-100 ${
+                    activeTab === 'logs' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                  }`}
+                >
                     <FileText size={48} className="mb-4 opacity-50" />
                     <p className="text-lg font-medium">{t('instances.logsComingSoon')}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                </div>
             </div>
             </div>
 
