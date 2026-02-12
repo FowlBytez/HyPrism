@@ -2,8 +2,9 @@ using HyPrism.Models;
 using HyPrism.Services.Core;
 using HyPrism.Services.Game;
 using HyPrism.Services.Game.Instance;
+using HyPrism.Services.User.Skin;
 
-namespace HyPrism.Services.User;
+namespace HyPrism.Services.User.Identity;
 
 /// <summary>
 /// Manages user identities (UUID and username mappings).

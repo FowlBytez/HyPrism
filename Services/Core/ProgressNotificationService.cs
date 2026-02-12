@@ -8,7 +8,7 @@ namespace HyPrism.Services.Core;
 /// </summary>
 public class ProgressNotificationService : IProgressNotificationService
 {
-    private readonly DiscordService _discordService;
+    private readonly IDiscordService _discordService;
     
     /// <inheritdoc/>
     public event Action<ProgressUpdateMessage>? DownloadProgressChanged;
@@ -23,13 +23,13 @@ public class ProgressNotificationService : IProgressNotificationService
     /// Initializes a new instance of the <see cref="ProgressNotificationService"/> class.
     /// </summary>
     /// <param name="discordService">The Discord service for Rich Presence updates.</param>
-    public ProgressNotificationService(DiscordService discordService)
+    public ProgressNotificationService(IDiscordService discordService)
     {
         _discordService = discordService;
     }
     
     /// <inheritdoc/>
-    public void SendProgress(string stage, int progress, string messageKey, object[]? args, long downloaded, long total)
+    public void ReportDownloadProgress(string stage, int progress, string messageKey, object[]? args = null, long downloaded = 0, long total = 0)
     {
         var msg = new ProgressUpdateMessage 
         { 
@@ -43,8 +43,7 @@ public class ProgressNotificationService : IProgressNotificationService
         
         DownloadProgressChanged?.Invoke(msg);
         
-        // Don't update Discord during download/install to avoid showing extraction messages
-        // Only update on complete or idle
+        // Only update Discord presence on completion
         if (stage == "complete")
         {
             _discordService.SetPresence(DiscordService.PresenceState.Idle);
@@ -52,11 +51,7 @@ public class ProgressNotificationService : IProgressNotificationService
     }
 
     /// <inheritdoc/>
-    public void ReportDownloadProgress(string stage, int progress, string messageKey, object[]? args = null, long downloaded = 0, long total = 0) 
-        => SendProgress(stage, progress, messageKey, args, downloaded, total);
-    /// Sends game state change notification.
-    /// </summary>
-    public void SendGameStateEvent(string state, int? exitCode = null)
+    public void ReportGameStateChanged(string state, int? exitCode = null)
     {
         switch (state)
         {
@@ -74,13 +69,9 @@ public class ProgressNotificationService : IProgressNotificationService
         }
     }
 
-    public void ReportGameStateChanged(string state, int? exitCode = null) => SendGameStateEvent(state, exitCode);
-
-    public void SendErrorEvent(string type, string message, string? technical = null)
+    /// <inheritdoc/>
+    public void ReportError(string type, string message, string? technical = null)
     {
         ErrorOccurred?.Invoke(type, message, technical);
     }
-    
-    public void ReportError(string type, string message, string? technical = null) 
-        => SendErrorEvent(type, message, technical);
 }

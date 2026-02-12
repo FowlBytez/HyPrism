@@ -87,10 +87,10 @@
   <Target Name="GenerateIpcTs"
           BeforeTargets="BuildFrontend"
           DependsOnTargets="NpmInstall"
-          Inputs="Services/Core/IpcService.cs"
+          Inputs="Services/Core/Ipc/**/*.cs"
           Outputs="Frontend/src/lib/ipc.ts"
           Condition="Exists('Scripts/generate-ipc.mjs')">
-    <Message Importance="high" Text="→ Generating ipc.ts from IpcService.cs" />
+    <Message Importance="high" Text="→ Generating ipc.ts from IpcRouter + Handlers" />
     <Exec Command="node Scripts/generate-ipc.mjs" />
   </Target>
 

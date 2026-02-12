@@ -3,6 +3,20 @@ using HyPrism.Services.Core;
 namespace HyPrism.Services.Game.Download;
 
 /// <summary>
+/// Exception thrown when download fails due to expired/forbidden URL (403).
+/// Indicates that the cached URL needs to be refreshed.
+/// </summary>
+public class DownloadUrlExpiredException : Exception
+{
+    public string Url { get; }
+    
+    public DownloadUrlExpiredException(string url, string message) : base(message)
+    {
+        Url = url;
+    }
+}
+
+/// <summary>
 /// Provides file download functionality with progress tracking and resume support.
 /// Used for downloading game files, patches, and other assets.
 /// </summary>
@@ -77,6 +91,14 @@ public class DownloadService : IDownloadService
             Logger.Warning("Download", "Server did not accept Range header, restarting download.");
             canResume = false;
             existingLength = 0;
+        }
+        else if (response.StatusCode == System.Net.HttpStatusCode.Forbidden ||
+                 response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // Signed URL expired - throw special exception to trigger cache refresh
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            Logger.Warning("Download", $"URL expired/forbidden: {url}. Response: {errorBody?.Substring(0, Math.Min(200, errorBody?.Length ?? 0))}");
+            throw new DownloadUrlExpiredException(url, $"Download URL expired or forbidden: HTTP {(int)response.StatusCode}");
         }
         else if (!response.IsSuccessStatusCode)
         {

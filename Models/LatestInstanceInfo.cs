@@ -1,6 +1,6 @@
 using System;
 
-namespace HyPrism.Services;
+namespace HyPrism.Models;
 
 /// <summary>
 /// Информация о последней установленной версии игровой instance.

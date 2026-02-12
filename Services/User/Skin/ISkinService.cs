@@ -1,6 +1,7 @@
 using HyPrism.Models;
+using Profile = HyPrism.Models.Profile;
 
-namespace HyPrism.Services.User;
+namespace HyPrism.Services.User.Skin;
 
 /// <summary>
 /// Provides skin management functionality including protection from game overwrites,

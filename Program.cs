@@ -2,6 +2,7 @@
 using ElectronNET.API;
 using ElectronNET.API.Entities;
 using HyPrism.Services.Core;
+using HyPrism.Services.Core.Ipc;
 using Microsoft.Extensions.DependencyInjection;
 
 using Serilog;
@@ -110,8 +111,8 @@ class Program
 
         // Register IPC handlers BEFORE creating window to ensure they're ready
         // when the frontend starts making IPC calls during initialization
-        var ipcService = services.GetRequiredService<IpcService>();
-        ipcService.RegisterAll();
+        var ipcRouter = services.GetRequiredService<IpcRouter>();
+        ipcRouter.RegisterAll();
 
         var mainWindow = await Electron.WindowManager.CreateWindowAsync(
             new BrowserWindowOptions

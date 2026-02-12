@@ -11,19 +11,6 @@ using HyPrism.Models;
 namespace HyPrism.Services.Core;
 
 /// <summary>
-/// Defines the source of news items.
-/// </summary>
-public enum NewsSource
-{
-    /// <summary>Fetch news from all sources.</summary>
-    All,
-    /// <summary>Fetch news from Hytale official blog only.</summary>
-    Hytale,
-    /// <summary>Fetch news from HyPrism GitHub releases only.</summary>
-    HyPrism
-}
-
-/// <summary>
 /// Fetches and aggregates news from Hytale's official blog API and HyPrism GitHub Releases.
 /// Implements caching to reduce API calls and handle rate limits.
 /// </summary>

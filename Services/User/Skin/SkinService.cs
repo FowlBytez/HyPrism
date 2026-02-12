@@ -2,8 +2,9 @@ using HyPrism.Models;
 using HyPrism.Services.Core;
 using HyPrism.Services.Game;
 using HyPrism.Services.Game.Instance;
+using Profile = HyPrism.Models.Profile;
 
-namespace HyPrism.Services.User;
+namespace HyPrism.Services.User.Skin;
 
 /// <summary>
 /// Manages player skin data including protection from game overwrites,

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using HyPrism.Models;
 
 namespace HyPrism.Services.Core;
 
@@ -9,7 +10,7 @@ namespace HyPrism.Services.Core;
 /// Works cross-platform: Windows (wmic/powershell), Linux (lspci/glxinfo), macOS (system_profiler).
 /// Results are cached after first detection.
 /// </summary>
-public class GpuDetectionService
+public class GpuDetectionService : IGpuDetectionService
 {
     private List<GpuAdapterInfo>? _cachedAdapters;
 
@@ -274,19 +275,4 @@ public class GpuDetectionService
             return "";
         }
     }
-}
-
-/// <summary>
-/// Represents a detected GPU adapter.
-/// </summary>
-public class GpuAdapterInfo
-{
-    /// <summary>Full name of the GPU (e.g., "NVIDIA GeForce RTX 4070")</summary>
-    public string Name { get; set; } = "";
-    
-    /// <summary>Vendor name (e.g., "NVIDIA", "AMD", "Intel")</summary>
-    public string Vendor { get; set; } = "";
-    
-    /// <summary>GPU type: "dedicated" or "integrated"</summary>
-    public string Type { get; set; } = "dedicated";
 }

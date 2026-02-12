@@ -1,6 +1,6 @@
 using HyPrism.Models;
 
-namespace HyPrism.Services.User;
+namespace HyPrism.Services.User.Identity;
 
 /// <summary>
 /// Manages user identities including UUID-to-username mappings,

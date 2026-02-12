@@ -1,3 +1,5 @@
+using HyPrism.Models;
+
 namespace HyPrism.Services.Core;
 
 /// <summary>

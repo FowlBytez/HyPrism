@@ -818,7 +818,7 @@ rm -f ""$0""
             var archivePath = Path.Combine(wrapperDir, assetName);
 
             // Download archive
-            _progressNotificationService.SendProgress("wrapper-install", 0, "Downloading HyPrism...", null, 0, 100);
+            _progressNotificationService.ReportDownloadProgress("wrapper-install", 0, "Downloading HyPrism...");
             
             var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
             if (!response.IsSuccessStatusCode)
@@ -833,7 +833,7 @@ rm -f ""$0""
                 await contentStream.CopyToAsync(fileStream);
             }
 
-            _progressNotificationService.SendProgress("wrapper-install", 50, "Extracting...", null, 50, 100);
+            _progressNotificationService.ReportDownloadProgress("wrapper-install", 50, "Extracting...", downloaded: 50, total: 100);
 
             // Extract archive
             if (assetName.EndsWith(".tar.gz"))
@@ -871,13 +871,13 @@ rm -f ""$0""
             // Cleanup archive
             File.Delete(archivePath);
 
-            _progressNotificationService.SendProgress("wrapper-install", 100, "Installation complete", null, 100, 100);
+            _progressNotificationService.ReportDownloadProgress("wrapper-install", 100, "Installation complete", downloaded: 100, total: 100);
             return true;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"WrapperInstallLatest error: {ex.Message}");
-            _progressNotificationService.SendErrorEvent("Wrapper Installation Error", ex.Message, null);
+            _progressNotificationService.ReportError("Wrapper Installation Error", ex.Message);
             return false;
         }
     }

@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 using HyPrism.Models;
 using HyPrism.Services.Core;
 
-namespace HyPrism.Services.User;
+namespace HyPrism.Services.User.Auth;
 
 /// <summary>
 /// Handles Hytale OAuth 2.0 Authorization Code flow with PKCE.
@@ -18,7 +18,7 @@ namespace HyPrism.Services.User;
 /// Session data is stored per-profile in the profile's folder to support
 /// multiple Hytale accounts across different launcher profiles.
 /// </remarks>
-public class HytaleAuthService
+public class HytaleAuthService : IHytaleAuthService
 {
     private const string AuthUrl = "https://oauth.accounts.hytale.com/oauth2/auth";
     private const string TokenUrl = "https://oauth.accounts.hytale.com/oauth2/token";
@@ -682,36 +682,6 @@ public class HytaleAuthService
 
 #region Models
 
-/// <summary>
-/// Persisted auth session for Hytale account.
-/// </summary>
-public class HytaleAuthSession
-{
-    [JsonPropertyName("access_token")]
-    public string AccessToken { get; set; } = "";
-    
-    [JsonPropertyName("refresh_token")]
-    public string RefreshToken { get; set; } = "";
-    
-    [JsonPropertyName("expires_at")]
-    public DateTime ExpiresAt { get; set; }
-    
-    [JsonPropertyName("session_token")]
-    public string SessionToken { get; set; } = "";
-    
-    [JsonPropertyName("identity_token")]
-    public string IdentityToken { get; set; } = "";
-    
-    [JsonPropertyName("username")]
-    public string Username { get; set; } = "";
-    
-    [JsonPropertyName("uuid")]
-    public string UUID { get; set; } = "";
-    
-    [JsonPropertyName("account_owner_id")]
-    public string AccountOwnerId { get; set; } = "";
-}
-
 internal class TokenResponse
 {
     [JsonPropertyName("access_token")]
@@ -759,27 +729,6 @@ internal class GameSessionResponse
     
     [JsonPropertyName("expiresAt")]
     public string ExpiresAt { get; set; } = "";
-}
-
-/// <summary>
-/// Thrown when no game profiles are found in the Hytale account.
-/// This is a non-critical warning — the user simply has no game profile yet.
-/// </summary>
-public class HytaleNoProfileException : Exception
-{
-    public HytaleNoProfileException(string message) : base(message) { }
-}
-
-/// <summary>
-/// Thrown when a general auth error occurs (network, HTTP status, etc.).
-/// </summary>
-public class HytaleAuthException : Exception
-{
-    public string ErrorType { get; }
-    public HytaleAuthException(string errorType, string message) : base(message)
-    {
-        ErrorType = errorType;
-    }
 }
 
 #endregion

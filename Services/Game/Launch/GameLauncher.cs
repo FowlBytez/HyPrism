@@ -3,10 +3,12 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using HyPrism.Models;
 using HyPrism.Services.Core;
-using HyPrism.Services.Game.Asset;
 using HyPrism.Services.Game.Auth;
 using HyPrism.Services.Game.Instance;
-using HyPrism.Services.User;
+using HyPrism.Services.User.Auth;
+using HyPrism.Services.User.Identity;
+using HyPrism.Services.User.Profiles;
+using HyPrism.Services.User.Skin;
 
 namespace HyPrism.Services.Game.Launch;
 

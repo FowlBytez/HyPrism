@@ -4,11 +4,15 @@ using HyPrism.Models;
 using HyPrism.Services.Core;
 using HyPrism.Services.Game;
 using HyPrism.Services.Game.Instance;
+using HyPrism.Services.User.Identity;
+using HyPrism.Services.User.Skin;
+using Profile = HyPrism.Models.Profile;
 
-namespace HyPrism.Services.User;
+namespace HyPrism.Services.User.Profiles;
 
 /// <summary>
-/// Manages profile operations: creation, deletion, switching, and profile folder/symlink management.
+/// Manages profile operations: creation, deletion, switching, profile folder/symlink management,
+/// nickname/UUID handling, and avatar management.
 /// </summary>
 public class ProfileManagementService : IProfileManagementService
 {
@@ -17,28 +21,201 @@ public class ProfileManagementService : IProfileManagementService
     private readonly SkinService _skinService;
     private readonly InstanceService _instanceService;
     private readonly UserIdentityService _userIdentityService;
+    private readonly AvatarService? _avatarService;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ProfileManagementService"/> class.
     /// </summary>
-    /// <param name="appPath">The application path configuration.</param>
-    /// <param name="configService">The configuration service.</param>
-    /// <param name="skinService">The skin management service.</param>
-    /// <param name="instanceService">The game instance service.</param>
-    /// <param name="userIdentityService">The user identity service.</param>
     public ProfileManagementService(
         AppPathConfiguration appPath,
         ConfigService configService,
         SkinService skinService,
         InstanceService instanceService,
-        UserIdentityService userIdentityService)
+        UserIdentityService userIdentityService,
+        AvatarService? avatarService = null)
     {
         _appDir = appPath.AppDir;
         _configService = configService;
         _skinService = skinService;
         _instanceService = instanceService;
         _userIdentityService = userIdentityService;
+        _avatarService = avatarService;
     }
+
+    // ─── Identity ──────────────────────────────────────────────
+
+    /// <inheritdoc/>
+    public string GetNick() => _configService.Configuration.Nick;
+
+    /// <inheritdoc/>
+    public bool SetNick(string nick)
+    {
+        if (string.IsNullOrWhiteSpace(nick) || nick.Length > 16)
+            return false;
+        _configService.Configuration.Nick = nick;
+        _configService.SaveConfig();
+        return true;
+    }
+
+    /// <inheritdoc/>
+    public string GetUUID() => GetCurrentUuid();
+
+    /// <inheritdoc/>
+    public bool SetUUID(string uuid)
+    {
+        if (string.IsNullOrWhiteSpace(uuid))
+            return false;
+        _configService.Configuration.UUID = uuid;
+        _configService.SaveConfig();
+        return true;
+    }
+
+    /// <inheritdoc/>
+    public string GetCurrentUuid()
+    {
+        var uuid = _configService.Configuration.UUID;
+        if (string.IsNullOrEmpty(uuid))
+        {
+            uuid = Guid.NewGuid().ToString();
+            SetUUID(uuid);
+        }
+        return uuid;
+    }
+
+    // ─── Avatar ────────────────────────────────────────────────
+
+    /// <inheritdoc/>
+    public string? GetAvatarPreview() => GetAvatarPreviewForUUID(GetCurrentUuid());
+
+    /// <inheritdoc/>
+    public string? GetAvatarPreviewForUUID(string uuid)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(uuid))
+                return null;
+
+            // 1. Check profile folder's avatar.png
+            var profile = _configService.Configuration.Profiles?.FirstOrDefault(p => p.UUID == uuid);
+            if (profile != null)
+            {
+                var profileDir = Path.Combine(_appDir, "Profiles", UtilityService.SanitizeFileName(profile.Name));
+                var profileAvatarPath = Path.Combine(profileDir, "avatar.png");
+
+                if (File.Exists(profileAvatarPath) && new FileInfo(profileAvatarPath).Length > 100)
+                {
+                    var bytes = File.ReadAllBytes(profileAvatarPath);
+                    return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+                }
+            }
+
+            // 2. Check AvatarBackups
+            if (_avatarService != null)
+            {
+                var backupPath = _avatarService.GetAvatarBackupPath(uuid);
+                if (File.Exists(backupPath) && new FileInfo(backupPath).Length > 100)
+                {
+                    var bytes = File.ReadAllBytes(backupPath);
+                    CopyAvatarToProfile(profile, bytes);
+                    return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+                }
+
+                // 3. Try to backup from CachedAvatarPreviews (game instances)
+                if (_avatarService.BackupAvatar(uuid))
+                {
+                    var freshBackupPath = _avatarService.GetAvatarBackupPath(uuid);
+                    if (File.Exists(freshBackupPath) && new FileInfo(freshBackupPath).Length > 100)
+                    {
+                        var bytes = File.ReadAllBytes(freshBackupPath);
+                        CopyAvatarToProfile(profile, bytes);
+                        return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+                    }
+                }
+            }
+
+            // 4. Legacy fallback: check skins/{uuid}/skin.png|jpg
+            var skinsPath = Path.Combine(_appDir, "skins", uuid);
+            if (Directory.Exists(skinsPath))
+            {
+                var pngPath = Path.Combine(skinsPath, "skin.png");
+                var jpgPath = Path.Combine(skinsPath, "skin.jpg");
+                string? skinPath = File.Exists(pngPath) ? pngPath : File.Exists(jpgPath) ? jpgPath : null;
+                if (skinPath != null)
+                {
+                    var bytes = File.ReadAllBytes(skinPath);
+                    var mime = skinPath.EndsWith(".png") ? "image/png" : "image/jpeg";
+                    return $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Avatar", $"Could not load avatar preview for {uuid}: {ex.Message}");
+            return null;
+        }
+    }
+
+    private void CopyAvatarToProfile(Profile? profile, byte[] avatarBytes)
+    {
+        if (profile == null) return;
+        try
+        {
+            var profileDir = Path.Combine(_appDir, "Profiles", UtilityService.SanitizeFileName(profile.Name));
+            Directory.CreateDirectory(profileDir);
+            File.WriteAllBytes(Path.Combine(profileDir, "avatar.png"), avatarBytes);
+        }
+        catch { /* Best effort */ }
+    }
+
+    /// <inheritdoc/>
+    public bool ClearAvatarCache()
+    {
+        try
+        {
+            var skinsPath = Path.Combine(_appDir, "skins");
+            if (Directory.Exists(skinsPath))
+                Directory.Delete(skinsPath, true);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <inheritdoc/>
+    public string GetAvatarDirectory()
+    {
+        var uuid = GetCurrentUuid();
+        var skinsPath = Path.Combine(_appDir, "skins", uuid);
+        if (!Directory.Exists(skinsPath))
+            Directory.CreateDirectory(skinsPath);
+        return skinsPath;
+    }
+
+    /// <inheritdoc/>
+    public bool OpenAvatarDirectory()
+    {
+        try
+        {
+            var avatarDir = GetAvatarDirectory();
+            if (OperatingSystem.IsWindows())
+                Process.Start("explorer.exe", avatarDir);
+            else if (OperatingSystem.IsLinux())
+                Process.Start("xdg-open", avatarDir);
+            else if (OperatingSystem.IsMacOS())
+                Process.Start("open", avatarDir);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <inheritdoc/>
+    public string GetProfilePath(Profile profile)
+    {
+        return Path.Combine(_appDir, "Profiles", UtilityService.SanitizeFileName(profile.Name));
+    }
+
+    // ─── Profile CRUD ──────────────────────────────────────────
 
     /// <inheritdoc/>
     /// <remarks>Filters out any profiles with null/empty names or UUIDs.</remarks>

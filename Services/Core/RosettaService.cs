@@ -7,7 +7,7 @@ namespace HyPrism.Services.Core;
 /// <summary>
 /// Service responsible for checking Rosetta 2 availability on macOS Apple Silicon.
 /// </summary>
-public class RosettaService
+public class RosettaService : IRosettaService
 {
     /// <summary>
     /// Check if Rosetta 2 is installed on macOS Apple Silicon.
