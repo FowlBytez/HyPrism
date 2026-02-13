@@ -7,7 +7,7 @@
     "executableArgs": ["--no-sandbox"],
     "category": "Game",
     "icon": "Packaging/flatpak/dev.hyprism.HyPrism.png",
-    "maintainer": "HyPrism Team <noreply@example.com>"
+    "maintainer": "HyPrism Team <eivordoudo2021@gmail.com>"
   },
   "win": {
     "target": ["zip"],
