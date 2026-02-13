@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Download, Package, Loader2, AlertCircle,
-  Check, ChevronDown, ChevronLeft, ChevronRight, Upload,
+  Check, ChevronDown, Upload,
   ArrowLeft, X
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -84,6 +84,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
@@ -143,8 +144,9 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleSearch = useCallback(async (page = 0) => {
-    setIsSearching(true);
+  const handleSearch = useCallback(async (page = 0, append = false) => {
+    if (!append) setIsSearching(true);
+    else setIsLoadingMore(true);
 
     try {
       const pageSize = 20;
@@ -161,29 +163,40 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
 
       const mods: ModInfo[] = result?.mods ?? [];
 
-      setSearchResults(mods);
+      if (append) {
+        setSearchResults(prev => [...prev, ...mods]);
+      } else {
+        setSearchResults(mods);
+      }
       setTotalCount(result?.totalCount ?? 0);
       setHasMore(mods.length >= pageSize);
       setCurrentPage(page);
     } catch (err: unknown) {
       const e = err as Error;
       setError(e.message || t('modManager.searchFailed'));
-      setSearchResults([]);
+      if (!append) setSearchResults([]);
     }
 
     setIsSearching(false);
+    setIsLoadingMore(false);
     setHasSearched(true);
   }, [searchQuery, selectedCategory, selectedSortField]);
 
   // Debounced search on query/filter changes
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => handleSearch(0), 300);
+    searchTimeoutRef.current = setTimeout(() => handleSearch(0, false), 300);
     return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
   }, [searchQuery, selectedCategory, selectedSortField, handleSearch]);
 
-  const pageSize = 20;
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  // Infinite scroll handler
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLDivElement;
+    const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (scrollBottom < 200 && !isLoadingMore && !isSearching && hasMore) {
+      handleSearch(currentPage + 1, true);
+    }
+  }, [isLoadingMore, isSearching, hasMore, currentPage, handleSearch]);
 
   // ------- Mod files -------
 
@@ -526,6 +539,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
         <div
           ref={scrollContainerRef}
           className="overflow-y-auto p-4 min-w-0"
+          onScroll={handleScroll}
           style={{
             flex: selectedMod ? '0 0 55%' : '1 1 100%',
             transition: 'flex 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -619,27 +633,14 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
                 );
               })}
 
-              {/* Pagination controls */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-3 pt-4 pb-2">
-                  <button
-                    onClick={() => handleSearch(currentPage - 1)}
-                    disabled={currentPage === 0 || isSearching}
-                    className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:pointer-events-none"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <span className="text-sm text-white/50 min-w-[80px] text-center">
-                    {currentPage + 1} / {totalPages}
-                  </span>
-                  <button
-                    onClick={() => handleSearch(currentPage + 1)}
-                    disabled={!hasMore || isSearching}
-                    className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:pointer-events-none"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
+              {/* Infinite scroll loading indicator */}
+              {isLoadingMore && (
+                <div className="flex justify-center py-4">
+                  <Loader2 size={24} className="animate-spin" style={{ color: accentColor }} />
                 </div>
+              )}
+              {!hasMore && searchResults.length > 0 && (
+                <p className="text-center text-white/30 text-xs py-4">{t('modManager.allModsLoaded')}</p>
               )}
             </div>
           )}

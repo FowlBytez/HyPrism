@@ -334,6 +334,7 @@ const _profile = {
   duplicate: (data?: unknown) => invoke<Profile>('hyprism:profile:duplicate', data),
   openFolder: (data?: unknown) => send('hyprism:profile:openFolder', data),
   avatarForUuid: (data?: unknown) => invoke<string>('hyprism:profile:avatarForUuid', data),
+  setAvatar: (data?: unknown) => invoke<{ success: boolean }>('hyprism:profile:setAvatar', data),
 };
 
 const _auth = {

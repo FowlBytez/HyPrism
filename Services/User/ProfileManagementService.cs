@@ -40,6 +40,7 @@ public class ProfileManagementService : IProfileManagementService
         _userIdentityService = userIdentityService;
     }
 
+
     /// <inheritdoc/>
     /// <remarks>Filters out any profiles with null/empty names or UUIDs.</remarks>
     public List<Profile> GetProfiles()
@@ -548,21 +549,46 @@ public class ProfileManagementService : IProfileManagementService
             {
                 Directory.CreateDirectory(profileDir);
                 Logger.Info("Profile", $"Created profile folder: {profileDir}");
+                
+                // Write profile info to the folder so it always has matching data
+                try
+                {
+                    var profileInfo = new
+                    {
+                        username = profile.Name,
+                        uuid = profile.UUID,
+                        createdAt = DateTime.UtcNow.ToString("o")
+                    };
+                    var infoPath = Path.Combine(profileDir, "profile.json");
+                    var json = System.Text.Json.JsonSerializer.Serialize(profileInfo, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(infoPath, json);
+                    Logger.Info("Profile", $"Created profile info file: {infoPath}");
+                }
+                catch (Exception infoEx)
+                {
+                    Logger.Warning("Profile", $"Failed to write profile info: {infoEx.Message}");
+                }
             }
             
-            // Open folder in file manager (cross-platform)
+            // Open folder in file manager (cross-platform) — use ProcessStartInfo to handle paths with spaces
+            var psi = new ProcessStartInfo();
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                Process.Start("explorer.exe", profileDir);
+                psi.FileName = "explorer.exe";
+                psi.Arguments = $"\"{profileDir}\"";
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                Process.Start("open", profileDir);
+                psi.FileName = "open";
+                psi.Arguments = $"\"{profileDir}\"";
             }
             else // Linux
             {
-                Process.Start("xdg-open", profileDir);
+                psi.FileName = "xdg-open";
+                psi.Arguments = $"\"{profileDir}\"";
             }
+            psi.UseShellExecute = false;
+            Process.Start(psi);
             
             Logger.Success("Profile", $"Opened profile folder: {profileDir}");
             return true;

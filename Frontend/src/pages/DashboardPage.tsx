@@ -281,7 +281,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
           className="flex items-center gap-2"
         >
           <button
-            onClick={async () => { ipc.browser.open('https://discord.gg/hyprism'); }}
+            onClick={async () => { ipc.browser.open('https://discord.gg/ekZqTtynjp'); }}
             className="p-2 rounded-xl hover:bg-[#5865F2]/20 transition-all active:scale-95"
             title={t('main.joinDiscord')}
           >
@@ -366,7 +366,32 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
           className="flex flex-col items-center"
         >
           {/* Button bar with relative positioning */}
-          <div className="relative mt-4">
+          <div className="relative mt-7">
+            {/* Educational label */}
+            <AnimatePresence>
+              {!shouldHideInfo && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 12, scale: 0.95 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="absolute bottom-full flex w-full justify-center mb-3"
+                >
+                  <div className="bg-[#1a1a1e]/80 backdrop-blur-sm rounded-full px-5 py-1.5 border border-white/[0.06] shadow-lg">
+                    <p className="text-white/40 text-[11px] whitespace-nowrap text-center">
+                      {t('main.educational')}{' '}
+                      <button
+                        onClick={() => ipc.browser.open('https://hytale.com')}
+                        className="font-semibold hover:underline cursor-pointer"
+                        style={{ color: accentColor }}
+                      >
+                        {t('main.buyIt')}
+                      </button>
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <div
               className={`flex items-center h-14 gap-2`}
             >

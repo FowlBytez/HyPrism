@@ -32,7 +32,7 @@ async function GetNick(): Promise<string> { return (await ipc.profile.get()).nic
 async function GetUUID(): Promise<string> { return (await ipc.profile.get()).uuid ?? ''; }
 async function GetAvatarPreview(): Promise<string | null> { return (await ipc.profile.get()).avatarPath ?? null; }
 async function GetAuthDomain(): Promise<string> { return (await ipc.settings.get()).authDomain ?? 'sessions.sanasol.ws'; }
-async function GetDiscordLink(): Promise<string> { console.warn('[IPC] GetDiscordLink: stub'); return 'https://discord.gg/hyprism'; }
+async function GetDiscordLink(): Promise<string> { console.warn('[IPC] GetDiscordLink: stub'); return 'https://discord.gg/ekZqTtynjp'; }
 
 // Real IPC functions that now have channels
 async function GetLauncherFolderPath(): Promise<string> { return ipc.settings.launcherPath(); }
@@ -583,7 +583,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     // Get the maintainer (yyyumeniku)
     const maintainer = contributors.find(c => c.login.toLowerCase() === 'yyyumeniku');
-    const otherContributors = contributors.filter(c => c.login.toLowerCase() !== 'yyyumeniku');
+    const otherContributors = contributors.filter(c => !['yyyumeniku', 'freakdaniel'].includes(c.login.toLowerCase()));
 
     return (
         <>
@@ -1380,6 +1380,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                                         <div className="text-left">
                                                             <span className="text-white font-medium text-sm">sanasol</span>
                                                             <p className="text-xs text-white/40">{t('settings.aboutSettings.authRole')}</p>
+                                                        </div>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => BrowserOpenURL('https://github.com/freakdaniel')}
+                                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors"
+                                                    >
+                                                        <img 
+                                                            src="https://avatars.githubusercontent.com/u/212660794?v=4" 
+                                                            alt="FREAK DANIEL"
+                                                            className="w-12 h-12 rounded-full"
+                                                        />
+                                                        <div className="text-left">
+                                                            <span className="text-white font-medium text-sm">FREAK DANIEL</span>
+                                                            <p className="text-xs text-white/40">CoDev, creator of the premium system, refactored the whole UI, code and a LOT MORE</p>
                                                         </div>
                                                     </button>
                                                 </div>
