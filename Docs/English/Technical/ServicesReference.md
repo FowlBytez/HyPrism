@@ -65,6 +65,7 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 - **Selected instance launch sync:** selecting an instance updates both `SelectedInstanceId` and legacy launch fields (`VersionType`/`SelectedVersion`), and Dashboard launch sends explicit branch/version to avoid stale-target launches.
 - **Launch path priority:** if `SelectedInstanceId` is set, `GameSessionService` resolves launch/install path by instance ID first (no fallback to another installed instance with same branch/version).
 - **Latest metadata storage:** `latest.json` is stored under branch root (`Instances/<branch>/latest.json`) instead of `Instances/<branch>/latest/latest.json`, preventing accidental creation of placeholder `latest` instance folders.
+- **Linux NVIDIA EGL fix:** in dedicated GPU mode, launcher exports `__EGL_VENDOR_LIBRARY_FILENAMES` to detected NVIDIA GLVND vendor JSON (e.g. `/usr/share/glvnd/egl_vendor.d/10_nvidia.json`) to avoid fallback to `llvmpipe` on affected systems.
 
 ### ClientPatcher ⚠️
 - **File:** `Services/Game/ClientPatcher.cs`

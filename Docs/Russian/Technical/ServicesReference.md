@@ -62,6 +62,7 @@
 - **Синхронизация запуска с выбранным инстансом:** при выборе инстанса обновляются и `SelectedInstanceId`, и legacy-поля запуска (`VersionType`/`SelectedVersion`), а запуск с Dashboard отправляет явные `branch/version`, чтобы исключить старт «старого» инстанса.
 - **Приоритет пути запуска:** если задан `SelectedInstanceId`, `GameSessionService` резолвит путь установки/запуска сначала по ID инстанса (без fallback на другой установленный инстанс того же branch/version).
 - **Хранение метаданных latest:** `latest.json` хранится в корне ветки (`Instances/<branch>/latest.json`), а не в `Instances/<branch>/latest/latest.json`, чтобы не провоцировать случайное создание плейсхолдер-папок `latest`.
+- **Linux NVIDIA EGL fix:** в режиме dedicated launcher экспортирует `__EGL_VENDOR_LIBRARY_FILENAMES` в обнаруженный NVIDIA GLVND vendor JSON (например, `/usr/share/glvnd/egl_vendor.d/10_nvidia.json`), чтобы исключить fallback в `llvmpipe` на затронутых системах.
 
 ### ClientPatcher ⚠️
 - **Файл:** `Services/Game/ClientPatcher.cs`
