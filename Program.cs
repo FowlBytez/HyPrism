@@ -110,6 +110,23 @@ class Program
     {
         var wwwroot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
 
+        static string? ResolveAppIconPath()
+        {
+            var baseDir = AppContext.BaseDirectory;
+            var candidates = new[]
+            {
+                Path.Combine(baseDir, "Build", "icon.png"),
+                Path.Combine(baseDir, "icon.png"),
+                Path.GetFullPath(Path.Combine(baseDir, "..", "Build", "icon.png")),
+                Path.GetFullPath(Path.Combine(baseDir, "..", "..", "Build", "icon.png")),
+                Path.GetFullPath(Path.Combine(baseDir, "..", "Resources", "Build", "icon.png")),
+                Path.GetFullPath(Path.Combine(baseDir, "..", "Resources", "icon.png")),
+                Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "Build", "icon.png")),
+            };
+
+            return candidates.FirstOrDefault(File.Exists);
+        }
+
         // Register IPC handlers BEFORE creating window to ensure they're ready
         // when the frontend starts making IPC calls during initialization
         var ipcService = services.GetRequiredService<IpcService>();
@@ -124,7 +141,7 @@ class Program
         // On Windows/Linux, BrowserWindowOptions.Icon sets the window icon.
         // On macOS, Icon is ignored by Electron; the dock icon must be set
         // programmatically via Electron.App.Dock.SetIcon().
-        var iconPath = Path.GetFullPath(Path.Combine("Build", "icon.png"));
+        var iconPath = ResolveAppIconPath();
 
         #pragma warning disable 
 
@@ -141,7 +158,7 @@ class Program
                 Title = "HyPrism",
                 AutoHideMenuBar = true,
                 BackgroundColor = "#0D0D10",
-                Icon = iconPath
+                Icon = iconPath ?? string.Empty
             },
             $"file://{Path.Combine(wwwroot, "index.html")}"
         );
@@ -154,8 +171,15 @@ class Program
         {
             try
             {
-                Electron.Dock.SetIcon(iconPath);
-                Logger.Info("Boot", $"macOS dock icon set to {iconPath}");
+                if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
+                {
+                    Electron.Dock.SetIcon(iconPath);
+                    Logger.Info("Boot", $"macOS dock icon set to {iconPath}");
+                }
+                else
+                {
+                    Logger.Warning("Boot", "macOS dock icon not set: icon.png not found in expected app paths");
+                }
             }
             catch (Exception ex)
             {
