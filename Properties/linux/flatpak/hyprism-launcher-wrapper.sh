@@ -96,10 +96,13 @@ if [ -z "$asset_url" ]; then
     json_all=$(curl -sSf "https://api.github.com/repos/$REPO/releases" 2>/dev/null || true)
     if [ -n "$json_all" ]; then
       # prefer non-draft releases; pick first release with matching asset
-      asset_url=$(printf "%s" "$json_all" | get_asset_url -)
+      asset_url=$(get_asset_url "$json_all")
       if [ -n "$asset_url" ]; then
         # find the tag_name for the release that contains the matched asset
-        lineno=$(printf "%s" "$json_all" | grep -nF "$asset_url" | head -n1 | cut -d: -f1 || true)
+        lineno=$(grep -nF "$asset_url" <<JSON | head -n1 | cut -d: -f1 || true
+$json_all
+JSON
+        )
         if [ -n "$lineno" ]; then
           REMOTE_TAG=$(printf "%s" "$json_all" | head -n "$lineno" | grep -E '"tag_name"' | tail -n1 | sed -E 's/.*"tag_name" *: *"([^"]+)".*/\1/' || true)
           REMOTE_VERSION=$(normalize_version "$REMOTE_TAG")
@@ -205,7 +208,7 @@ fi
 
 # Minimal shim that execs the wrapper shipped in /app/lib/hyprism if present,
 # otherwise execs the system wrapper (this file is kept to make bundle builds
-# include the wrapper script). The real logic is in Packaging/flatpak/hyprism-launcher-wrapper.sh
+# include the wrapper script). The real logic is in Properties/linux/flatpak/hyprism-launcher-wrapper.sh
 
 if [ -x "/app/lib/hyprism/hyprism-launcher-wrapper.sh" ]; then
   exec /app/lib/hyprism/hyprism-launcher-wrapper.sh "$@"

@@ -593,7 +593,7 @@ build_deb()      { build_platform "linux" '["deb"]'                             
 build_rpm()      { build_platform "linux" '["rpm"]'                                 "rpm"; }
 build_tar()      { build_platform "linux" '["tar.xz"]'                              "tar.xz"; }
 
-# Build flatpak using the repository Flatpak manifest (Packaging/linux/flatpak/...)
+# Build flatpak using the repository Flatpak manifest (Properties/linux/flatpak/...)
 # -- do NOT rely on electron-builder's flatpak target; use flatpak-builder + build-bundle
 arch_to_flatpak_arch() {
     case "$1" in
@@ -633,7 +633,7 @@ build_flatpak() {
     done
 }
 
-# Publish for a single RID then build .flatpak from Packaging/linux/flatpak manifest
+# Publish for a single RID then build .flatpak from Properties/linux/flatpak manifest
 do_flatpak_publish() {
     local rid="$1"
     local arch="$2"
@@ -643,6 +643,10 @@ do_flatpak_publish() {
 
     # dotnet publish (same as do_publish does)
     cd "$PROJECT_ROOT"
+    # Ensure dotnet/electron-builder temp files land on disk (avoid small tmpfs /tmp)
+    mkdir -p "$PROJECT_ROOT/.tmp"
+    export TMPDIR="$PROJECT_ROOT/.tmp"
+
     if ! dotnet publish -c Release -p:RuntimeIdentifier="$rid"; then
         log_error "dotnet publish failed for $rid"
         FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -657,8 +661,7 @@ do_flatpak_publish() {
     fi
 
     # Copy publish output into manifest 'bundle' source (manifest expects a 'bundle' dir)
-    local manifest_dir="$PROJECT_ROOT/Packaging/linux/flatpak"
-    local bundle_dir="$manifest_dir/bundle"
+local manifest_dir="$PROJECT_ROOT/Properties/linux/flatpak"
     rm -rf "$bundle_dir"
     mkdir -p "$bundle_dir"
     cp -a "$publish_dir/." "$bundle_dir/"
@@ -694,12 +697,12 @@ do_flatpak_publish() {
     flatpak_arch=$(arch_to_flatpak_arch "$arch")
     local out_file="$DIST_DIR/HyPrism-linux-$arch-$version.flatpak"
 
-    if ! flatpak build-bundle --repo="$repo_dir" "$out_file" com.hyprismteam.hyprism "$version" --arch="$flatpak_arch"; then
-        log_error "flatpak build-bundle failed for $arch"
-        rm -rf "$bundle_dir" "$build_dir"
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        return 1
-    fi
+    # Use the app-id declared in the Flatpak manifest so repo refs match the bundle export
+    local manifest_file="$manifest_dir/com.hyprismteam.hyprism.yml"
+    local flatpak_app_id
+    flatpak_app_id=$(grep -E '^app-id:' "$manifest_file" | awk '{print $2}' | tr -d "\"'" ) || flatpak_app_id="com.hyprismteam.hyprism"
+
+    flatpak build-bundle "$repo_dir" "$out_file" "$flatpak_app_id" --arch="$flatpak_arch"
 
     local elapsed=$(( SECONDS - start_time ))
     log_ok "Flatpak built: $(basename "$out_file") — ${elapsed}s"

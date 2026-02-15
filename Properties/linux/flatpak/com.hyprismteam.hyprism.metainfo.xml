@@ -3,6 +3,7 @@
   <id>com.hyprismteam.hyprism</id>
   <name>HyPrism</name>
   <summary>Cross-platform Hytale launcher</summary>
+  <icon type="cached">com.hyprismteam.hyprism</icon>
   <metadata_license>MIT</metadata_license>
   <project_license>MIT</project_license>
 
@@ -19,7 +20,7 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">HyPrism.desktop</launchable>
+  <launchable type="desktop-id">com.hyprismteam.hyprism.desktop</launchable>
 
   <screenshots>
     <screenshot type="default">
