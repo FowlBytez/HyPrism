@@ -9,7 +9,7 @@
 # Targets:
 #   all        All formats for the current platform
 #   linux      All Linux formats (AppImage + deb + rpm + tar.xz)
-#   win        All Windows formats (zip)
+#   win        All Windows formats (zip + exe)
 #   mac        All macOS formats (dmg)
 #   appimage   Linux AppImage
 #   deb        Linux .deb package
@@ -18,6 +18,7 @@
 #   flatpak    Linux .flatpak bundle
 #   dmg        macOS .dmg disk image
 #   zip        Windows portable .zip
+#   exe        Windows installer .exe (NSIS)
 #   clean      Remove dist/ and intermediate publish dirs
 #
 # Options:
@@ -104,7 +105,7 @@ if [[ ${#TARGETS[@]} -eq 0 ]]; then
     echo ""
     echo "Usage: $0 <target> [<target>...] [--arch x64|arm64]"
     echo ""
-    echo "Targets: all linux win mac appimage deb rpm tar flatpak dmg zip clean"
+    echo "Targets: all linux win mac appimage deb rpm tar flatpak dmg zip exe clean"
     echo ""
     echo "Examples:"
     echo "  $0 all                  # All formats, both arches"
@@ -612,9 +613,10 @@ build_tar()      { build_platform "linux" '["tar.xz"]'                          
 build_flatpak()  { build_platform "linux" '["flatpak"]'                              "flatpak"; }
 build_dmg()      { build_platform "mac"   '["dmg"]'                                 "dmg"; }
 build_zip()      { build_platform "win"   '["zip"]'                                 "zip"; }
+build_exe()      { build_platform "win"   '["nsis"]'                                "exe (NSIS)"; }
 
 build_linux()    { build_platform "linux" '["AppImage", "deb", "rpm", "tar.xz"]'    "Linux (all formats)"; }
-build_win()      { build_platform "win"   '["zip"]'                                 "Windows (zip)"; }
+build_win()      { build_platform "win"   '["zip", "nsis"]'                        "Windows (zip + exe)"; }
 build_mac()      { build_platform "mac"   '["dmg"]'                                 "macOS (dmg)"; }
 
 build_all() {
@@ -681,9 +683,10 @@ for target in "${TARGETS[@]}"; do
         flatpak)   build_flatpak ;;
         dmg)       build_dmg ;;
         zip)       build_zip ;;
+        exe)       build_exe ;;
         *)
             log_error "Unknown target: $target"
-            echo "Valid targets: all linux win mac appimage deb rpm tar flatpak dmg zip clean"
+            echo "Valid targets: all linux win mac appimage deb rpm tar flatpak dmg zip exe clean"
             exit 1
             ;;
     esac

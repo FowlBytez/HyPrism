@@ -2,8 +2,15 @@
 
 ## Requirements
 
-- **Windows 10/11** (x64), **Linux** (x64), or **macOS** (x64/arm64)
+- **Windows:** Windows 10 **22H2** or Windows 11 (x64)
+- **Linux:** x64 distribution compatible with modern Electron builds (tested baseline: Ubuntu 18.04+, Debian 10+, Fedora 32+)
+- **macOS:** Monterey (12)+, Apple Silicon (arm64)
 - Internet connection for first launch (authentication & game download)
+
+Runtime note:
+- HyPrism is currently built with **Electron 34.2.0** and `net10.0` self-contained publish.
+- No separate .NET runtime installation is required for release binaries.
+- On old Windows 10 builds (pre-22H2), startup can fail due to unsupported OS/runtime combinations.
 
 ## Download
 
@@ -11,9 +18,15 @@ Download the latest release from the [GitHub Releases](https://github.com/yyyume
 
 ### Windows
 
+Option A (portable):
 1. Download `HyPrism-win-x64.zip`
 2. Extract to any folder
 3. Run `HyPrism.exe`
+
+Option B (installer):
+1. Download `HyPrism-win-x64-<version>.exe`
+2. Run installer
+3. Launch HyPrism from Start menu or desktop shortcut
 
 ### Linux
 
