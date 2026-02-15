@@ -70,12 +70,13 @@ dotnet build
 # Продакшен-публикация
 dotnet publish -c Release -r linux-x64
 
-# Flatpak
-- Манифест сборки (источник): `Packaging/linux/flatpak/com.hyprismteam.hyprism.json`
-- Метаданные Flatpak (desktop, metainfo, иконка, wrapper) теперь находятся в `Packaging/linux/flatpak/` — редактируйте их там.
-
-flatpak-builder build Packaging/linux/flatpak/com.hyprismteam.hyprism.json
+# Flatpak-бандл (рекомендуется)
+./Scripts/publish.sh flatpak --arch x64
 ```
+
+Упаковка Flatpak теперь генерируется через `Scripts/publish.sh` и Electron Builder.
+Linux-иконки генерируются из `Frontend/public/icon.png` в `Build/icons/` во время публикации.
+Источник AppStream-метаданных остаётся `Properties/linux/com.hyprismteam.hyprism.metainfo.xml`.
 
 Релизный CI (`.github/workflows/release.yml`) публикует Linux-артефакты только для `linux-x64`. Релизные сборки Linux `arm64` не поддерживаются.
 
@@ -87,7 +88,7 @@ dotnet publish -c Release -r osx-x64
 dotnet publish -c Release -r osx-arm64
 ```
 
-Смотрите `Packaging/macos/Info.plist` для специфичных метаданных macOS.
+Смотрите `Properties/macos/Info.plist` для специфичных метаданных macOS.
 
 ### Windows
 

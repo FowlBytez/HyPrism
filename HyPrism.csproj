@@ -25,7 +25,7 @@
 
   <!-- Windows-specific settings -->
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows')) OR '$(RuntimeIdentifier)' == 'win-x64' OR '$(RuntimeIdentifier)' == 'win-arm64'">
-    <ApplicationIcon>Packaging/windows/HyPrism.ico</ApplicationIcon>
+    <ApplicationIcon>Properties/windows/HyPrism.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- Release optimizations -->

@@ -10,7 +10,7 @@
     "target": ["flatpak"],
     "executableArgs": ["--no-sandbox"],
     "category": "Game",
-    "icon": "Build/icons",
+    "icon": "icons",
         "maintainer": "HyPrism Team <eivordoudo2021@gmail.com>",
         "synopsis": "Cross-platform Hytale launcher",
         "description": "HyPrism is a cross-platform Hytale launcher with instance and mod management.",
@@ -23,8 +23,8 @@
     }
   },
   "flatpak": {
-    "runtimeVersion": "25.08",
-    "baseVersion": "25.08",
+    "runtimeVersion": "24.08",
+    "baseVersion": "24.08",
     "useWaylandFlags": true
   }
 }

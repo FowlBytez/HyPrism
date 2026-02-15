@@ -19,7 +19,7 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">HyPrism.desktop</launchable>
+  <launchable type="desktop-id">com.hyprismteam.hyprism.desktop</launchable>
 
   <screenshots>
     <screenshot type="default">

@@ -45,6 +45,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DIST_DIR="$PROJECT_ROOT/dist"
 EB_CONFIG="$PROJECT_ROOT/Properties/electron-builder.json"
+LINUX_APP_ID="com.hyprismteam.hyprism"
 
 # ─── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -240,13 +241,22 @@ prepare_macos_icon() {
 
 # ─── Prepare Linux icon set for desktop environments ───────────────────────
 prepare_linux_icon_set() {
-    local source_png="$PROJECT_ROOT/Build/icon.png"
+    local source_png="$PROJECT_ROOT/Frontend/public/icon.png"
+    local fallback_png="$PROJECT_ROOT/Build/icon.png"
     local iconset_root="$PROJECT_ROOT/Build/icons"
 
-    if [[ ! -f "$source_png" ]]; then
-        log_warn "Build/icon.png not found; Linux packages may miss launcher icon"
+    local icon_source=""
+    if [[ -f "$source_png" ]]; then
+        icon_source="$source_png"
+    elif [[ -f "$fallback_png" ]]; then
+        icon_source="$fallback_png"
+    else
+        log_warn "No source icon found (expected Frontend/public/icon.png or Build/icon.png)"
         return 0
     fi
+
+    mkdir -p "$PROJECT_ROOT/Build"
+    cp "$icon_source" "$PROJECT_ROOT/Build/icon.png"
 
     rm -rf "$iconset_root"
     mkdir -p "$iconset_root"
@@ -254,27 +264,34 @@ prepare_linux_icon_set() {
     local sizes=(16 24 32 48 64 128 256 512)
     for size in "${sizes[@]}"; do
         local target="$iconset_root/${size}x${size}.png"
+        local hicolor_dir="$iconset_root/hicolor/${size}x${size}/apps"
+        mkdir -p "$hicolor_dir"
 
         if command -v convert >/dev/null 2>&1; then
-            convert "$source_png" -resize "${size}x${size}" "$target" >/dev/null 2>&1 || cp "$source_png" "$target"
+            convert "$PROJECT_ROOT/Build/icon.png" -resize "${size}x${size}" "$target" >/dev/null 2>&1 || cp "$PROJECT_ROOT/Build/icon.png" "$target"
         else
-            cp "$source_png" "$target"
+            cp "$PROJECT_ROOT/Build/icon.png" "$target"
         fi
+
+        cp "$target" "$hicolor_dir/${LINUX_APP_ID}.png"
+        cp "$target" "$hicolor_dir/HyPrism.png"
     done
 
-    # Keep a generic icon file as fallback for tooling that expects icon.png
-    cp "$source_png" "$iconset_root/icon.png"
+    # Keep fallbacks at the icon root as well
+    cp "$PROJECT_ROOT/Build/icon.png" "$iconset_root/icon.png"
+    cp "$PROJECT_ROOT/Build/icon.png" "$iconset_root/${LINUX_APP_ID}.png"
+    cp "$PROJECT_ROOT/Build/icon.png" "$iconset_root/HyPrism.png"
 
-    log_ok "Prepared Linux icon set in Build/icons (files: ${sizes[*]} + icon.png)"
+    log_ok "Prepared Linux icon set in Build/icons (hicolor + app-id icons, source: $(basename "$icon_source"))"
 }
 
 # ─── Inject AppStream metadata into .deb artifact ───────────────────────────
 inject_deb_appstream() {
     local deb_path="$1"
-    local metainfo_src="$PROJECT_ROOT/Packaging/linux/com.hyprismteam.hyprism.metainfo.xml"
+    local metainfo_src="$PROJECT_ROOT/Properties/linux/com.hyprismteam.hyprism.metainfo.xml"
 
     if [[ ! -f "$metainfo_src" ]]; then
-        log_warn "AppStream metadata not found: Packaging/linux/com.hyprismteam.hyprism.metainfo.xml"
+        log_warn "AppStream metadata not found: Properties/linux/com.hyprismteam.hyprism.metainfo.xml"
         return 0
     fi
 
@@ -312,10 +329,10 @@ inject_deb_appstream() {
 # ─── Inject AppStream metadata into .rpm artifact ───────────────────────────
 inject_rpm_appstream() {
     local rpm_path="$1"
-    local metainfo_src="$PROJECT_ROOT/Packaging/linux/com.hyprismteam.hyprism.metainfo.xml"
+    local metainfo_src="$PROJECT_ROOT/Properties/linux/com.hyprismteam.hyprism.metainfo.xml"
 
     if [[ ! -f "$metainfo_src" ]]; then
-        log_warn "AppStream metadata not found: Packaging/linux/com.hyprismteam.hyprism.metainfo.xml"
+        log_warn "AppStream metadata not found: Properties/linux/com.hyprismteam.hyprism.metainfo.xml"
         return 0
     fi
 

@@ -15,6 +15,7 @@ obj/
 *.cache
 .vs/
 Build/icons/*
+Build/*
 
 # Rider IDE
 .idea/
