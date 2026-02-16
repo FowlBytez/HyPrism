@@ -75,9 +75,9 @@ HyPrism
 
 # Flatpak build artifacts
 flatpak-repo/
-flatpak-build/
 .flatpak-builder/
 *.flatpak
+Properties/linux/flatpak/bundle
 
 # scripts
 scripts/run.sh
