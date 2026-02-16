@@ -107,7 +107,8 @@ jobs:
             rpm \
             libfuse2 \
             flatpak \
-            flatpak-builder
+            flatpak-builder \
+            fakeroot
 
       - name: Prepare Flatpak remotes
         run: |

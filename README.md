@@ -23,6 +23,7 @@ Downloads are available in [Releases](https://github.com/yyyumeniku/HyPrism/rele
 
 **Requirements:**
 - .NET 10.0 SDK
+- (for local Flatpak builds) `fakeroot` — required so `chrome-sandbox` is packaged with correct owner/permissions (SUID)
 
 **Build:**
 ```bash
