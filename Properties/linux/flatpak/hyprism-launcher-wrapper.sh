@@ -34,11 +34,13 @@ launch_bundled() {
     sandbox_mode=$(stat -c '%a' "$BUNDLED_DIR/chrome-sandbox" 2>/dev/null || true)
     sandbox_owner=$(stat -c '%u' "$BUNDLED_DIR/chrome-sandbox" 2>/dev/null || true)
     if [ "$sandbox_mode" != "4755" ] || [ "$sandbox_owner" != "0" ]; then
-      log "chrome-sandbox present but not SUID root (owner=$sandbox_owner mode=$sandbox_mode). Trying --no-sandbox fallback"
-      eval exec \"$BUNDLED_LAUNCHER\" $extra_args --no-sandbox
+      log "chrome-sandbox present but not SUID root (owner=$sandbox_owner mode=$sandbox_mode). Production requires SUID chrome-sandbox — aborting"
+      echo "ERROR: chrome-sandbox must be setuid root (mode 4755). Rebuild Flatpak with chrome-sandbox installed as setuid." >&2
+      exit 1
     fi
   fi
-  eval exec \"$BUNDLED_LAUNCHER\" $extra_args
+
+  eval \"$BUNDLED_LAUNCHER\" $extra_args
 }
 
 log() {
