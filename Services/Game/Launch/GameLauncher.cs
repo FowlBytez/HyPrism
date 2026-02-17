@@ -40,6 +40,7 @@ public class GameLauncher : IGameLauncher
     private readonly HttpClient _httpClient;
     private readonly HytaleAuthService _hytaleAuthService;
     private readonly GpuDetectionService _gpuDetectionService;
+    private readonly string _appDir;
     
     private Config _config => _configService.Configuration;
 
@@ -63,6 +64,7 @@ public class GameLauncher : IGameLauncher
     /// <param name="httpClient">HTTP client for authentication requests.</param>
     /// <param name="hytaleAuthService">Service for official Hytale OAuth authentication.</param>
     /// <param name="gpuDetectionService">Service for GPU detection.</param>
+    /// <param name="appPath">Application path configuration.</param>
     public GameLauncher(
         IConfigService configService,
         ILaunchService launchService,
@@ -75,7 +77,8 @@ public class GameLauncher : IGameLauncher
         AvatarService avatarService,
         HttpClient httpClient,
         HytaleAuthService hytaleAuthService,
-        GpuDetectionService gpuDetectionService)
+        GpuDetectionService gpuDetectionService,
+        AppPathConfiguration appPath)
     {
         _configService = configService;
         _launchService = launchService;
@@ -89,6 +92,7 @@ public class GameLauncher : IGameLauncher
         _httpClient = httpClient;
         _hytaleAuthService = hytaleAuthService;
         _gpuDetectionService = gpuDetectionService;
+        _appDir = appPath.AppDir;
         _gameProcessService.ProcessExited += OnGameProcessExited;
     }
 
@@ -341,7 +345,7 @@ public class GameLauncher : IGameLauncher
 
             try
             {
-                var dualAuthResult = await DualAuthService.EnsureAgentAvailableAsync(versionPath, (msg, progress) =>
+                var dualAuthResult = await DualAuthService.EnsureAgentAvailableAsync(_appDir, (msg, progress) =>
                 {
                     Logger.Info("DualAuth", progress.HasValue ? $"{msg} ({progress}%)" : msg);
                     if (progress.HasValue)

@@ -429,6 +429,16 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
     GetCustomInstanceDir().then(dir => dir && setInstanceDir(dir)).catch(() => {});
   }, [loadInstances]);
 
+  // Reload instance list when a download finishes so newly-installed instances
+  // reflect their updated status without requiring a manual refresh.
+  const prevDownloadingRef = useRef(isDownloading);
+  useEffect(() => {
+    if (prevDownloadingRef.current && !isDownloading) {
+      loadInstances();
+    }
+    prevDownloadingRef.current = isDownloading;
+  }, [isDownloading, loadInstances]);
+
   // Load installed mods when selected instance changes
   const loadInstalledMods = useCallback(async (options?: { silent?: boolean }) => {
     const silent = !!options?.silent;
@@ -1981,13 +1991,9 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="px-4 py-2 border-b border-white/[0.06] flex-shrink-0"
+                  className={`px-4 py-2 border-b border-white/[0.06] flex-shrink-0 ${canCancel ? 'cursor-pointer' : ''}`}
+                  onClick={() => canCancel && onCancelDownload?.()}
                 >
-                  <div
-                    className={`rounded-xl px-3 py-2 border border-white/[0.06] ${canCancel ? 'cursor-pointer' : ''}`}
-                    style={{ background: 'rgba(28,28,30,0.98)' }}
-                    onClick={() => canCancel && onCancelDownload?.()}
-                  >
                     <div className="h-1.5 w-full bg-[#1c1c1e] rounded-full overflow-hidden mb-1.5">
                       <div
                         className="h-full rounded-full transition-all duration-300"
@@ -2015,7 +2021,6 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                         )}
                       </div>
                     </div>
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

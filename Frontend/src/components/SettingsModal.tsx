@@ -156,6 +156,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         isAvailable: boolean;
         testedAt: string;
     } | null>(null);
+    const [shipOfYarnSpeedTest, setShipOfYarnSpeedTest] = useState<{
+        mirrorId: string;
+        mirrorUrl: string;
+        mirrorName: string;
+        pingMs: number;
+        speedMBps: number;
+        isAvailable: boolean;
+        testedAt: string;
+    } | null>(null);
     const [officialSpeedTest, setOfficialSpeedTest] = useState<{
         pingMs: number;
         speedMBps: number;
@@ -164,6 +173,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     } | null>(null);
     const [isMirrorTesting, setIsMirrorTesting] = useState(false);
     const [isCobyLobbyTesting, setIsCobyLobbyTesting] = useState(false);
+    const [isShipOfYarnTesting, setIsShipOfYarnTesting] = useState(false);
     const [isOfficialTesting, setIsOfficialTesting] = useState(false);
     const [hasOfficialAccount, setHasOfficialAccount] = useState(false);
     const [closeAfterLaunch, setCloseAfterLaunch] = useState(false);
@@ -667,6 +677,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             });
         } finally {
             setIsCobyLobbyTesting(false);
+        }
+    };
+
+    const handleTestShipOfYarnSpeed = async (forceRefresh = false) => {
+        setIsShipOfYarnTesting(true);
+        try {
+            const result = await ipc.settings.testMirrorSpeed({ mirrorId: 'shipofyarn', forceRefresh });
+            setShipOfYarnSpeedTest(result);
+        } catch (err) {
+            console.error('ShipOfYarn speed test failed:', err);
+            setShipOfYarnSpeedTest({
+                mirrorId: 'shipofyarn',
+                mirrorUrl: '',
+                mirrorName: 'ShipOfYarn',
+                pingMs: -1,
+                speedMBps: 0,
+                isAvailable: false,
+                testedAt: new Date().toISOString()
+            });
+        } finally {
+            setIsShipOfYarnTesting(false);
         }
     };
 
@@ -1470,6 +1501,69 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                                             <Wifi size={16} />
                                                         )}
                                                         <span className="ml-2 text-sm">{isCobyLobbyTesting ? t('settings.downloads.testing') : t('settings.downloads.testSpeed')}</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* ShipOfYarn Mirror Card */}
+                                    <div
+                                        className="p-3 rounded-xl border cursor-default transition-colors"
+                                        style={{
+                                            backgroundColor: '#151515',
+                                            borderColor: 'rgba(255,255,255,0.08)'
+                                        }}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                                                    <span className="text-lg">🧶</span>
+                                                </div>
+                                                <div>
+                                                    <div className="text-white text-sm font-medium">ShipOfYarn Mirror</div>
+                                                    <div className="text-[11px] text-white/40 mt-0.5">{t('settings.downloads.mirrorsHint')}</div>
+                                                    <code className="text-[10px] text-white/30 mt-1 block font-mono">thecute.cloud/ShipOfYarn</code>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 relative">
+                                                <AnimatePresence mode="wait">
+                                                    {shipOfYarnSpeedTest && !isShipOfYarnTesting && (
+                                                        <motion.div
+                                                            key="shipofyarn-speed-badge"
+                                                            initial={{ opacity: 0, x: 20, scale: 0.9 }}
+                                                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                                                            exit={{ opacity: 0, x: 20, scale: 0.9 }}
+                                                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                                                            className={`flex items-center gap-2 px-3 h-10 rounded-full text-xs ${shipOfYarnSpeedTest.isAvailable
+                                                                ? 'bg-green-500/20 text-green-400'
+                                                                : 'bg-red-500/20 text-red-400'
+                                                                }`}
+                                                        >
+                                                            {shipOfYarnSpeedTest.isAvailable ? (
+                                                                <>
+                                                                    <span>{shipOfYarnSpeedTest.pingMs}ms</span>
+                                                                    <span>•</span>
+                                                                    <span>{shipOfYarnSpeedTest.speedMBps.toFixed(1)} MB/s</span>
+                                                                </>
+                                                            ) : (
+                                                                <span>{t('settings.downloads.unavailable')}</span>
+                                                            )}
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                                <div className={`flex rounded-full overflow-hidden ${gc}`}>
+                                                    <button
+                                                        onClick={() => handleTestShipOfYarnSpeed(true)}
+                                                        disabled={isShipOfYarnTesting}
+                                                        className="h-10 px-4 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-white/60"
+                                                    >
+                                                        {isShipOfYarnTesting ? (
+                                                            <Loader2 size={16} className="animate-spin" />
+                                                        ) : (
+                                                            <Wifi size={16} />
+                                                        )}
+                                                        <span className="ml-2 text-sm">{isShipOfYarnTesting ? t('settings.downloads.testing') : t('settings.downloads.testSpeed')}</span>
                                                     </button>
                                                 </div>
                                             </div>

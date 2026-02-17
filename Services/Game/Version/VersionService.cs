@@ -66,6 +66,11 @@ public class VersionService : IVersionService
         
         // Sort by priority
         _sources.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+
+        foreach (var source in _sources)
+        {
+            Logger.Debug("Version", $"Source {source.SourceId}: full={source.LayoutInfo.FullBuildLocation}; patch={source.LayoutInfo.PatchLocation}; cache={source.LayoutInfo.CachePolicy}");
+        }
     }
 
     /// <summary>
@@ -126,12 +131,26 @@ public class VersionService : IVersionService
             Data = new VersionsCacheData()
         };
 
+        snapshot = SanitizeSnapshot(snapshot);
+
         // Update OS/Arch in case they changed
         snapshot.Os = osName;
         snapshot.Arch = arch;
         snapshot.FetchedAtUtc = DateTime.UtcNow;
 
-        // Fetch from ALL sources using IVersionSource interface
+        // Load existing patch cache (same structure, saved alongside versions)
+        var patchSnapshot = LoadPatchCacheSnapshot() ?? new PatchesCacheSnapshot
+        {
+            Os = osName,
+            Arch = arch,
+            FetchedAtUtc = DateTime.UtcNow,
+            Data = new PatchesCacheData()
+        };
+        patchSnapshot.Os = osName;
+        patchSnapshot.Arch = arch;
+        patchSnapshot.FetchedAtUtc = DateTime.UtcNow;
+
+        // Fetch versions AND patches from ALL sources
         foreach (var source in _sources)
         {
             if (!source.IsAvailable)
@@ -175,10 +194,41 @@ public class VersionService : IVersionService
             {
                 Logger.Warning("Version", $"{source.SourceId} fetch failed for {normalizedBranch}: {ex.Message}");
             }
+
+            // Fetch patch chain from the same source (runs in sync, no fire-and-forget)
+            try
+            {
+                var patchSteps = await source.GetPatchChainAsync(osName, arch, normalizedBranch, ct);
+                if (patchSteps.Count > 0)
+                {
+                    if (source.Type == VersionSourceType.Official)
+                    {
+                        patchSnapshot.Data.Hytale ??= new Dictionary<string, List<CachedPatchStep>>();
+                        patchSnapshot.Data.Hytale[normalizedBranch] = patchSteps;
+                    }
+                    else
+                    {
+                        var mirrorPatch = patchSnapshot.Data.Mirrors.FirstOrDefault(m => m.MirrorId == source.SourceId);
+                        if (mirrorPatch == null)
+                        {
+                            mirrorPatch = new MirrorPatchCache { MirrorId = source.SourceId };
+                            patchSnapshot.Data.Mirrors.Add(mirrorPatch);
+                        }
+                        mirrorPatch.Branches[normalizedBranch] = patchSteps;
+                    }
+
+                    Logger.Success("Version", $"{source.SourceId} returned {patchSteps.Count} patch steps for {normalizedBranch}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug("Version", $"{source.SourceId} patch chain fetch failed for {normalizedBranch}: {ex.Message}");
+            }
         }
 
-        // Save updated cache
+        // Save both caches together
         SaveCacheSnapshot(snapshot);
+        SavePatchCacheSnapshot(patchSnapshot);
         _memoryCache = snapshot;
 
         // Return merged version list
@@ -493,17 +543,31 @@ public class VersionService : IVersionService
         string os, string arch, string branch, int version, CancellationToken ct = default)
     {
         var normalizedBranch = NormalizeBranch(branch);
-        
-        // Use selected mirror if available, otherwise select one
-        var mirror = _selectedMirror ?? await GetSelectedMirrorAsync(ct);
-        if (mirror == null && _mirrorSources.Count > 0)
+
+        var candidates = await GetMirrorCandidatesAsync(ct);
+        foreach (var mirror in candidates)
         {
-            mirror = _mirrorSources[0];
+            try
+            {
+                var url = await mirror.GetDownloadUrlAsync(os, arch, normalizedBranch, version, ct);
+                if (!string.IsNullOrWhiteSpace(url))
+                {
+                    if (!ReferenceEquals(_selectedMirror, mirror))
+                    {
+                        _selectedMirror = mirror;
+                        Logger.Info("Version", $"Switched active mirror to {mirror.SourceId} for {normalizedBranch} v{version}");
+                    }
+
+                    return url;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Version", $"Mirror {mirror.SourceId} failed for {normalizedBranch} v{version}: {ex.Message}");
+            }
         }
-        
-        return mirror != null 
-            ? await mirror.GetDownloadUrlAsync(os, arch, normalizedBranch, version, ct)
-            : null;
+
+        return null;
     }
 
     /// <summary>
@@ -513,17 +577,52 @@ public class VersionService : IVersionService
         string os, string arch, string branch, int fromVersion, int toVersion, CancellationToken ct = default)
     {
         var normalizedBranch = NormalizeBranch(branch);
-        
-        // Use selected mirror if available, otherwise select one
-        var mirror = _selectedMirror ?? await GetSelectedMirrorAsync(ct);
-        if (mirror == null && _mirrorSources.Count > 0)
+
+        var candidates = await GetMirrorCandidatesAsync(ct);
+        foreach (var mirror in candidates)
         {
-            mirror = _mirrorSources[0];
+            try
+            {
+                var url = await mirror.GetDiffUrlAsync(os, arch, normalizedBranch, fromVersion, toVersion, ct);
+                if (!string.IsNullOrWhiteSpace(url))
+                {
+                    if (!ReferenceEquals(_selectedMirror, mirror))
+                    {
+                        _selectedMirror = mirror;
+                        Logger.Info("Version", $"Switched active mirror to {mirror.SourceId} for {normalizedBranch} v{fromVersion}~{toVersion}");
+                    }
+
+                    return url;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Version", $"Mirror {mirror.SourceId} failed for {normalizedBranch} v{fromVersion}~{toVersion}: {ex.Message}");
+            }
         }
-        
-        return mirror != null
-            ? await mirror.GetDiffUrlAsync(os, arch, normalizedBranch, fromVersion, toVersion, ct)
-            : null;
+
+        return null;
+    }
+
+    private async Task<List<IVersionSource>> GetMirrorCandidatesAsync(CancellationToken ct)
+    {
+        var candidates = new List<IVersionSource>();
+
+        var preferred = _selectedMirror ?? await SelectBestMirrorAsync(ct);
+        if (preferred != null)
+        {
+            candidates.Add(preferred);
+        }
+
+        foreach (var mirror in _mirrorSources)
+        {
+            if (!candidates.Contains(mirror))
+            {
+                candidates.Add(mirror);
+            }
+        }
+
+        return candidates;
     }
 
     /// <summary>
@@ -738,7 +837,13 @@ public class VersionService : IVersionService
             var json = File.ReadAllText(path);
             if (string.IsNullOrWhiteSpace(json)) return null;
 
-            return JsonSerializer.Deserialize<VersionsCacheSnapshot>(json);
+            var snapshot = JsonSerializer.Deserialize<VersionsCacheSnapshot>(json);
+            if (snapshot == null)
+            {
+                return null;
+            }
+
+            return SanitizeSnapshot(snapshot);
         }
         catch (Exception ex)
         {
@@ -751,6 +856,8 @@ public class VersionService : IVersionService
     {
         try
         {
+            snapshot = SanitizeSnapshot(snapshot);
+
             var path = GetCacheSnapshotPath();
             var directory = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory))
@@ -766,6 +873,93 @@ public class VersionService : IVersionService
         catch (Exception ex)
         {
             Logger.Warning("Version", $"Failed to save versions cache: {ex.Message}");
+        }
+    }
+
+    private VersionsCacheSnapshot SanitizeSnapshot(VersionsCacheSnapshot snapshot)
+    {
+        snapshot.Data ??= new VersionsCacheData();
+        snapshot.Data.Mirrors ??= new List<MirrorSourceCache>();
+
+        var allowedMirrorIds = _mirrorSources
+            .Select(m => m.SourceId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var filtered = snapshot.Data.Mirrors
+            .Where(m => !string.IsNullOrWhiteSpace(m.MirrorId) && allowedMirrorIds.Contains(m.MirrorId))
+            .GroupBy(m => m.MirrorId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.Last())
+            .ToList();
+
+        if (filtered.Count != snapshot.Data.Mirrors.Count)
+        {
+            Logger.Debug("Version", $"Sanitized mirror cache list: {snapshot.Data.Mirrors.Count} -> {filtered.Count}");
+        }
+
+        snapshot.Data.Mirrors = filtered;
+        return snapshot;
+    }
+
+    private string GetPatchCacheSnapshotPath()
+        => Path.Combine(_appDir, "Cache", "Game", "patches.json");
+
+    private PatchesCacheSnapshot? LoadPatchCacheSnapshot()
+    {
+        try
+        {
+            var path = GetPatchCacheSnapshotPath();
+            if (!File.Exists(path)) return null;
+
+            var json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json)) return null;
+
+            var snapshot = JsonSerializer.Deserialize<PatchesCacheSnapshot>(json);
+            if (snapshot == null) return null;
+
+            // Sanitize mirrors list: remove mirrors that are no longer registered
+            snapshot.Data ??= new PatchesCacheData();
+            snapshot.Data.Mirrors ??= new List<MirrorPatchCache>();
+
+            var allowedMirrorIds = _mirrorSources
+                .Select(m => m.SourceId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            snapshot.Data.Mirrors = snapshot.Data.Mirrors
+                .Where(m => !string.IsNullOrWhiteSpace(m.MirrorId) && allowedMirrorIds.Contains(m.MirrorId))
+                .GroupBy(m => m.MirrorId, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.Last())
+                .ToList();
+
+            return snapshot;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Version", $"Failed to deserialize patches cache: {ex.Message}");
+            return null;
+        }
+    }
+
+    private void SavePatchCacheSnapshot(PatchesCacheSnapshot snapshot)
+    {
+        try
+        {
+            var path = GetPatchCacheSnapshotPath();
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(path, json);
+
+            var totalSteps = (snapshot.Data.Hytale?.Values.Sum(v => v.Count) ?? 0)
+                + snapshot.Data.Mirrors.Sum(m => m.Branches.Values.Sum(v => v.Count));
+            Logger.Debug("Version", $"Saved patches cache ({totalSteps} total steps) to {path}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Version", $"Failed to save patches cache: {ex.Message}");
         }
     }
     

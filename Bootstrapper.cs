@@ -86,10 +86,9 @@ public static class Bootstrapper
                     sp.GetRequiredService<AppPathConfiguration>().AppDir,
                     sp.GetRequiredService<IConfigService>(),
                     sp.GetRequiredService<HytaleVersionSource>(),
-                    new IVersionSource[] {
-                        sp.GetRequiredService<EstroGenVersionSource>(),
-                        sp.GetRequiredService<CobyLobbyVersionSource>()
-                    }));
+                    MirrorLoaderService.LoadAll(
+                        sp.GetRequiredService<AppPathConfiguration>().AppDir,
+                        sp.GetRequiredService<HttpClient>())));
             services.AddSingleton<IVersionService>(sp => sp.GetRequiredService<VersionService>());
 
             #endregion
@@ -169,7 +168,8 @@ public static class Bootstrapper
                     sp.GetRequiredService<AvatarService>(),
                     sp.GetRequiredService<HttpClient>(),
                     sp.GetRequiredService<HytaleAuthService>(),
-                    sp.GetRequiredService<GpuDetectionService>()));
+                    sp.GetRequiredService<GpuDetectionService>(),
+                    sp.GetRequiredService<AppPathConfiguration>()));
             services.AddSingleton<IGameLauncher>(sp => sp.GetRequiredService<GameLauncher>());
 
             services.AddSingleton(sp =>
@@ -218,7 +218,7 @@ public static class Bootstrapper
                     sp.GetRequiredService<ConfigService>()));
             services.AddSingleton<IHytaleAuthService>(sp => sp.GetRequiredService<HytaleAuthService>());
 
-            // Version Sources (unified interface for official and mirrors)
+            // Version Sources — official source (requires auth)
             services.AddSingleton(sp =>
                 new HytaleVersionSource(
                     sp.GetRequiredService<AppPathConfiguration>().AppDir,
@@ -226,13 +226,8 @@ public static class Bootstrapper
                     sp.GetRequiredService<HytaleAuthService>(),
                     sp.GetRequiredService<IConfigService>()));
 
-            services.AddSingleton(sp =>
-                new EstroGenVersionSource(
-                    sp.GetRequiredService<HttpClient>()));
-
-            services.AddSingleton(sp =>
-                new CobyLobbyVersionSource(
-                    sp.GetRequiredService<HttpClient>()));
+            // Mirror sources are loaded from JSON meta files by MirrorLoaderService
+            // (see VersionService registration above)
 
             #endregion
 

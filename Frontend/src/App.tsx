@@ -682,6 +682,9 @@ const App: React.FC = () => {
         setLaunchState('');
         setLaunchDetail('');
         gameLaunchTimeRef.current = null; // Clear launch time to prevent polling error
+
+        // Refresh instances so newly-installed instances appear as installed
+        refreshInstances();
       }
     });
 
@@ -699,6 +702,12 @@ const App: React.FC = () => {
     const unsubError = EventsOn('error', (err: any) => {
       setError(err);
       clearDownloadState();
+      setProgress(0);
+      setDownloaded(0);
+      setTotal(0);
+      setLaunchState('');
+      setLaunchDetail('');
+      setDownloadState('downloading');
     });
 
     return () => {
@@ -830,6 +839,7 @@ const App: React.FC = () => {
     send('hyprism:game:launch', {
       branch,
       version,
+      launchAfterDownload: false,
       ...(launchingInstance?.id ? { instanceId: launchingInstance.id } : {})
     });
   };

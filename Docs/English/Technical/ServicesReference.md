@@ -63,7 +63,9 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 - **Server JAR policy:** The launcher no longer rewrites `Server/HytaleServer.jar` during custom-auth launches.
 - **Stop control:** Game stop is available through IPC (`hyprism:game:stop`) and can be triggered from Dashboard and Instances actions.
 - **Official 403 recovery:** If official CDN download returns HTTP 403 (expired signed `verify` token), the service force-refreshes version cache and retries official download once before mirror fallback.
+- **Pre-release mirror fallback:** If target full mirror file is invalid/missing (for example 0-byte placeholder), service tries previous full build and applies patch chain to target version.
 - **Selected instance launch sync:** selecting an instance updates both `SelectedInstanceId` and legacy launch fields (`VersionType`/`SelectedVersion`), and Dashboard launch sends explicit branch/version to avoid stale-target launches.
+- **Instance-menu install mode:** Launch requests from Instances page can set `launchAfterDownload=false`, so download/install completes without auto-starting the game.
 - **Launch path priority:** if `SelectedInstanceId` is set, `GameSessionService` resolves launch/install path by instance ID first (no fallback to another installed instance with same branch/version).
 - **Latest metadata storage:** `latest.json` is stored under branch root (`Instances/<branch>/latest.json`) instead of `Instances/<branch>/latest/latest.json`, preventing accidental creation of placeholder `latest` instance folders.
 - **Linux NVIDIA EGL fix:** in dedicated GPU mode, launcher exports `__EGL_VENDOR_LIBRARY_FILENAMES` to detected NVIDIA GLVND vendor JSON (e.g. `/usr/share/glvnd/egl_vendor.d/10_nvidia.json`) to avoid fallback to `llvmpipe` on affected systems.
@@ -75,19 +77,32 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 
 ### VersionService
 - **Purpose:** Manages game version discovery and download URL resolution
-- **Sources:** Queries official Hytale API and community mirror (EstroGen) for version lists
-- **Caching:** Version lists are cached locally with configurable TTL
-- **Mirror fallback:** If official servers are unavailable, mirror versions are used automatically
+- **Sources:** Queries official Hytale API and community mirrors (defined by JSON meta files in `Mirrors/`) for version lists
+- **Unified caching:** Both version lists (`versions.json`) and patch chains (`patches.json`) are cached by VersionService from ALL sources (official + mirrors) in a single coordinated fetch. The two caches share the same multi-source structure (official data + per-mirror data keyed by source ID).
+- **Cache sanitization:** Both `versions.json` and `patches.json` mirror lists are sanitized against currently registered mirror source IDs, removing stale/legacy entries and duplicate mirror IDs
+- **Mirror fallback:** If official servers are unavailable, mirrors are auto-tested and selected at runtime, with failover across available mirrors when needed
+- **Release download policy:** For mirror `release`, launcher prefers full standalone builds; patch metadata remains cached for future update flows
 
-### EstroGenVersionSource
-- **File:** `Services/Game/Sources/EstroGenVersionSource.cs`
-- **Purpose:** Community mirror version source for game downloads (licdn.estrogen.cat)
-- **URL format:** `https://licdn.estrogen.cat/hytale/patches/{os}/{arch}/{branch}/0/{version}.pwr`
-- **Diff patches:** `https://licdn.estrogen.cat/hytale/patches/{os}/{arch}/{branch}/{from}/{to}.pwr`
-- **HTML parsing:** Uses regex to parse nginx autoindex HTML for version discovery
-- **File size validation:** Versions with files < 1 MB are filtered out (incomplete uploads)
+### IVersionSource
+- **File:** `Services/Game/Sources/IVersionSource.cs`
+- **Diagnostic layout info:** Each source exposes `LayoutInfo` with three explicit fields:
+  - where full builds are downloaded (`FullBuildLocation`)
+  - where diff patches are downloaded (`PatchLocation`)
+  - how source-level cache works (`CachePolicy`)
+- **Goal:** Reduce ambiguity in mirror patch/full behavior and speed up troubleshooting of wrong URL assumptions
+
+### JsonMirrorSource
+- **File:** `Services/Game/Sources/JsonMirrorSource.cs`
+- **Purpose:** Universal mirror implementation driven by JSON meta descriptors (`Mirrors/*.mirror.json`)
+- **Source types:** `pattern` (URL templates + version discovery) and `json-index` (single API endpoint)
+- **Patch chain:** `GetPatchChainAsync` builds a full patch chain from known versions + URL templates, enabling VersionService to cache mirror patches alongside official data
 - **Speed test:** Supports mirror speed testing with ping and download speed measurement
-- **Cache TTL:** Version cache: 30 minutes, Speed test cache: 1 hour
+
+### HytaleVersionSource
+- **File:** `Services/Game/Sources/HytaleVersionSource.cs`
+- **Purpose:** Official authenticated version source (`account-data.hytale.com/patches`)
+- **Patch chain:** `GetPatchChainAsync` fetches patch steps via `from_build=1` API call
+- **Header compatibility:** Sends launcher-compatible headers (`User-Agent`, `x-hytale-launcher-version`, `x-hytale-launcher-branch`) and keeps token-refresh retries for 401/403
 
 ### ModService
 - **Purpose:** Mod listing, searching, and management (CurseForge integration)

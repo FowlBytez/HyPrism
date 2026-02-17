@@ -45,7 +45,7 @@ namespace HyPrism.Services.Core.Ipc;
 /// @type Profile { id: string; name: string; uuid?: string; isOfficial?: boolean; avatar?: string; folderName?: string; }
 /// @type HytaleAuthStatus { loggedIn: boolean; username?: string; uuid?: string; error?: string; errorType?: string; }
 /// @type ProfileSnapshot { nick: string; uuid: string; avatarPath?: string; }
-/// @type SettingsSnapshot { language: string; musicEnabled: boolean; launcherBranch: string; closeAfterLaunch: boolean; showDiscordAnnouncements: boolean; disableNews: boolean; backgroundMode: string; availableBackgrounds: string[]; accentColor: string; hasCompletedOnboarding: boolean; onlineMode: boolean; authDomain: string; javaArguments?: string; useCustomJava?: boolean; customJavaPath?: string; systemMemoryMb?: number; dataDirectory: string; instanceDirectory: string; gpuPreference?: string; preferredMirror?: string; launchOnStartup?: boolean; minimizeToTray?: boolean; animations?: boolean; transparency?: boolean; resolution?: string; ramMb?: number; sound?: boolean; closeOnLaunch?: boolean; developerMode?: boolean; verboseLogging?: boolean; preRelease?: boolean; [key: string]: unknown; }
+/// @type SettingsSnapshot { language: string; musicEnabled: boolean; launcherBranch: string; closeAfterLaunch: boolean; showDiscordAnnouncements: boolean; disableNews: boolean; backgroundMode: string; availableBackgrounds: string[]; accentColor: string; hasCompletedOnboarding: boolean; onlineMode: boolean; authDomain: string; javaArguments?: string; useCustomJava?: boolean; customJavaPath?: string; systemMemoryMb?: number; dataDirectory: string; instanceDirectory: string; gpuPreference?: string; launchOnStartup?: boolean; minimizeToTray?: boolean; animations?: boolean; transparency?: boolean; resolution?: string; ramMb?: number; sound?: boolean; closeOnLaunch?: boolean; developerMode?: boolean; verboseLogging?: boolean; preRelease?: boolean; [key: string]: unknown; }
 /// @type MirrorSpeedTestResult { mirrorId: string; mirrorUrl: string; mirrorName: string; pingMs: number; speedMBps: number; isAvailable: boolean; testedAt: string; }
 /// @type ModScreenshot { id: number; title: string; thumbnailUrl: string; url: string; }
 /// @type ModInfo { id: string; name: string; slug: string; summary: string; author: string; downloadCount: number; iconUrl: string; thumbnailUrl: string; categories: string[]; dateUpdated: string; latestFileId: string; screenshots: ModScreenshot[]; }
@@ -320,6 +320,8 @@ public class IpcService
                 return;
             }
             
+            var launchAfterDownload = true;
+
             // Optionally accept branch and version to launch a specific instance
             if (args != null)
             {
@@ -362,14 +364,52 @@ public class IpcService
                                 }
                             }
                         }
+
+                        if (data.TryGetValue("launchAfterDownload", out var launchAfterEl) && launchAfterEl.ValueKind == JsonValueKind.True)
+                        {
+                            launchAfterDownload = true;
+                        }
+                        else if (data.TryGetValue("launchAfterDownload", out launchAfterEl) && launchAfterEl.ValueKind == JsonValueKind.False)
+                        {
+                            launchAfterDownload = false;
+                        }
                     }
                 }
                 catch { /* ignore parsing errors, use current config */ }
             }
             
             Logger.Info("IPC", "Game launch requested");
-            try { await gameSession.DownloadAndLaunchAsync(); }
-            catch (Exception ex) { Logger.Error("IPC", $"Game launch failed: {ex.Message}"); }
+            try
+            {
+                var result = await gameSession.DownloadAndLaunchAsync(() => launchAfterDownload);
+
+                if (result.Cancelled || string.Equals(result.Error, "Cancelled", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Cancellation is a normal operation — just reset state, no error.
+                    progressService.ReportGameStateChanged("stopped", 0);
+                    return;
+                }
+
+                // Download-only (no launch) completed successfully
+                if (result.Success && !launchAfterDownload)
+                {
+                    progressService.ReportGameStateChanged("stopped", 0);
+                    return;
+                }
+
+                if (!result.Success)
+                {
+                    var technical = result.Error ?? "Unknown download/install error";
+                    progressService.ReportError("download", "Failed to install game", technical);
+                    progressService.ReportGameStateChanged("stopped", 1);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Game launch failed: {ex.Message}");
+                progressService.ReportError("download", "Failed to install game", ex.ToString());
+                progressService.ReportGameStateChanged("stopped", 1);
+            }
         });
 
         Electron.IpcMain.On("hyprism:game:cancel", (_) =>
@@ -1400,7 +1440,6 @@ public class IpcService
                 instanceDirectory = settings.GetInstanceDirectory(),
                 gpuPreference = settings.GetGpuPreference(),
                 gameEnvironmentVariables = settings.GetGameEnvironmentVariables(),
-                preferredMirror = settings.GetPreferredMirror(),
                 launcherVersion = UpdateService.GetCurrentVersion()
             });
         });
@@ -1505,7 +1544,6 @@ public class IpcService
             case "customJavaPath": s.SetCustomJavaPath(val.GetString() ?? ""); break;
             case "gpuPreference": s.SetGpuPreference(val.GetString() ?? "dedicated"); break;
             case "gameEnvironmentVariables": s.SetGameEnvironmentVariables(val.GetString() ?? ""); break;
-            case "preferredMirror": s.SetPreferredMirror(val.GetString() ?? "estrogen"); break;
             case "hasCompletedOnboarding": s.SetHasCompletedOnboarding(val.GetBoolean()); break;
             default: Logger.Warning("IPC", $"Unknown setting key: {key}"); break;
         }

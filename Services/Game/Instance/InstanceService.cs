@@ -252,7 +252,7 @@ public class InstanceService : IInstanceService
     }
 
     /// <summary>
-    /// Get path for latest.json file.
+    /// Get path for latest.json file (legacy, used for migration only).
     /// </summary>
     public string GetLatestInfoPath(string branch)
     {
@@ -265,20 +265,50 @@ public class InstanceService : IInstanceService
         }
 
     /// <summary>
-    /// Load latest instance info from latest.json.
+    /// Load latest instance info.
+    /// Reads from the "latest" instance's meta.json (InstalledVersion field).
+    /// Falls back to legacy latest.json for migration.
     /// </summary>
     public LatestInstanceInfo? LoadLatestInfo(string branch)
     {
         try
         {
-                var path = GetLatestInfoPath(branch);
-                if (!File.Exists(path))
+            var normalizedBranch = NormalizeVersionType(branch);
+
+            // Primary: read from the "latest" instance's meta.json
+            var latestPath = GetLatestInstancePath(normalizedBranch);
+            if (Directory.Exists(latestPath))
+            {
+                var meta = GetInstanceMeta(latestPath);
+                if (meta != null && meta.InstalledVersion > 0)
                 {
-                    path = GetLegacyLatestInfoPath(branch);
-                    if (!File.Exists(path)) return null;
+                    return new LatestInstanceInfo { Version = meta.InstalledVersion, UpdatedAt = meta.LastPlayedAt ?? meta.CreatedAt };
                 }
+            }
+
+            // Fallback: legacy latest.json files (migration path)
+            var path = GetLatestInfoPath(normalizedBranch);
+            if (!File.Exists(path))
+            {
+                path = GetLegacyLatestInfoPath(normalizedBranch);
+                if (!File.Exists(path)) return null;
+            }
             var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<LatestInstanceInfo>(json, JsonOptions);
+            var info = JsonSerializer.Deserialize<LatestInstanceInfo>(json, JsonOptions);
+
+            // Migrate: write to instance meta so legacy file is no longer needed
+            if (info?.Version > 0 && Directory.Exists(latestPath))
+            {
+                var meta = GetInstanceMeta(latestPath);
+                if (meta != null && meta.InstalledVersion == 0)
+                {
+                    meta.InstalledVersion = info.Version;
+                    SaveInstanceMeta(latestPath, meta);
+                    Logger.Info("Instance", $"Migrated InstalledVersion={info.Version} from latest.json to instance meta for {branch}");
+                }
+            }
+
+            return info;
         }
         catch
         {
@@ -287,16 +317,35 @@ public class InstanceService : IInstanceService
     }
 
     /// <summary>
-    /// Save latest instance info to latest.json.
+    /// Save latest instance info.
+    /// Updates the "latest" instance's meta.json InstalledVersion field.
+    /// No longer creates latest.json files.
     /// </summary>
     public void SaveLatestInfo(string branch, int version)
     {
         try
         {
-            Directory.CreateDirectory(GetBranchPath(branch));
+            var normalizedBranch = NormalizeVersionType(branch);
+            var latestPath = GetLatestInstancePath(normalizedBranch);
+
+            if (Directory.Exists(latestPath))
+            {
+                var meta = GetInstanceMeta(latestPath);
+                if (meta != null)
+                {
+                    meta.InstalledVersion = version;
+                    SaveInstanceMeta(latestPath, meta);
+                    Logger.Debug("Instance", $"Updated InstalledVersion={version} in instance meta for {branch}");
+                    return;
+                }
+            }
+
+            // Fallback: write legacy latest.json if no instance meta exists yet
+            // (e.g. during initial install before meta is created)
+            Directory.CreateDirectory(GetBranchPath(normalizedBranch));
             var info = new LatestInstanceInfo { Version = version, UpdatedAt = DateTime.UtcNow };
             var json = JsonSerializer.Serialize(info, new JsonSerializerOptions(JsonOptions) { WriteIndented = true });
-            File.WriteAllText(GetLatestInfoPath(branch), json);
+            File.WriteAllText(GetLatestInfoPath(normalizedBranch), json);
         }
         catch (Exception ex)
         {

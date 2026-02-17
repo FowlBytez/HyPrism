@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using HyPrism.Models;
 using HyPrism.Services.Core.Infrastructure;
+using HyPrism.Services.Core.Integration;
 using HyPrism.Services.User;
 
 namespace HyPrism.Services.Game.Sources;
@@ -26,7 +27,6 @@ internal class HytaleAuthExpiredException : Exception
 public class HytaleVersionSource : IVersionSource
 {
     private const string PatchesApiBaseUrl = "https://account-data.hytale.com/patches";
-    private const string PatchesCacheFileName = "patches.json";
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(15);
     private const int MaxAuthRetries = 2;
 
@@ -91,6 +91,14 @@ public class HytaleVersionSource : IVersionSource
     public int Priority => 0; // Highest priority
 
     /// <inheritdoc/>
+    public VersionSourceLayoutInfo LayoutInfo => new()
+    {
+        FullBuildLocation = "Official API: /patches/{os}/{arch}/{branch}/0 (latest full build)",
+        PatchLocation = "Official API: /patches/{os}/{arch}/{branch}/{fromBuild} (signed incremental steps)",
+        CachePolicy = "In-memory TTL 15m by key os:arch:branch:fromBuild; patches cached by VersionService in Cache/Game/patches.json"
+    };
+
+    /// <inheritdoc/>
     /// <remarks>
     /// Official Hytale API with from_build=0 returns the LATEST full version as a complete .pwr.
     /// This means for downloading the latest version, we DON'T need patch chains.
@@ -129,64 +137,21 @@ public class HytaleVersionSource : IVersionSource
             }
         };
 
-        // Also cache patches for future update functionality (from_build=1)
-        // This runs in background and doesn't block the version list
-        _ = CachePatchesAsync(os, arch, branch, ct);
-
         return entries;
     }
 
-    /// <summary>
-    /// Caches patch information for future update operations.
-    /// Called in background when fetching versions.
-    /// </summary>
-    private async Task CachePatchesAsync(string os, string arch, string branch, CancellationToken ct)
+    /// <inheritdoc/>
+    public async Task<List<CachedPatchStep>> GetPatchChainAsync(
+        string os, string arch, string branch, CancellationToken ct = default)
     {
         try
         {
             // from_build=1 returns the patch chain for updating from version 1 onwards
             var patches = await GetPatchesAsync(os, arch, branch, 1, ct);
-            if (patches != null && patches.Steps.Count > 0)
-            {
-                await SavePatchesToFileAsync(os, arch, branch, patches.Steps, ct);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug("HytaleSource", $"Background patch caching failed: {ex.Message}");
-        }
-    }
+            if (patches == null || patches.Steps.Count == 0)
+                return new List<CachedPatchStep>();
 
-    /// <summary>
-    /// Saves patch steps to a separate patches.json file.
-    /// </summary>
-    private async Task SavePatchesToFileAsync(string os, string arch, string branch, List<OfficialPatchStep> steps, CancellationToken ct)
-    {
-        try
-        {
-            var cacheDir = Path.Combine(_appDir, "Cache", "Game");
-            Directory.CreateDirectory(cacheDir);
-            var patchesFile = Path.Combine(cacheDir, PatchesCacheFileName);
-
-            // Load existing cache or create new
-            PatchesCacheSnapshot cache;
-            if (File.Exists(patchesFile))
-            {
-                var json = await File.ReadAllTextAsync(patchesFile, ct);
-                cache = JsonSerializer.Deserialize<PatchesCacheSnapshot>(json) ?? new PatchesCacheSnapshot();
-            }
-            else
-            {
-                cache = new PatchesCacheSnapshot();
-            }
-
-            // Update cache metadata
-            cache.FetchedAtUtc = DateTime.UtcNow;
-            cache.Os = os;
-            cache.Arch = arch;
-
-            // Store patches for this branch
-            var patchSteps = steps.Select(s => new CachedPatchStep
+            return patches.Steps.Select(s => new CachedPatchStep
             {
                 From = s.From,
                 To = s.To,
@@ -194,19 +159,11 @@ public class HytaleVersionSource : IVersionSource
                 PwrHeadUrl = s.PwrHead,
                 SigUrl = s.Sig
             }).ToList();
-
-            cache.Patches[branch] = patchSteps;
-
-            // Save to file
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var jsonOut = JsonSerializer.Serialize(cache, options);
-            await File.WriteAllTextAsync(patchesFile, jsonOut, ct);
-
-            Logger.Debug("HytaleSource", $"Saved {patchSteps.Count} patch steps for {branch} to {patchesFile}");
         }
         catch (Exception ex)
         {
-            Logger.Warning("HytaleSource", $"Failed to save patches to file: {ex.Message}");
+            Logger.Debug("HytaleSource", $"GetPatchChainAsync failed: {ex.Message}");
+            return new List<CachedPatchStep>();
         }
     }
 
@@ -284,7 +241,7 @@ public class HytaleVersionSource : IVersionSource
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            await HytaleLauncherHeaderHelper.ApplyOfficialHeadersAsync(request, _httpClient, branch, ct);
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(30));

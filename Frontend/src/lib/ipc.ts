@@ -135,7 +135,6 @@ export interface SettingsSnapshot {
   dataDirectory: string;
   instanceDirectory: string;
   gpuPreference?: string;
-  preferredMirror?: string;
   launchOnStartup?: boolean;
   minimizeToTray?: boolean;
   animations?: boolean;

@@ -74,6 +74,11 @@
     <EmbeddedResource Include="Locales/*.json" />
   </ItemGroup>
 
+  <!-- Legacy source retained in tree for reference only; excluded from build -->
+  <ItemGroup>
+    <Compile Remove="Services/Game/Sources/MirrorVersionSource.cs" />
+  </ItemGroup>
+
   <!-- ================================================================ -->
   <!--  FRONTEND AUTO-BUILD PIPELINE                                     -->
   <!--  `npm ci` when lockfile changes, then `npm run build`             -->

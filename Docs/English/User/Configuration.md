@@ -63,18 +63,20 @@ Access settings through the **Settings** page (gear icon in sidebar).
 | Pre-release | Receive pre-release updates | false |
 | Launcher branch | Release or pre-release channel | release |
 | Data directory | Custom data storage path | Platform default |
-| Download source | Where to download game files from | auto |
+| Download source | Managed automatically by launcher (official first, mirrors as fallback) | auto |
 
-#### Download Source Options
+#### Download Source Strategy
 
-| Value | Description |
-|-------|-------------|
-| auto | Use official server if available, fallback to mirror |
-| official | Only use official Hytale servers (requires account) |
-| estrogen | Use EstroGen community mirror (licdn.estrogen.cat) |
+- HyPrism always tries official Hytale sources first.
+- If official download is unavailable, launcher automatically tests available mirrors and uses the best reachable one.
+- Mirror choice is not persisted as a user setting.
+- Mirrors are defined by JSON meta files in the `Mirrors/` folder (see [Custom Mirrors](#custom-mirrors) below).
 
-The EstroGen mirror provides full game versions at:
-`https://licdn.estrogen.cat/hytale/patches/{os}/{arch}/{branch}/0/{version}.pwr`
+## Custom Mirrors
+
+HyPrism supports a data-driven mirror system. Mirrors are defined by `.mirror.json` files in the `Mirrors/` folder inside the launcher data directory. Default mirror definitions are auto-generated on first launch.
+
+For full documentation on mirror configuration — including schema reference, all source types, version discovery methods, URL placeholders, annotated examples of all built-in mirrors, and step-by-step tutorials for creating your own — see the **[Mirrors Guide](Mirrors.md)**.
 
 ## Instance Management
 

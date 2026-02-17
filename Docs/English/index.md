@@ -24,3 +24,4 @@
 ### User
 - [Installation](User/Installation.md) — Installing HyPrism
 - [Configuration](User/Configuration.md) — Settings and configuration
+- [Mirrors Guide](User/Mirrors.md) — Custom download mirrors: setup, schemas, and examples
