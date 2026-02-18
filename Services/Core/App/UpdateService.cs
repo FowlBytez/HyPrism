@@ -22,8 +22,8 @@ namespace HyPrism.Services.Core.App;
 /// </remarks>
 public class UpdateService : IUpdateService
 {
-    private const string GitHubApiUrl = "https://api.github.com/repos/yyyumeniku/HyPrism/releases";
-    private const string ReleasesPageUrl = "https://github.com/yyyumeniku/HyPrism/releases/latest";
+    private const string GitHubApiUrl = "https://api.github.com/repos/yyyumeniku/TEST/releases";
+    private const string ReleasesPageUrl = "https://github.com/yyyumeniku/TEST/releases/latest";
     
     private static readonly Lazy<string> _launcherVersion = new(() =>
     {
@@ -80,6 +80,19 @@ public class UpdateService : IUpdateService
 
     private Config _config => _configService.Configuration;
 
+    private string GetInstalledLauncherBranchOrInit(string desiredBranch)
+    {
+        var installed = _config.InstalledLauncherBranch;
+        if (!string.IsNullOrWhiteSpace(installed))
+            return installed;
+
+        // First run (or old config): assume the currently running launcher matches the user's desired channel.
+        installed = string.IsNullOrWhiteSpace(desiredBranch) ? "release" : desiredBranch;
+        _config.InstalledLauncherBranch = installed;
+        try { _configService.SaveConfig(); } catch { /* ignore */ }
+        return installed;
+    }
+
     /// <summary>
     /// Gets the path to the latest game instance for the current branch.
     /// </summary>
@@ -125,6 +138,8 @@ public class UpdateService : IUpdateService
         {
             var launcherBranch = GetLauncherBranch();
             var isBetaChannel = launcherBranch == "beta";
+            var installedBranch = GetInstalledLauncherBranchOrInit(launcherBranch);
+            var isChannelSwitch = !string.Equals(installedBranch, launcherBranch, StringComparison.OrdinalIgnoreCase);
             
             // Get all releases (not just latest) to support beta channel
             var apiUrl = $"{GitHubApiUrl}?per_page=50";
@@ -139,30 +154,30 @@ public class UpdateService : IUpdateService
             {
                 var tagName = release.GetProperty("tag_name").GetString();
                 if (string.IsNullOrWhiteSpace(tagName)) continue;
-                
+
                 // Check GitHub's native prerelease flag
                 var isPrerelease = release.TryGetProperty("prerelease", out var prereleaseVal) && prereleaseVal.GetBoolean();
-                
+
                 // Match channel: beta channel gets prereleases, stable gets stable releases
-                if (isBetaChannel && !isPrerelease)
-                {
-                    // User wants beta, skip stable releases
-                    continue;
-                }
-                else if (!isBetaChannel && isPrerelease)
-                {
-                    // User wants stable, skip prereleases
-                    continue;
-                }
-                
+                if (isBetaChannel && !isPrerelease) continue;
+                if (!isBetaChannel && isPrerelease) continue;
+
                 // Parse version from tag
                 var version = ParseVersionFromTag(tagName);
                 if (string.IsNullOrWhiteSpace(version)) continue;
-                
-                // Compare with current version
+
+                if (isChannelSwitch)
+                {
+                    // Channel switch: always offer the newest release in the selected channel,
+                    // even if it is the same version or a downgrade.
+                    bestVersion = version;
+                    bestRelease = release;
+                    break;
+                }
+
+                // Normal update flow: only newer versions
                 if (IsNewerVersion(version, currentVersion))
                 {
-                    // Check if this is better than our current best
                     if (bestVersion == null || IsNewerVersion(version, bestVersion))
                     {
                         bestVersion = version;
@@ -174,40 +189,23 @@ public class UpdateService : IUpdateService
             if (bestRelease.HasValue && !string.IsNullOrWhiteSpace(bestVersion))
             {
                 var release = bestRelease.Value;
-                Logger.Info("Update", $"Update available: {currentVersion} -> {bestVersion} (channel: {launcherBranch})");
+                var reason = isChannelSwitch ? $"channel switch {installedBranch} -> {launcherBranch}" : "version update";
+                Logger.Info("Update", $"Update available: {currentVersion} -> {bestVersion} ({reason})");
                 
                 // Pick the right asset for this platform
                 string? downloadUrl = null;
                 string? assetName = null;
-                var assets = release.GetProperty("assets");
-                var arch = RuntimeInformation.ProcessArchitecture;
+                TryPickBestAssetForCurrentPlatform(release, out downloadUrl, out assetName);
 
-                string? targetAsset = null;
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                    targetAsset = "macos-arm64.dmg";
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                    targetAsset = "windows-x64.exe";
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                    targetAsset = arch == Architecture.Arm64 ? "linux-arm64.tar.gz" : "linux-x64.AppImage";
-
-                if (!string.IsNullOrWhiteSpace(targetAsset))
-                {
-                    foreach (var asset in assets.EnumerateArray())
-                    {
-                        var name = asset.GetProperty("name").GetString();
-                        if (!string.IsNullOrWhiteSpace(name) && name.Contains(targetAsset, StringComparison.OrdinalIgnoreCase))
-                        {
-                            downloadUrl = asset.GetProperty("browser_download_url").GetString();
-                            assetName = name;
-                            break;
-                        }
-                    }
-                }
+                var changelog = release.TryGetProperty("body", out var bodyEl) ? bodyEl.GetString() : null;
 
                 var updateInfo = new
                 {
+                    // Back-compat: keep both `version` and `latestVersion`
                     version = bestVersion,
+                    latestVersion = bestVersion,
                     currentVersion = currentVersion,
+                    changelog = changelog ?? string.Empty,
                     downloadUrl = downloadUrl ?? "",
                     assetName = assetName ?? "",
                     releaseUrl = release.GetProperty("html_url").GetString() ?? "",
@@ -226,11 +224,6 @@ public class UpdateService : IUpdateService
             Logger.Error("Update", $"Error checking for updates: {ex.Message}");
         }
     }
-
-    /// <summary>
-    /// Скачивает и устанавливает обновление лаунчера.
-    /// После успешной загрузки автоматически заменяет текущий файл и перезапускает лаунчер.
-    /// </summary>
     public async Task<bool> UpdateAsync(JsonElement[]? args)
     {
         try
@@ -238,6 +231,8 @@ public class UpdateService : IUpdateService
             var launcherBranch = GetLauncherBranch();
             var isBetaChannel = launcherBranch == "beta";
             var currentVersion = GetLauncherVersion();
+            var installedBranch = GetInstalledLauncherBranchOrInit(launcherBranch);
+            var isChannelSwitch = !string.Equals(installedBranch, launcherBranch, StringComparison.OrdinalIgnoreCase);
             
             // Get all releases to find the best match for user's channel
             var apiUrl = $"{GitHubApiUrl}?per_page=50";
@@ -279,45 +274,16 @@ public class UpdateService : IUpdateService
             }
             
             Logger.Info("Update", $"Downloading {(isBetaChannel ? "pre-release" : "release")} {targetVersion} (current: {currentVersion})");
-            
-            var assets = targetRelease.Value.GetProperty("assets");
 
-            // Pick asset by platform/arch
-            string? targetAsset = null;
-            var arch = RuntimeInformation.ProcessArchitecture;
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            if (!isChannelSwitch && !IsNewerVersion(targetVersion, currentVersion))
             {
-                targetAsset = "macos-arm64.dmg"; // Apple Silicon only
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                targetAsset = "windows-x64.exe";
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                targetAsset = arch == Architecture.Arm64 ? "linux-arm64.tar.gz" : "linux-x64.AppImage";
-            }
-
-            if (string.IsNullOrWhiteSpace(targetAsset))
-            {
-                Logger.Warning("Update", "Unsupported OS for auto-download, opening releases page");
-                _browserService.OpenURL(ReleasesPageUrl);
+                Logger.Info("Update", $"No update needed (current: {currentVersion}, latest: {targetVersion})");
                 return false;
             }
-
+            
             string? downloadUrl = null;
             string? assetName = null;
-            foreach (var asset in assets.EnumerateArray())
-            {
-                var name = asset.GetProperty("name").GetString();
-                if (!string.IsNullOrWhiteSpace(name) && name.Contains(targetAsset, StringComparison.OrdinalIgnoreCase))
-                {
-                    downloadUrl = asset.GetProperty("browser_download_url").GetString();
-                    assetName = name;
-                    break;
-                }
-            }
+            TryPickBestAssetForCurrentPlatform(targetRelease.Value, out downloadUrl, out assetName);
 
             if (string.IsNullOrWhiteSpace(downloadUrl) || string.IsNullOrWhiteSpace(assetName))
             {
@@ -326,9 +292,9 @@ public class UpdateService : IUpdateService
                 return false;
             }
 
-            var downloadsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-            Directory.CreateDirectory(downloadsDir);
-            var targetPath = Path.Combine(downloadsDir, assetName);
+            var updateDir = Path.Combine(Path.GetTempPath(), "HyPrism", "launcher-update");
+            Directory.CreateDirectory(updateDir);
+            var targetPath = Path.Combine(updateDir, assetName);
 
             Logger.Info("Update", $"Downloading latest launcher to {targetPath}");
             using (var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
@@ -345,6 +311,19 @@ public class UpdateService : IUpdateService
             }
 
             // Platform-specific installation
+
+            // Persist the installed channel before we hand off to the replacement script.
+            // (The current process usually exits right after starting the updater.)
+            try
+            {
+                _config.InstalledLauncherBranch = launcherBranch;
+                _configService.SaveConfig();
+            }
+            catch
+            {
+                // Non-fatal
+            }
+
             await InstallUpdateAsync(targetPath);
             
             return true;
@@ -464,15 +443,216 @@ public class UpdateService : IUpdateService
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            await InstallMacOSUpdateAsync(targetPath);
+            if (targetPath.EndsWith(".dmg", StringComparison.OrdinalIgnoreCase))
+                await InstallMacOSUpdateAsync(targetPath);
+            else if (targetPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                await InstallMacOSZipUpdateAsync(targetPath);
+            else
+                await InstallMacOSBinaryUpdateAsync(targetPath);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            InstallWindowsUpdate(targetPath);
+            if (targetPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                var extractedExe = ExtractZipAndFindWindowsExe(targetPath);
+                if (string.IsNullOrWhiteSpace(extractedExe))
+                    throw new Exception("Could not find .exe inside update .zip");
+                InstallWindowsUpdate(extractedExe);
+            }
+            else
+            {
+                InstallWindowsUpdate(targetPath);
+            }
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             InstallLinuxUpdate(targetPath);
+        }
+    }
+
+    private async Task InstallMacOSBinaryUpdateAsync(string newBinaryPath)
+    {
+        try
+        {
+            var currentExe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(currentExe))
+                throw new Exception("Could not determine current executable path");
+
+            // Replace just the executable and restart the app. This is intended for update assets
+            // that are direct binaries (not DMG installers).
+            var updateScript = Path.Combine(Path.GetTempPath(), "hyprism_update.sh");
+            var scriptContent = $@"#!/bin/bash
+sleep 2
+chmod +x ""{newBinaryPath}"" 2>/dev/null || true
+rm -f ""{currentExe}""
+cp -f ""{newBinaryPath}"" ""{currentExe}""
+chmod +x ""{currentExe}"" 2>/dev/null || true
+""{currentExe}"" &
+rm -f ""{newBinaryPath}""
+rm -f ""$0""
+";
+
+            File.WriteAllText(updateScript, scriptContent);
+            Process.Start("chmod", $"+x \"{updateScript}\"")?.WaitForExit();
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "/bin/bash",
+                Arguments = $"\"{updateScript}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+
+            Logger.Info("Update", "Update script started, exiting launcher...");
+            Environment.Exit(0);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Update", $"Auto-update (binary) failed: {ex.Message}");
+            throw;
+        }
+    }
+
+    private async Task InstallMacOSZipUpdateAsync(string zipPath)
+    {
+        var extractDir = Path.Combine(Path.GetTempPath(), "HyPrism", "launcher-update", "extract", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(extractDir);
+        ZipFile.ExtractToDirectory(zipPath, extractDir, true);
+
+        // Prefer .app bundles if present
+        var appCandidate = Directory.GetDirectories(extractDir, "*.app", SearchOption.AllDirectories).FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(appCandidate) && Directory.Exists(appCandidate))
+        {
+            var currentExe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(currentExe))
+                throw new Exception("Could not determine current executable path");
+
+            var currentAppPath = currentExe;
+            for (int i = 0; i < 3; i++)
+            {
+                currentAppPath = Path.GetDirectoryName(currentAppPath);
+                if (string.IsNullOrEmpty(currentAppPath)) break;
+            }
+
+            if (string.IsNullOrEmpty(currentAppPath) || !currentAppPath.EndsWith(".app", StringComparison.OrdinalIgnoreCase))
+                throw new Exception($"Could not determine .app path from: {currentExe}");
+
+            var updateScript = Path.Combine(Path.GetTempPath(), "hyprism_update.sh");
+            var scriptContent = $@"#!/bin/bash
+sleep 2
+rm -rf ""{currentAppPath}""
+cp -R ""{appCandidate}"" ""{currentAppPath}""
+rm -f ""{zipPath}""
+open ""{currentAppPath}""
+rm -f ""$0""
+";
+            File.WriteAllText(updateScript, scriptContent);
+            Process.Start("chmod", $"+x \"{updateScript}\"")?.WaitForExit();
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "/bin/bash",
+                Arguments = $"\"{updateScript}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            Logger.Info("Update", "Update script started, exiting launcher...");
+            Environment.Exit(0);
+            return;
+        }
+
+        // Fallback: raw executable inside zip
+        var raw = FindExecutableFile(extractDir);
+        if (string.IsNullOrWhiteSpace(raw))
+            throw new Exception("Could not find executable inside update .zip");
+
+        await InstallMacOSBinaryUpdateAsync(raw);
+    }
+
+    private static string? ExtractZipAndFindWindowsExe(string zipPath)
+    {
+        var extractDir = Path.Combine(Path.GetTempPath(), "HyPrism", "launcher-update", "extract", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(extractDir);
+        ZipFile.ExtractToDirectory(zipPath, extractDir, true);
+
+        var currentExe = Environment.ProcessPath;
+        var preferredName = string.IsNullOrWhiteSpace(currentExe) ? null : Path.GetFileName(currentExe);
+        var exes = Directory.GetFiles(extractDir, "*.exe", SearchOption.AllDirectories);
+
+        if (!string.IsNullOrWhiteSpace(preferredName))
+        {
+            var match = exes.FirstOrDefault(e => string.Equals(Path.GetFileName(e), preferredName, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(match)) return match;
+        }
+
+        return exes.FirstOrDefault();
+    }
+
+    private static string? FindExecutableFile(string rootDir)
+    {
+        try
+        {
+            var files = Directory.GetFiles(rootDir, "*", SearchOption.AllDirectories);
+            var direct = files.FirstOrDefault(f => string.Equals(Path.GetFileName(f), "HyPrism", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(direct)) return direct;
+
+            return files.FirstOrDefault(f =>
+                !f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) &&
+                !f.EndsWith(".json", StringComparison.OrdinalIgnoreCase) &&
+                !f.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase) &&
+                !f.EndsWith(".txt", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void TryPickBestAssetForCurrentPlatform(JsonElement release, out string? downloadUrl, out string? assetName)
+    {
+        downloadUrl = null;
+        assetName = null;
+
+        if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+            return;
+
+        static bool EndsWithAny(string name, params string[] suffixes) => suffixes.Any(s => name.EndsWith(s, StringComparison.OrdinalIgnoreCase));
+
+        // 1) Prefer known HyPrism asset naming if present
+        string[] preferredSuffixes;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            preferredSuffixes = [".dmg", ".zip", ".tar.gz"];
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            preferredSuffixes = [".exe", ".zip"];
+        else
+            preferredSuffixes = [".AppImage", ".tar.gz", ".zip"];
+
+        foreach (var asset in assets.EnumerateArray())
+        {
+            var name = asset.TryGetProperty("name", out var n) ? n.GetString() : null;
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            if (!asset.TryGetProperty("browser_download_url", out var urlEl)) continue;
+            var url = urlEl.GetString();
+            if (string.IsNullOrWhiteSpace(url)) continue;
+
+            if (EndsWithAny(name, preferredSuffixes))
+            {
+                assetName = name;
+                downloadUrl = url;
+                return;
+            }
+        }
+
+        // 2) Fallback: first asset with a download URL
+        foreach (var asset in assets.EnumerateArray())
+        {
+            var name = asset.TryGetProperty("name", out var n) ? n.GetString() : null;
+            var url = asset.TryGetProperty("browser_download_url", out var urlEl) ? urlEl.GetString() : null;
+            if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(url))
+            {
+                assetName = name;
+                downloadUrl = url;
+                return;
+            }
         }
     }
 
@@ -634,6 +814,31 @@ del ""%~f0""
             {
                 throw new Exception("Could not determine current executable path");
             }
+
+            // Accept archives by extracting and then installing the extracted payload.
+            if (targetPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                var extractDir = Path.Combine(Path.GetTempPath(), "HyPrism", "launcher-update", "extract", Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(extractDir);
+                ZipFile.ExtractToDirectory(targetPath, extractDir, true);
+                var candidate = Directory.GetFiles(extractDir, "*.AppImage", SearchOption.AllDirectories).FirstOrDefault() ?? FindExecutableFile(extractDir);
+                if (string.IsNullOrWhiteSpace(candidate))
+                    throw new Exception("Could not find executable inside update archive");
+                InstallLinuxUpdate(candidate);
+                return;
+            }
+
+            if (targetPath.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
+            {
+                var extractDir = Path.Combine(Path.GetTempPath(), "HyPrism", "launcher-update", "extract", Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(extractDir);
+                ExtractTarGz(targetPath, extractDir).GetAwaiter().GetResult();
+                var candidate = Directory.GetFiles(extractDir, "*.AppImage", SearchOption.AllDirectories).FirstOrDefault() ?? FindExecutableFile(extractDir);
+                if (string.IsNullOrWhiteSpace(candidate))
+                    throw new Exception("Could not find executable inside update archive");
+                InstallLinuxUpdate(candidate);
+                return;
+            }
             
             // For AppImage, just replace the file
             if (targetPath.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase))
@@ -668,9 +873,30 @@ rm -f ""$0""
             }
             else
             {
-                // For other formats, just open the file manager
-                try { Process.Start("xdg-open", Path.GetDirectoryName(targetPath) ?? ""); } catch { }
-                throw new Exception("Please install the update manually from Downloads.");
+                // Treat as a raw executable: replace and restart.
+                Process.Start("chmod", $"+x \"{targetPath}\"")?.WaitForExit();
+
+                var updateScript = Path.Combine(Path.GetTempPath(), "hyprism_update.sh");
+                var scriptContent = $@"#!/bin/bash
+sleep 2
+rm -f ""{currentExe}""
+mv ""{targetPath}"" ""{currentExe}""
+chmod +x ""{currentExe}"" 2>/dev/null || true
+""{currentExe}"" &
+rm -f ""$0""
+";
+                File.WriteAllText(updateScript, scriptContent);
+                Process.Start("chmod", $"+x \"{updateScript}\"")?.WaitForExit();
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = $"\"{updateScript}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+
+                Logger.Info("Update", "Update script started, exiting launcher...");
+                Environment.Exit(0);
             }
         }
         catch (Exception ex)

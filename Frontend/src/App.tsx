@@ -63,7 +63,7 @@ const stub = <T,>(name: string, fallback: T) => async (..._args: any[]): Promise
 };
 const _OpenInstanceFolder = stub('OpenInstanceFolder', undefined as void);
 const DeleteGame = stub('DeleteGame', false);
-const Update = stub('Update', undefined as void);
+const Update = async (): Promise<boolean> => ipc.update.install();
 const GetRecentLogs = stub<string[]>('GetRecentLogs', []);
 
 // Real IPC call to check if game is running
@@ -727,12 +727,6 @@ const App: React.FC = () => {
 
     try {
       await Update();
-      setError({
-        type: 'INFO',
-        message: t('app.downloadedUpdate'),
-        technical: t('app.downloadedUpdateHint'),
-        timestamp: new Date().toISOString()
-      });
     } catch (err) {
       console.error('Update failed:', err);
       setError({
@@ -865,29 +859,20 @@ const App: React.FC = () => {
   };
 
   const handleCancelDownload = async () => {
-    console.log('Cancel download requested');
-    // Immediately update UI to show cancellation is happening
-    setDownloadState('downloading');
     try {
-      const result = await CancelDownload();
-      console.log('Cancel download result:', result);
-      // Reset state immediately on successful cancel call
-      clearDownloadState();
-      setProgress(0);
-      setDownloaded(0);
-      setTotal(0);
-      setLaunchState('');
-      setLaunchDetail('');
+      CancelDownload();
     } catch (err) {
       console.error('Cancel failed:', err);
-      // Still try to reset UI state even if call fails
-      clearDownloadState();
-      setProgress(0);
-      setDownloaded(0);
-      setTotal(0);
-      setLaunchState('');
-      setLaunchDetail('');
     }
+
+    // UI reset is also handled by the backend 'cancelled' progress event,
+    // but we reset optimistically for responsiveness.
+    clearDownloadState();
+    setProgress(0);
+    setDownloaded(0);
+    setTotal(0);
+    setLaunchState('');
+    setLaunchDetail('');
   };
 
   const handleExit = async () => {
@@ -1052,6 +1037,7 @@ const App: React.FC = () => {
               uuid={uuid}
               launcherVersion={launcherVersion}
               updateAvailable={!!updateAsset}
+              launcherUpdateInfo={updateAsset}
               avatarRefreshTrigger={avatarRefreshTrigger}
               onOpenProfileEditor={() => setCurrentPage('profiles')}
               onLauncherUpdate={handleUpdate}

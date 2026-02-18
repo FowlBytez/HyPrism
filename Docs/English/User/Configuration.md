@@ -65,6 +65,8 @@ Access settings through the **Settings** page (gear icon in sidebar).
 | Data directory | Custom data storage path | Platform default |
 | Download source | Managed automatically by launcher (official first, mirrors as fallback) | auto |
 
+- Changing **Launcher branch** triggers an immediate launcher update check. If you switch between channels (release ↔ beta), HyPrism will offer the latest build from the selected channel and may reinstall or downgrade to match it.
+
 #### Download Source Strategy
 
 - HyPrism always tries official Hytale sources first.
