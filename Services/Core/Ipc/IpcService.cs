@@ -41,11 +41,11 @@ namespace HyPrism.Services.Core.Ipc;
 /// @type ProgressUpdate { state: string; progress: number; messageKey: string; args?: unknown[]; downloadedBytes: number; totalBytes: number; }
 /// @type GameState { state: 'starting' | 'started' | 'running' | 'stopped'; exitCode: number; }
 /// @type GameError { type: string; message: string; technical?: string; }
-/// @type NewsItem { title: string; excerpt?: string; url?: string; date?: string; publishedAt?: string; author?: string; imageUrl?: string; source?: string; }
+/// @type NewsItem { title: string; excerpt?: string; url?: string; date?: string; publishedAt?: string; author?: string; imageUrl?: string; source?: 'hytale' | 'hyprism'; }
 /// @type Profile { id: string; name: string; uuid?: string; isOfficial?: boolean; avatar?: string; folderName?: string; }
 /// @type HytaleAuthStatus { loggedIn: boolean; username?: string; uuid?: string; error?: string; errorType?: string; }
 /// @type ProfileSnapshot { nick: string; uuid: string; avatarPath?: string; }
-/// @type SettingsSnapshot { language: string; musicEnabled: boolean; launcherBranch: string; closeAfterLaunch: boolean; showDiscordAnnouncements: boolean; disableNews: boolean; backgroundMode: string; availableBackgrounds: string[]; accentColor: string; hasCompletedOnboarding: boolean; onlineMode: boolean; authDomain: string; javaArguments?: string; useCustomJava?: boolean; customJavaPath?: string; systemMemoryMb?: number; dataDirectory: string; instanceDirectory: string; gpuPreference?: string; useDualAuth?: boolean; launchOnStartup?: boolean; minimizeToTray?: boolean; animations?: boolean; transparency?: boolean; resolution?: string; ramMb?: number; sound?: boolean; closeOnLaunch?: boolean; developerMode?: boolean; verboseLogging?: boolean; preRelease?: boolean; [key: string]: unknown; }
+/// @type SettingsSnapshot { language: string; musicEnabled: boolean; launcherBranch: string; versionType: string; selectedVersion: number; closeAfterLaunch: boolean; launchAfterDownload: boolean; showDiscordAnnouncements: boolean; disableNews: boolean; backgroundMode: string; availableBackgrounds: string[]; accentColor: string; hasCompletedOnboarding: boolean; onlineMode: boolean; authDomain: string; javaArguments?: string; useCustomJava?: boolean; customJavaPath?: string; systemMemoryMb?: number; dataDirectory: string; instanceDirectory: string; gpuPreference?: string; gameEnvironmentVariables?: Record<string, string>; useDualAuth?: boolean; showAlphaMods: boolean; launcherVersion: string; launchOnStartup?: boolean; minimizeToTray?: boolean; animations?: boolean; transparency?: boolean; resolution?: string; ramMb?: number; sound?: boolean; closeOnLaunch?: boolean; developerMode?: boolean; verboseLogging?: boolean; preRelease?: boolean; [key: string]: unknown; }
 /// @type MirrorSpeedTestResult { mirrorId: string; mirrorUrl: string; mirrorName: string; pingMs: number; speedMBps: number; isAvailable: boolean; testedAt: string; }
 /// @type ModScreenshot { id: number; title: string; thumbnailUrl: string; url: string; }
 /// @type ModInfo { id: string; name: string; slug: string; summary: string; author: string; downloadCount: number; iconUrl: string; thumbnailUrl: string; categories: string[]; dateUpdated: string; latestFileId: string; screenshots: ModScreenshot[]; }
@@ -320,7 +320,8 @@ public class IpcService
                 return;
             }
             
-            var launchAfterDownload = true;
+            // Default behavior comes from persisted config.
+            var launchAfterDownload = configService.Configuration.LaunchAfterDownload;
 
             // Optionally accept branch and version to launch a specific instance
             if (args != null)
@@ -1198,6 +1199,37 @@ public class IpcService
                 Reply("hyprism:instance:rename:reply", false);
             }
         });
+
+        // @ipc invoke hyprism:instance:changeVersion -> boolean
+        // Change the version/branch of an existing instance.
+        // Clears game client files, updates meta.json, marks non-latest.
+        Electron.IpcMain.On("hyprism:instance:changeVersion", (args) =>
+        {
+            try
+            {
+                var json = ArgsToJson(args);
+                var data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, JsonOpts);
+                var instanceId = data?["instanceId"].GetString();
+                var branch = data?["branch"].GetString();
+                var version = data?["version"].GetInt32() ?? 0;
+
+                if (string.IsNullOrEmpty(instanceId) || string.IsNullOrEmpty(branch))
+                {
+                    Logger.Warning("IPC", "Instance changeVersion failed: missing instanceId or branch");
+                    Reply("hyprism:instance:changeVersion:reply", false);
+                    return;
+                }
+
+                var result = instanceService.ChangeInstanceVersion(instanceId, branch, version);
+                Reply("hyprism:instance:changeVersion:reply", result);
+                Logger.Info("IPC", $"Changed instance {instanceId} version to {branch} v{version}: {result}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Failed to change instance version: {ex.Message}");
+                Reply("hyprism:instance:changeVersion:reply", false);
+            }
+        });
     }
     // #endregion
 
@@ -1421,6 +1453,7 @@ public class IpcService
                 versionType = settings.GetVersionType(),
                 selectedVersion = settings.GetSelectedVersion(),
                 closeAfterLaunch = settings.GetCloseAfterLaunch(),
+                launchAfterDownload = settings.GetLaunchAfterDownload(),
                 showDiscordAnnouncements = settings.GetShowDiscordAnnouncements(),
                 disableNews = settings.GetDisableNews(),
                 backgroundMode = settings.GetBackgroundMode(),
@@ -1532,6 +1565,7 @@ public class IpcService
             case "versionType": s.SetVersionType(val.GetString() ?? "release"); break;
             case "selectedVersion": s.SetSelectedVersion(val.ValueKind == JsonValueKind.Number ? val.GetInt32() : 0); break;
             case "closeAfterLaunch": s.SetCloseAfterLaunch(val.GetBoolean()); break;
+            case "launchAfterDownload": s.SetLaunchAfterDownload(val.GetBoolean()); break;
             case "showDiscordAnnouncements": s.SetShowDiscordAnnouncements(val.GetBoolean()); break;
             case "disableNews": s.SetDisableNews(val.GetBoolean()); break;
             case "backgroundMode": s.SetBackgroundMode(val.GetString() ?? "default"); break;

@@ -22,7 +22,6 @@ const DeleteConfirmationModal = lazy(() => import('./components/modals/DeleteCon
 const OnboardingModal = lazy(() => import('./components/modals/OnboardingModal').then(m => ({ default: m.OnboardingModal })));
 
 // Functions that map to real IPC channels
-const _BrowserOpenURL = (url: string) => ipc.browser.open(url);
 const WindowClose = () => ipc.windowCtl.close();
 const CancelDownload = () => ipc.game.cancel();
 const StopGame = () => ipc.game.stop();
@@ -45,6 +44,7 @@ async function GetBackgroundMode(): Promise<string> { return (await ipc.settings
 async function GetMusicEnabled(): Promise<boolean> { return (await ipc.settings.get()).musicEnabled ?? true; }
 async function GetAccentColor(): Promise<string> { return (await ipc.settings.get()).accentColor ?? '#FF6B2B'; }
 async function GetCloseAfterLaunch(): Promise<boolean> { return (await ipc.settings.get()).closeAfterLaunch ?? false; }
+async function GetLaunchAfterDownload(): Promise<boolean> { return (await ipc.settings.get()).launchAfterDownload ?? true; }
 async function GetHasCompletedOnboarding(): Promise<boolean> { return (await ipc.settings.get()).hasCompletedOnboarding ?? false; }
 async function GetLauncherBranch(): Promise<string> { return (await ipc.settings.get()).launcherBranch ?? 'release'; }
 async function GetLauncherVersion(): Promise<string> { return (await ipc.settings.get()).launcherVersion ?? ''; }
@@ -61,8 +61,6 @@ const stub = <T,>(name: string, fallback: T) => async (..._args: any[]): Promise
   console.warn(`[IPC] ${name}: no IPC channel yet`);
   return fallback;
 };
-const _OpenInstanceFolder = stub('OpenInstanceFolder', undefined as void);
-const DeleteGame = stub('DeleteGame', false);
 const Update = stub('Update', undefined as void);
 const GetRecentLogs = stub<string[]>('GetRecentLogs', []);
 
@@ -95,15 +93,11 @@ async function GetInstances(): Promise<InstanceInfo[]> {
   }
 }
 
-const GetCustomInstanceDir = stub('GetCustomInstanceDir', '');
-const SetInstanceDirectory = stub('SetInstanceDirectory', '');
 const GetWrapperStatus = stub<null>('GetWrapperStatus', null);
 const WrapperInstallLatest = stub('WrapperInstallLatest', true);
 const WrapperLaunch = stub('WrapperLaunch', true);
 const SetLauncherBranch = stub<void>('SetLauncherBranch', undefined as void);
 const CheckRosettaStatus = stub<{ NeedsInstall: boolean; Message: string; Command: string; TutorialUrl?: string } | null>('CheckRosettaStatus', null);
-const _GetDiscordLink = stub('GetDiscordLink', 'https://discord.gg/hyprism');
-import appIcon from './assets/images/logo.png';
 
 // Modal loading fallback - minimal spinner
 const ModalFallback = () => (
@@ -111,11 +105,6 @@ const ModalFallback = () => (
     <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
   </div>
 );
-
-const withLatest = (versions: number[] | null | undefined): number[] => {
-  const base = Array.isArray(versions) ? versions : [];
-  return base.includes(0) ? base : [0, ...base];
-};
 
 const parseDateMs = (dateValue: string | number | Date | undefined): number => {
   if (!dateValue) return 0;
@@ -140,33 +129,6 @@ const formatDateConsistent = (dateMs: number, locale = 'en-US') => {
     month: 'long',
     year: 'numeric'
   });
-};
-
-const fetchLauncherReleases = async (locale: string) => {
-  try {
-    const res = await fetch('https://api.github.com/repos/yyyumeniku/HyPrism/releases?per_page=100');
-    if (!res.ok) return [] as Array<{ item: any; dateMs: number }>;
-    const data = await res.json();
-    return (Array.isArray(data) ? data : []).map((r: any) => {
-      const rawName = (r?.name || r?.tag_name || '').toString();
-      const cleaned = rawName.replace(/[()]/g, '').trim();
-      const dateMs = parseDateMs(r?.published_at || r?.created_at);
-      return {
-        item: {
-          title: `Hyprism ${cleaned || 'Release'} release`,
-          excerpt: `Hyprism ${cleaned || 'Release'} release — click to see changelog.`,
-          url: r?.html_url || 'https://github.com/yyyumeniku/HyPrism/releases',
-          date: formatDateConsistent(dateMs || Date.now(), locale),
-          author: 'HyPrism',
-          imageUrl: appIcon,
-          source: 'hyprism' as const,
-        },
-        dateMs
-      };
-    });
-  } catch {
-    return [] as Array<{ item: any; dateMs: number }>;
-  }
 };
 
 const App: React.FC = () => {
@@ -214,7 +176,7 @@ const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
 
   // Instance sub-tab state (persisted across page navigations)
-  const [instanceTab, setInstanceTab] = useState<'content' | 'browse' | 'worlds' | 'logs'>('content');
+  const [instanceTab, setInstanceTab] = useState<'content' | 'browse' | 'worlds'>('content');
 
   // Settings state
   const [launcherBranch, setLauncherBranch] = useState<string>('release');
@@ -230,7 +192,6 @@ const App: React.FC = () => {
   const [hasUpdateAvailable, setHasUpdateAvailable] = useState<boolean>(false);
   // Refs to track current instance for event listeners
   const selectedInstanceRef = useRef<InstanceInfo | null>(null);
-  const [customInstanceDir, setCustomInstanceDir] = useState<string>("");
 
   // Official server blocked state: true when using official servers with an unofficial profile in online mode
   const [isOfficialProfile, setIsOfficialProfile] = useState<boolean>(false);
@@ -477,11 +438,6 @@ const App: React.FC = () => {
     localStorage.setItem('hyprism_onboarding_done', '1');
     // Reload profile data after onboarding
     await reloadProfile();
-    // Reload instance directory
-    try {
-      const dir = await GetCustomInstanceDir();
-      if (dir) setCustomInstanceDir(dir);
-    } catch { /* ignore */ }
     // Reload background mode (user may have changed it in onboarding)
     try {
       const mode = await GetBackgroundMode();
@@ -494,7 +450,6 @@ const App: React.FC = () => {
     GetNick().then((n: string) => n && setUsername(n));
     GetUUID().then((u: string) => u && setUuid(u));
     GetLauncherVersion().then((v: string) => setLauncherVersion(v));
-    GetCustomInstanceDir().then((dir: string) => dir && setCustomInstanceDir(dir));
 
     // Compute official server/profile status for play-button blocking
     refreshOfficialStatus();
@@ -819,8 +774,10 @@ const App: React.FC = () => {
   };
 
   // Launch a specific instance from the Instances page — properly tracks download state
-  const handleLaunchFromInstances = (branch: string, version: number, instanceId?: string) => {
+  const handleLaunchFromInstances = async (branch: string, version: number, instanceId?: string) => {
     if (isGameRunning || isDownloading) return;
+
+    const launchAfterDownload = await GetLaunchAfterDownload();
 
     const launchingInstance = instanceId
       ? (instances.find(inst => inst.id === instanceId) ?? null)
@@ -840,7 +797,7 @@ const App: React.FC = () => {
     send('hyprism:game:launch', {
       branch,
       version,
-      launchAfterDownload: false,
+      launchAfterDownload,
       ...(launchingInstance?.id ? { instanceId: launchingInstance.id } : {})
     });
   };

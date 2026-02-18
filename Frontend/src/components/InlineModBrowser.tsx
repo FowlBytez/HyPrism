@@ -8,6 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useAccentColor } from '../contexts/AccentColorContext';
 import { ipc, type ModInfo, type ModCategory, type ModFileInfo } from '@/lib/ipc';
+import { ImageLightbox } from '@/components/ui/Controls';
 
 // ------- Helpers -------
 
@@ -59,6 +60,7 @@ interface InlineModBrowserProps {
   installedFileIds?: Set<string>;
   onModsInstalled?: () => void;
   onBack?: () => void;
+  refreshSignal?: number;
 }
 
 // ------- Component -------
@@ -71,6 +73,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
   installedFileIds,
   onModsInstalled,
   onBack,
+  refreshSignal,
 }) => {
   const { t } = useTranslation();
   const { accentColor, accentTextColor } = useAccentColor();
@@ -86,7 +89,6 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
   const [hasSearched, setHasSearched] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
@@ -107,7 +109,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
   const [isLoadingModFiles, setIsLoadingModFiles] = useState(false);
   const [detailSelectedFileId, setDetailSelectedFileId] = useState<string | undefined>();
   const [activeScreenshot, setActiveScreenshot] = useState(0);
-  const [fullscreenImage, setFullscreenImage] = useState<{ url: string; title: string } | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   // --- Download ---
   const [isDownloading, setIsDownloading] = useState(false);
@@ -121,6 +123,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
 
   // --- Refs ---
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragDepthRef = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
@@ -152,9 +155,39 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleSearch = useCallback(async (page = 0, append = false) => {
-    if (!append) setIsSearching(true);
-    else setIsLoadingMore(true);
+  // Ensure drag overlay is never stuck if user leaves the window / ends drag elsewhere.
+  useEffect(() => {
+    const clearDrag = () => {
+      dragDepthRef.current = 0;
+      setIsDragging(false);
+    };
+
+    const onWindowDrop = () => clearDrag();
+    const onWindowDragEnd = () => clearDrag();
+    const onWindowDragLeave = (e: DragEvent) => {
+      // Common pattern: dragleave on window with no relatedTarget means leaving the window.
+      if ((e as unknown as { relatedTarget?: EventTarget | null }).relatedTarget == null) {
+        clearDrag();
+      }
+    };
+
+    window.addEventListener('drop', onWindowDrop);
+    window.addEventListener('dragend', onWindowDragEnd);
+    window.addEventListener('dragleave', onWindowDragLeave);
+    return () => {
+      window.removeEventListener('drop', onWindowDrop);
+      window.removeEventListener('dragend', onWindowDragEnd);
+      window.removeEventListener('dragleave', onWindowDragLeave);
+    };
+  }, []);
+
+  const handleSearch = useCallback(async (page = 0, append = false, options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (append) {
+      setIsLoadingMore(true);
+    } else if (!silent) {
+      setIsSearching(true);
+    }
 
     try {
       const pageSize = 20;
@@ -176,19 +209,25 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
       } else {
         setSearchResults(mods);
       }
-      setTotalCount(result?.totalCount ?? 0);
       setHasMore(mods.length >= pageSize);
       setCurrentPage(page);
     } catch (err: unknown) {
       const e = err as Error;
       setError(e.message || t('modManager.searchFailed'));
-      if (!append) setSearchResults([]);
+      if (!append && !silent) setSearchResults([]);
     }
 
-    setIsSearching(false);
+    if (!silent) setIsSearching(false);
     setIsLoadingMore(false);
     setHasSearched(true);
   }, [searchQuery, selectedCategory, selectedSortField]);
+
+  // External refresh trigger (used by InstancesPage to nudge the browser after installs)
+  useEffect(() => {
+    if (refreshSignal == null) return;
+    // Re-run the current search with the same filters, but keep UI stable.
+    handleSearch(0, false, { silent: true });
+  }, [refreshSignal, handleSearch]);
 
   // Debounced search on query/filter changes
   useEffect(() => {
@@ -387,12 +426,32 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
 
   // ------- Drag & Drop -------
 
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
-  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.currentTarget === e.target) setIsDragging(false); };
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current += 1;
+    setIsDragging(true);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setIsDragging(false);
+    }
+  };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    dragDepthRef.current = 0;
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
@@ -437,6 +496,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
   return (
     <div
       className="h-full flex flex-col"
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -779,10 +839,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
                       src={selectedMod.screenshots[activeScreenshot]?.url || selectedMod.screenshots[activeScreenshot]?.thumbnailUrl}
                       alt={selectedMod.screenshots[activeScreenshot]?.title}
                       className="w-full h-full object-cover cursor-pointer"
-                      onClick={() => setFullscreenImage({
-                        url: selectedMod.screenshots![activeScreenshot].url,
-                        title: selectedMod.screenshots![activeScreenshot].title,
-                      })}
+                      onClick={() => setLightboxIndex(activeScreenshot)}
                     />
                   </div>
                   {selectedMod.screenshots.length > 1 && (
@@ -923,20 +980,15 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
         </div>
       )}
 
-      {/* Fullscreen image viewer */}
-      <AnimatePresence>
-        {fullscreenImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[500] bg-black/90 flex items-center justify-center cursor-pointer"
-            onClick={() => setFullscreenImage(null)}
-          >
-            <img src={fullscreenImage.url} alt={fullscreenImage.title} className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Screenshot lightbox */}
+      <ImageLightbox
+        isOpen={lightboxIndex !== null}
+        title={selectedMod?.name}
+        images={(selectedMod?.screenshots ?? []).map((ss) => ({ url: ss.url, title: ss.title }))}
+        index={lightboxIndex ?? 0}
+        onIndexChange={(next) => setLightboxIndex(next)}
+        onClose={() => setLightboxIndex(null)}
+      />
     </div>
   );
 };

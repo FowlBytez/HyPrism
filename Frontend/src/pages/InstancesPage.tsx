@@ -5,17 +5,21 @@ import {
   HardDrive, FolderOpen, Trash2, Upload, RefreshCw, 
   Clock, Box, Loader2, AlertTriangle, Check, Plus,
   Search, Package, MoreVertical,
-  ChevronRight, Image, Map, Globe, Play, X, Edit2, ChevronDown,
+  Image, Map, Globe, Play, X, Edit2, ChevronDown,
   Download, AlertCircle, RotateCw
 } from 'lucide-react';
 import { useAccentColor } from '../contexts/AccentColorContext';
 
-import { ipc, InstalledInstance, invoke, send, SaveInfo, InstanceValidationDetails, type ModInfo as CurseForgeModInfo, type ModScreenshot } from '@/lib/ipc';
+import { ipc, InstalledInstance, invoke, send, SaveInfo, type ModInfo as CurseForgeModInfo, type ModScreenshot } from '@/lib/ipc';
+import { InstancesSidebar } from '@/pages/instances/InstancesSidebar';
+import type { InstalledVersionInfo, InstanceTab, ModInfo } from '@/pages/instances/types';
 import { InlineModBrowser } from '../components/InlineModBrowser';
 import { formatBytes } from '../utils/format';
 import { GameBranch } from '@/constants/enums';
 import { CreateInstanceModal } from '../components/modals/CreateInstanceModal';
 import { EditInstanceModal } from '../components/modals/EditInstanceModal';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { AccentSegmentedControl, IconButton, MenuActionButton, MenuItemButton } from '@/components/ui/Controls';
 
 // IPC calls for instance operations - uses invoke to send to backend
 const ExportInstance = async (instanceId: string): Promise<string> => {
@@ -119,26 +123,6 @@ const GetInstanceIcon = async (instanceId: string): Promise<string | null> => {
 };
 
 // Types
-interface ModInfo {
-  id: string;
-  name: string;
-  slug?: string;
-  version: string;
-  fileName?: string;
-  author: string;
-  description: string;
-  enabled: boolean;
-  iconUrl?: string;
-  downloads?: number;
-  category?: string;
-  categories?: string[];
-  curseForgeId?: number;
-  fileId?: number;
-  releaseType?: number;
-  latestVersion?: string;
-  latestFileId?: number;
-}
-
 // Convert InstalledInstance to InstalledVersionInfo
 const toVersionInfo = (inst: InstalledInstance): InstalledVersionInfo => ({
   id: inst.id,
@@ -154,25 +138,6 @@ const toVersionInfo = (inst: InstalledInstance): InstalledVersionInfo => ({
   customName: inst.customName,
 });
 
-export interface InstalledVersionInfo {
-  id: string;
-  branch: string;
-  version: number;
-  path: string;
-  sizeBytes?: number;
-  isLatest?: boolean;
-  isLatestInstance?: boolean;
-  playTimeSeconds?: number;
-  playTimeFormatted?: string;
-  createdAt?: string;
-  lastPlayedAt?: string;
-  updatedAt?: string;
-  iconPath?: string;
-  customName?: string;
-  validationStatus?: 'Valid' | 'NotInstalled' | 'Corrupted' | 'Unknown';
-  validationDetails?: InstanceValidationDetails;
-}
-
 const pageVariants = {
   initial: { opacity: 0, y: 12 },
   animate: { opacity: 1, y: 0 },
@@ -180,8 +145,6 @@ const pageVariants = {
 };
 
 // Instance detail tabs
-type InstanceTab = 'content' | 'browse' | 'worlds';
-
 interface InstancesPageProps {
   onInstanceDeleted?: () => void;
   onInstanceSelected?: () => void;
@@ -281,11 +244,10 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
   const [bulkUpdatePreviewId, setBulkUpdatePreviewId] = useState<string | null>(null);
   const [bulkDeletePreviewId, setBulkDeletePreviewId] = useState<string | null>(null);
   const [browseRefreshSignal, setBrowseRefreshSignal] = useState(0);
+  const hasOpenedBrowseRef = useRef(false);
   const [openChangelogIds, setOpenChangelogIds] = useState<Set<string>>(new Set());
   const [changelogCache, setChangelogCache] = useState<Record<string, { status: 'idle' | 'loading' | 'ready' | 'error'; text: string }>>({});
-  const [editingInstanceName, setEditingInstanceName] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editNameValue, setEditNameValue] = useState('');
   
   // Updates
   const [modsWithUpdates, setModsWithUpdates] = useState<ModInfo[]>([]);
@@ -308,67 +270,35 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
   // Create Instance Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Tab slider animation state
-  const tabContainerRef = useRef<HTMLDivElement>(null);
-  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const [sliderStyle, setSliderStyle] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
-  const [sliderReady, setSliderReady] = useState(false);
-  const prevTabRef = useRef<InstanceTab>(activeTab);
-
-  // Measure and update slider position
-  const updateSlider = useCallback(() => {
-    const btn = tabRefs.current[activeTab];
-    const container = tabContainerRef.current;
-    if (btn && container) {
-      const containerRect = container.getBoundingClientRect();
-      const btnRect = btn.getBoundingClientRect();
-      // Only update if we got valid measurements (element is in DOM and visible)
-      if (btnRect.width > 0) {
-        setSliderStyle({
-          left: btnRect.left - containerRect.left,
-          width: btnRect.width,
-        });
-        if (!sliderReady) setSliderReady(true);
-      }
-    }
-  }, [activeTab, sliderReady]);
-
-  useEffect(() => {
-    // Use rAF to ensure DOM has been painted before measuring
-    const rafId = requestAnimationFrame(() => {
-      updateSlider();
-    });
-    window.addEventListener('resize', updateSlider);
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', updateSlider);
-    };
-  }, [updateSlider]);
-
-  // Re-measure when selectedInstance changes (tabs become visible)
-  useEffect(() => {
-    if (selectedInstance) {
-      // Double rAF: first for React commit, second for browser paint
-      const id1 = requestAnimationFrame(() => {
-        const id2 = requestAnimationFrame(() => {
-          updateSlider();
-        });
-        // Clean up inner rAF on unmount
-        return () => cancelAnimationFrame(id2);
-      });
-      return () => cancelAnimationFrame(id1);
-    }
-  }, [selectedInstance, updateSlider]);
-
-  // Track previous tab for slider animation
-  useEffect(() => {
-    prevTabRef.current = activeTab;
-  }, [activeTab]);
-
   // Keep selectedInstanceRef in sync with state
   useEffect(() => {
     selectedInstanceRef.current = selectedInstance;
   }, [selectedInstance]);
+
+  // Ensure mod drop overlay is never stuck if drag ends/leaves window.
+  useEffect(() => {
+    const clearDrop = () => {
+      modDropDepthRef.current = 0;
+      setIsModDropActive(false);
+    };
+
+    const onWindowDrop = () => clearDrop();
+    const onWindowDragEnd = () => clearDrop();
+    const onWindowDragLeave = (e: DragEvent) => {
+      if ((e as unknown as { relatedTarget?: EventTarget | null }).relatedTarget == null) {
+        clearDrop();
+      }
+    };
+
+    window.addEventListener('drop', onWindowDrop);
+    window.addEventListener('dragend', onWindowDragEnd);
+    window.addEventListener('dragleave', onWindowDragLeave);
+    return () => {
+      window.removeEventListener('drop', onWindowDrop);
+      window.removeEventListener('dragend', onWindowDragEnd);
+      window.removeEventListener('dragleave', onWindowDragLeave);
+    };
+  }, []);
 
   const tabs: InstanceTab[] = ['content', 'browse', 'worlds'];
 
@@ -534,25 +464,6 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
     setIsLoadingSaves(false);
   }, [selectedInstance]);
 
-  const refreshInstanceIcon = useCallback(async (instanceId: string) => {
-    if (!instanceId) return;
-    try {
-      const icon = await GetInstanceIcon(instanceId);
-      setInstanceIcons(prev => {
-        const next = { ...prev };
-        if (icon) {
-          const suffix = icon.includes('?') ? '&' : '?';
-          next[instanceId] = `${icon}${suffix}ts=${Date.now()}`;
-        } else {
-          delete next[instanceId];
-        }
-        return next;
-      });
-    } catch (err) {
-      console.error('Failed to refresh instance icon:', err);
-    }
-  }, []);
-
   const loadAllInstanceIcons = useCallback(async () => {
     const requestSeq = ++iconLoadSeqRef.current;
 
@@ -713,6 +624,8 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
 
   useEffect(() => {
     if (activeTab !== 'browse') return;
+    if (hasOpenedBrowseRef.current) return;
+    hasOpenedBrowseRef.current = true;
     setBrowseRefreshSignal((v) => v + 1);
   }, [activeTab]);
 
@@ -1227,24 +1140,6 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
     }
   };
 
-  const handleRenameInstance = async (inst: InstalledVersionInfo, customName: string | null) => {
-    try {
-      const result = await invoke<boolean>('hyprism:instance:rename', { 
-        instanceId: inst.id, 
-        customName: customName || null 
-      });
-      if (result) {
-        await loadInstances();
-        if (selectedInstance?.id === inst.id) {
-          setSelectedInstance(prev => prev ? { ...prev, customName: customName || undefined } : null);
-        }
-        setEditingInstanceName(false);
-      }
-    } catch (e) {
-      console.error('Failed to rename instance:', e);
-    }
-  };
-
   const handleDeleteMod = async (mod: ModInfo) => {
     if (!selectedInstance) return;
     setIsDeletingMod(true);
@@ -1530,221 +1425,83 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
       animate="animate"
       exit="exit"
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="h-full flex px-4 pt-6 pb-28 gap-4"
+      className="h-full w-full"
     >
+      <PageContainer contentClassName="h-full">
+      <div className="h-full flex gap-4">
       {/* Left Sidebar - Instances List (macOS Tahoe style) */}
-      <div className="w-72 flex-shrink-0 flex flex-col">
-        {/* Sidebar Header */}
-        <div className="flex items-center justify-between mb-3 px-3">
-          <div className="flex items-center gap-2">
-            <HardDrive size={18} className="text-white/70" />
-            <h2 className="text-sm font-semibold text-white">{t('instances.title')}</h2>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all"
-              title={t('instances.addInstance')}
-            >
-              <Plus size={14} />
-            </button>
-            <button
-              onClick={handleImport}
-              disabled={isImporting}
-              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all"
-              title={t('instances.import')}
-            >
-              {isImporting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            </button>
-            <button
-              onClick={loadInstances}
-              disabled={isLoading}
-              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all"
-              title={t('common.refresh')}
-            >
-              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        </div>
-
-        {/* Instance List & Storage Info - Unified glass panel */}
-        <div className={`flex-1 flex flex-col overflow-hidden rounded-2xl glass-panel-static-solid min-h-0`}>
-          <div className="flex-1 overflow-y-auto">
-          <div className="p-2 space-y-1">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 size={24} className="animate-spin" style={{ color: accentColor }} />
-            </div>
-          ) : instances.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-white/40">
-              <Box size={32} className="mb-2 opacity-50" />
-              <p className="text-xs text-center mb-3">{t('instances.noInstances')}</p>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 hover:text-white text-xs transition-all"
-              >
-                <Plus size={14} />
-                {t('instances.addInstance')}
-              </button>
-            </div>
-          ) : (
-            instances.map((inst) => {
-              const key = inst.id;
-              const isSelected = selectedInstance?.id === inst.id;
-              const validation = getValidationInfo(inst);
-              
-              return (
-                <div key={key} className="relative">
-                <button
-                  onClick={() => {
-                    setSelectedInstance(inst);
-                    setInlineMenuInstanceId(null);
-                    // Save selected instance to config
-                    if (inst.id) {
-                      ipc.instance.select({ id: inst.id }).then(() => {
-                        onInstanceSelected?.();
-                      }).catch(console.error);
-                    }
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setSelectedInstance(inst);
-                    if (inst.id) {
-                      ipc.instance.select({ id: inst.id }).catch(console.error);
-                    }
-                    setInlineMenuInstanceId(inst.id);
-                    setShowInstanceMenu(false);
-                  }}
-                  className={`w-full p-3 rounded-xl flex items-center gap-3 text-left transition-all duration-150 ${
-                    isSelected 
-                      ? 'shadow-md' 
-                      : 'hover:bg-white/[0.04]'
-                  }`}
-                  style={isSelected ? { 
-                    backgroundColor: `${accentColor}18`,
-                    boxShadow: `0 0 0 1px ${accentColor}40`
-                  } : undefined}
-                >
-                  {/* Instance Icon */}
-                  <div 
-                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border border-white/[0.08]"
-                    style={{ backgroundColor: isSelected ? `${accentColor}25` : 'rgba(255,255,255,0.06)' }}
-                  >
-                    {getInstanceIcon(inst)}
-                  </div>
-                  
-                  {/* Instance Info */}
-                  <div className="flex-1 min-w-0">
-                    <p 
-                      className="text-white text-sm font-medium leading-tight overflow-hidden whitespace-nowrap"
-                      title={getInstanceDisplayName(inst)}
-                      style={{
-                        maskImage: 'linear-gradient(to right, black 85%, transparent 100%)',
-                        WebkitMaskImage: 'linear-gradient(to right, black 85%, transparent 100%)'
-                      }}
-                    >
-                      {getInstanceDisplayName(inst)}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-white/40 text-xs">
-                        {inst.sizeBytes ? formatBytes(inst.sizeBytes) : t('common.unknown')}
-                      </span>
-                      {/* Validation Status Badge */}
-                      <span 
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
-                        style={{ backgroundColor: validation.bgColor, color: validation.color }}
-                        title={inst.validationDetails?.errorMessage || validation.label}
-                      >
-                        {validation.icon}
-                        {validation.status !== 'valid' && validation.label}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Selection indicator */}
-                  {isSelected && (
-                    <ChevronRight size={14} style={{ color: accentColor }} />
-                  )}
-                </button>
-                {inlineMenuInstanceId === inst.id && (
-                  <div
-                    ref={inlineMenuRef}
-                    className="absolute left-2 right-2 top-full mt-1 bg-[#1c1c1e] border border-white/[0.08] rounded-xl shadow-xl overflow-hidden z-40"
-                  >
-                    <button
-                      onClick={() => {
-                        setSelectedInstance(inst);
-                        setShowEditModal(true);
-                        setInlineMenuInstanceId(null);
-                      }}
-                      className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
-                    >
-                      <Edit2 size={14} />
-                      {t('common.edit')}
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleOpenFolder(inst);
-                        setInlineMenuInstanceId(null);
-                      }}
-                      className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
-                    >
-                      <FolderOpen size={14} />
-                      {t('common.openFolder')}
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleOpenModsFolderFor(inst);
-                        setInlineMenuInstanceId(null);
-                      }}
-                      className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
-                    >
-                      <Package size={14} />
-                      {t('modManager.openModsFolder')}
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleExport(inst);
-                        setInlineMenuInstanceId(null);
-                      }}
-                      disabled={exportingInstance !== null}
-                      className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
-                    >
-                      {exportingInstance === inst.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Upload size={14} />
-                      )}
-                      {t('common.export')}
-                    </button>
-                    <div className="border-t border-white/10 my-1" />
-                    <button
-                      onClick={() => {
-                        setInstanceToDelete(inst);
-                        setInlineMenuInstanceId(null);
-                      }}
-                      className="w-full px-4 py-2.5 text-sm text-left text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2"
-                    >
-                      <Trash2 size={14} />
-                      {t('common.delete')}
-                    </button>
-                  </div>
-                )}
-                </div>
-              );
-            })
-          )}
-          </div>
-          </div>
-
-          {/* Storage Info */}
-          {instanceDir && (
-            <div className="px-3 py-2 border-t border-white/[0.06] text-xs text-white/40 truncate flex-shrink-0">
-              {instanceDir}
-            </div>
-          )}
-        </div>
-      </div>
+      <InstancesSidebar
+        title={t('instances.title')}
+        accentColor={accentColor}
+        instances={instances}
+        isLoading={isLoading}
+        instanceDir={instanceDir}
+        selectedInstanceId={selectedInstance?.id ?? null}
+        onCreate={() => setShowCreateModal(true)}
+        onImport={handleImport}
+        importDisabled={isImporting}
+        onRefresh={loadInstances}
+        refreshDisabled={isLoading}
+        onSelectInstance={(inst) => {
+          setSelectedInstance(inst);
+          setInlineMenuInstanceId(null);
+          if (inst.id) {
+            ipc.instance
+              .select({ id: inst.id })
+              .then(() => {
+                onInstanceSelected?.();
+              })
+              .catch(console.error);
+          }
+        }}
+        onContextMenuInstance={(inst) => {
+          setSelectedInstance(inst);
+          if (inst.id) {
+            ipc.instance.select({ id: inst.id }).catch(console.error);
+          }
+          setInlineMenuInstanceId(inst.id);
+          setShowInstanceMenu(false);
+        }}
+        inlineMenuInstanceId={inlineMenuInstanceId}
+        inlineMenuRef={inlineMenuRef}
+        exportingInstanceId={exportingInstance}
+        exportDisabled={exportingInstance !== null}
+        onEdit={(inst) => {
+          setSelectedInstance(inst);
+          setShowEditModal(true);
+          setInlineMenuInstanceId(null);
+        }}
+        onOpenFolder={(inst) => {
+          handleOpenFolder(inst);
+          setInlineMenuInstanceId(null);
+        }}
+        onOpenModsFolder={(inst) => {
+          handleOpenModsFolderFor(inst);
+          setInlineMenuInstanceId(null);
+        }}
+        onExport={(inst) => {
+          handleExport(inst);
+          setInlineMenuInstanceId(null);
+        }}
+        onDelete={(inst) => {
+          setInstanceToDelete(inst);
+          setInlineMenuInstanceId(null);
+        }}
+        getDisplayName={getInstanceDisplayName}
+        getIcon={(inst) => getInstanceIcon(inst)}
+        getValidationInfo={getValidationInfo}
+        formatSize={formatBytes}
+        tCommonUnknown={t('common.unknown')}
+        tAddInstance={t('instances.addInstance')}
+        tNoInstances={t('instances.noInstances')}
+        tImport={t('instances.import')}
+        tOpenModsFolder={t('modManager.openModsFolder')}
+        tCommonRefresh={t('common.refresh')}
+        tCommonEdit={t('common.edit')}
+        tCommonOpenFolder={t('common.openFolder')}
+        tCommonExport={t('common.export')}
+        tCommonDelete={t('common.delete')}
+      />
 
       {/* Main Content - Instance Detail */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -1757,48 +1514,20 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
               {/* Left side: Tabs */}
               <div className="flex items-center gap-3">
                 {/* Tabs with sliding indicator */}
-                <div
-                  ref={tabContainerRef}
-                  className="relative flex items-center gap-1 px-1.5 py-1.5 bg-[#1c1c1e] rounded-2xl border border-white/10"
-                >
-                  {/* Sliding indicator */}
-                  <div
-                    className="absolute rounded-xl"
-                    style={{
-                      background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)`,
-                      left: sliderStyle.left,
-                      width: sliderStyle.width,
-                      top: '0.3rem',
-                      bottom: '0.3rem',
-                      transition: sliderReady
-                        ? 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
-                        : 'none',
-                      opacity: sliderReady ? 1 : 0,
-                    }}
-                  />
-                  {tabs.map((tab) => {
-                  const isTabDisabled = tab === 'browse' && selectedInstance.validationStatus !== 'Valid';
-                  return (
-                  <button
-                    key={tab}
-                    ref={(el) => { tabRefs.current[tab] = el; }}
-                    onClick={() => !isTabDisabled && setActiveTab(tab)}
-                    disabled={isTabDisabled}
-                    className={`relative z-10 px-5 py-2 rounded-xl text-sm font-bold transition-colors duration-200 whitespace-nowrap ${
-                      activeTab === tab
-                        ? 'text-white'
-                        : isTabDisabled
-                          ? 'text-white/25 cursor-not-allowed'
-                          : 'text-white/80 hover:text-white'
-                    }`}
-                    style={activeTab === tab ? { color: accentTextColor } : undefined}
-                    title={isTabDisabled ? t('instances.instanceNotInstalled') : undefined}
-                  >
-                    {getTabLabel(tab)}
-                  </button>
-                  );
-                })}
-                </div>
+                <AccentSegmentedControl
+                  value={activeTab}
+                  onChange={setActiveTab}
+                  items={tabs.map((tab) => {
+                    const isTabDisabled = tab === 'browse' && selectedInstance.validationStatus !== 'Valid';
+                    return {
+                      value: tab,
+                      label: getTabLabel(tab),
+                      disabled: isTabDisabled,
+                      title: isTabDisabled ? t('instances.instanceNotInstalled') : undefined,
+                      className: 'text-sm font-bold',
+                    };
+                  })}
+                />
               </div>
 
               {/* Right side: Action Buttons */}
@@ -1923,43 +1652,39 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
 
                   {showInstanceMenu && (
                     <div className="absolute right-0 top-full mt-2 w-48 bg-[#1c1c1e] border border-white/[0.08] rounded-xl shadow-xl z-50 overflow-hidden">
-                      <button
+                      <MenuItemButton
                         onClick={() => {
                           setShowEditModal(true);
                           setShowInstanceMenu(false);
                         }}
-                        className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
                       >
                         <Edit2 size={14} />
                         {t('common.edit')}
-                      </button>
-                      <button
+                      </MenuItemButton>
+                      <MenuItemButton
                         onClick={() => {
                           handleOpenFolder(selectedInstance);
                           setShowInstanceMenu(false);
                         }}
-                        className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
                       >
                         <FolderOpen size={14} />
                         {t('common.openFolder')}
-                      </button>
-                      <button
+                      </MenuItemButton>
+                      <MenuItemButton
                         onClick={() => {
                           handleOpenModsFolder();
                           setShowInstanceMenu(false);
                         }}
-                        className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
                       >
                         <Package size={14} />
                         {t('modManager.openModsFolder')}
-                      </button>
-                      <button
+                      </MenuItemButton>
+                      <MenuItemButton
                         onClick={() => {
                           handleExport(selectedInstance);
                           setShowInstanceMenu(false);
                         }}
                         disabled={exportingInstance !== null}
-                        className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
                       >
                         {exportingInstance === selectedInstance.id ? (
                           <Loader2 size={14} className="animate-spin" />
@@ -1967,18 +1692,18 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                           <Upload size={14} />
                         )}
                         {t('common.export')}
-                      </button>
+                      </MenuItemButton>
                       <div className="border-t border-white/10 my-1" />
-                      <button
+                      <MenuItemButton
                         onClick={() => {
                           setInstanceToDelete(selectedInstance);
                           setShowInstanceMenu(false);
                         }}
-                        className="w-full px-4 py-2.5 text-sm text-left text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2"
+                        variant="danger"
                       >
                         <Trash2 size={14} />
                         {t('common.delete')}
-                      </button>
+                      </MenuItemButton>
                     </div>
                   )}
                 </div>
@@ -2400,14 +2125,9 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                       {t('instances.saves')}
                     </h3>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={loadSaves}
-                        disabled={isLoadingSaves}
-                        className="p-2 rounded-xl text-white/50 hover:text-white hover:bg-white/10 transition-all"
-                        title={t('common.refresh')}
-                      >
+                      <IconButton onClick={loadSaves} disabled={isLoadingSaves} title={t('common.refresh')}>
                         <RefreshCw size={16} className={isLoadingSaves ? 'animate-spin' : ''} />
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
 
@@ -2466,24 +2186,27 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                             </div>
 
                             {/* Hover Overlay */}
-                            <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  OpenSaveFolder(selectedInstance!.id, selectedInstance!.branch, selectedInstance!.version, save.name);
-                                }}
-                                className="px-6 py-3 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold flex items-center justify-center gap-2 min-w-[200px]"
-                              >
-                                <FolderOpen size={18} />
-                                {t('common.openFolder')}
-                              </button>
-                              <button
-                                onClick={(e) => handleDeleteSave(e, save.name)}
-                                className="px-6 py-3 rounded-xl bg-red-500/30 hover:bg-red-500/40 text-red-100 text-sm font-semibold flex items-center justify-center gap-2 min-w-[200px]"
-                              >
-                                <Trash2 size={18} />
-                                {t('common.delete')}
-                              </button>
+                            <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <div className="w-[240px] rounded-2xl overflow-hidden border border-white/15 bg-[#0a0a0a]/35">
+                                <MenuActionButton
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    OpenSaveFolder(selectedInstance!.id, selectedInstance!.branch, selectedInstance!.version, save.name);
+                                  }}
+                                >
+                                  <FolderOpen size={18} />
+                                  {t('common.openFolder')}
+                                </MenuActionButton>
+                                <div className="h-px bg-white/10" />
+                                <MenuActionButton
+                                  variant="danger"
+                                  onClick={(e) => handleDeleteSave(e, save.name)}
+                                  className="bg-red-500/10"
+                                >
+                                  <Trash2 size={18} />
+                                  {t('common.delete')}
+                                </MenuActionButton>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -2504,6 +2227,8 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
               instanceId={selectedInstance.id}
               initialName={selectedInstance.customName || getInstanceDisplayName(selectedInstance)}
               initialIconUrl={instanceIcons[selectedInstance.id]}
+              initialBranch={selectedInstance.branch}
+              initialVersion={selectedInstance.version}
             />
           </>
         ) : instances.length === 0 ? (
@@ -2963,6 +2688,8 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
           loadInstances();
         }}
       />
+      </div>
+      </PageContainer>
     </motion.div>
   );
 };

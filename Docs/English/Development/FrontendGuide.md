@@ -33,6 +33,45 @@ The frontend is a React 19 SPA built with Vite 7 and TypeScript 5.9. It runs ins
 | Sidebar | `components/Sidebar.tsx` | Navigation sidebar with icons |
 | GlassCard | `components/GlassCard.tsx` | Glass-morphism card wrapper |
 
+## UI Primitives
+
+To keep pages consistent and maintainable, prefer the shared primitives in `Frontend/src/components/ui/`:
+
+- **PageContainer** (`components/ui/PageContainer.tsx`) — consistent max-width, centered layout, and responsive padding for all main pages
+- **SettingsHeader** (`components/ui/SettingsHeader.tsx`) — unified section/page header (title + optional description, optional actions slot)
+- **SelectionCard** (`components/ui/SelectionCard.tsx`) — reusable selectable “choice” card with variants, icon slot, selected state, and click handler
+
+### Shared Controls (single source of truth)
+
+For most interactive UI (buttons, icon buttons, tab-like segmented pills, scroll areas, and image lightbox), use:
+
+- **Controls** (`components/ui/Controls.tsx`) — stable barrel export (implementations live in `components/ui/controls/`)
+
+This file intentionally centralizes the “feel” of the app so we don’t end up with many one-off button styles.
+
+**What to use**
+- `Button` — default button for most actions
+- `IconButton` — square icon-only actions (refresh/copy/export/etc.)
+- `SegmentedControl` — tab-like pill switchers with sliding indicator (same behavior as Instances tabs)
+- `AccentSegmentedControl` — `SegmentedControl` wrapper that auto-applies the current accent styling (use for Logs filters and Instances tabs)
+- `Switch` — accent-reactive toggle primitive
+- `ScrollArea` — consistent overflow + optional `thin-scrollbar` styling
+- `ImageLightbox` — centered screenshot viewer with `1/3 < >` navigation
+- `MenuActionButton` — full-width menu-row actions for hover menus (e.g., Worlds overlay)
+- `MenuItemButton` — full-width menu-row actions for context menus / popover menus (replaces ad-hoc `button className="..."` in menus)
+
+**Rule of thumb**
+- If you are about to write a new `className="...rounded...hover..."` button: stop and use `Button`/`IconButton` from `@/components/ui/Controls` instead.
+
+**Editing controls**
+- If you need to tweak a specific control, edit the role-based module in `components/ui/controls/` and keep `Controls.tsx` as a thin re-export.
+
+## Splitting monolithic pages
+
+If a page grows too large, extract cohesive UI chunks into a folder next to the page and move shared types there.
+
+- Example: `InstancesPage` uses `Frontend/src/pages/instances/` for extracted components and shared types.
+
 ## Creating a Component
 
 ```tsx

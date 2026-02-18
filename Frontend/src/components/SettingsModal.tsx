@@ -33,7 +33,6 @@ async function GetBackgroundMode(): Promise<string> { return (await ipc.settings
 async function SetBackgroundMode(v: string): Promise<void> { await ipc.settings.update({ backgroundMode: v }); }
 async function GetCustomInstanceDir(): Promise<string> { return (await ipc.settings.get()).instanceDirectory ?? ''; }
 async function GetNick(): Promise<string> { return (await ipc.profile.get()).nick ?? 'HyPrism'; }
-async function GetUUID(): Promise<string> { return (await ipc.profile.get()).uuid ?? ''; }
 async function GetAvatarPreview(): Promise<string | null> { return (await ipc.profile.get()).avatarPath ?? null; }
 async function GetAuthDomain(): Promise<string> { return (await ipc.settings.get()).authDomain ?? 'sessions.sanasol.ws'; }
 async function GetDiscordLink(): Promise<string> { console.warn('[IPC] GetDiscordLink: stub'); return 'https://discord.gg/ekZqTtynjp'; }
@@ -70,6 +69,8 @@ const DeleteGame = _stub('DeleteGame', false);
 const ResetOnboarding = _stub('ResetOnboarding', undefined as void);
 const ImportInstanceFromZip = _stub('ImportInstanceFromZip', true);
 import { useAccentColor } from '../contexts/AccentColorContext';
+import { Button } from '@/components/ui/Controls';
+import { DeveloperUiCatalog } from '@/components/dev/DeveloperUiCatalog';
 
 import { DiscordIcon } from './icons/DiscordIcon';
 import { Language } from '../constants/enums';
@@ -104,7 +105,6 @@ interface SettingsModalProps {
     onClose: () => void;
     launcherBranch: string;
     onLauncherBranchChange: (branch: string) => void;
-    onShowModManager?: () => void;
     rosettaWarning?: { message: string; command: string; tutorialUrl?: string } | null;
     onBackgroundModeChange?: (mode: string) => void;
     onAccentColorChange?: (color: string) => void;
@@ -117,14 +117,10 @@ interface SettingsModalProps {
 
 type SettingsTab = 'general' | 'downloads' | 'java' | 'visual' | 'network' | 'graphics' | 'variables' | 'logs' | 'language' | 'data' | 'instances' | 'about' | 'developer';
 
-// Auth server base URL for avatar/skin head
-const DEFAULT_AUTH_DOMAIN = 'sessions.sanasol.ws';
-
 export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose,
     launcherBranch,
     onLauncherBranchChange,
-    onShowModManager,
     rosettaWarning,
     onBackgroundModeChange,
     onAccentColorChange,
@@ -168,6 +164,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         testedAt: string;
     } | null>(null);
     const [officialSpeedTest, setOfficialSpeedTest] = useState<{
+        mirrorId: string;
+        mirrorUrl: string;
+        mirrorName: string;
         pingMs: number;
         speedMBps: number;
         isAvailable: boolean;
@@ -239,7 +238,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [installedInstances, setInstalledInstances] = useState<InstalledVersionInfo[]>([]);
     const [isLoadingInstances, setIsLoadingInstances] = useState(false);
     const [exportingInstance, setExportingInstance] = useState<string | null>(null);
-    const [_exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [instanceToDelete, setInstanceToDelete] = useState<InstalledVersionInfo | null>(null);
     const [isImportingInstance, setIsImportingInstance] = useState(false);
     const [showImportModal, setShowImportModal] = useState<{ zipBase64: string; fileName: string } | null>(null);
@@ -250,15 +248,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
 
     // Profile state
-    const [_profileUsername, setProfileUsername] = useState('');
-    const [profileUuid, setProfileUuid] = useState('');
-    const [editUsernameValue, setEditUsernameValue] = useState('');
-    const [editUuidValue, setEditUuidValue] = useState('');
     const [authDomain, setAuthDomain] = useState('sessions.sanasol.ws');
     const [authMode, setAuthModeState] = useState<'default' | 'official' | 'custom'>('default');
     const [customAuthDomain, setCustomAuthDomain] = useState('');
     const [useDualAuth, setUseDualAuth] = useState(false);
-    const [_localAvatar, setLocalAvatar] = useState<string | null>(null);
+    const [launchAfterDownload, setLaunchAfterDownload] = useState(true);
 
     const parseJavaHeapMb = (args: string, flag: 'xmx' | 'xms'): number | null => {
         const match = args.match(new RegExp(`(?:^|\\s)-${flag}(\\d+(?:\\.\\d+)?)([kKmMgG])(?:\\s|$)`, 'i'));
@@ -367,6 +361,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 // Load DualAuth mode
                 setUseDualAuth(settingsSnapshot.useDualAuth ?? false);
+                setLaunchAfterDownload(settingsSnapshot.launchAfterDownload ?? true);
 
                 const loadedJavaArgs = settingsSnapshot.javaArguments;
                 const normalizedJavaArgs = typeof loadedJavaArgs === 'string' ? loadedJavaArgs : '';
@@ -427,16 +422,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     console.error('Failed to load GPU adapters:', err);
                 }
 
-                // Load profile data
-                const username = await GetNick();
-                // Use 'HyPrism' as fallback - matches backend default
-                const displayName = username || 'HyPrism';
-                setProfileUsername(displayName);
-                setEditUsernameValue(displayName);
-
-                const uuid = await GetUUID();
-                setProfileUuid(uuid || '');
-                setEditUuidValue(uuid || '');
+                // Load profile username (keep the fetch for config hydration)
+                await GetNick();
 
                 // Load auth domain for profile pictures
                 const domain = await GetAuthDomain();
@@ -455,8 +442,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 // Load local avatar preview
                 try {
-                    const avatar = await GetAvatarPreview();
-                    if (avatar) setLocalAvatar(avatar);
+                    await GetAvatarPreview();
                 } catch { /* ignore */ }
 
                 // Check if user has any official account
@@ -537,20 +523,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const handleExportInstance = async (instance: InstalledVersionInfo) => {
         const key = `${instance.branch}-${instance.version}`;
         setExportingInstance(key);
-        setExportMessage(null);
         try {
             const exportPath = await ExportInstance(instance.branch, instance.version, instanceExportPath || undefined);
-            if (exportPath) {
-                setExportMessage({ type: 'success', text: `${t('settings.instanceSettings.exportedSuccess')}: ${exportPath.split('/').pop()}` });
-                setTimeout(() => setExportMessage(null), 5000);
-            } else {
-                setExportMessage({ type: 'error', text: t('settings.instanceSettings.noUserData') });
-                setTimeout(() => setExportMessage(null), 5000);
+            if (!exportPath) {
+                console.warn('Export returned no path (no user data or cancelled)');
             }
         } catch (err) {
             console.error('Failed to export instance:', err);
-            setExportMessage({ type: 'error', text: t('settings.instanceSettings.exportFailed') });
-            setTimeout(() => setExportMessage(null), 5000);
         }
         setExportingInstance(null);
         setShowInstanceExportModal(null);
@@ -944,13 +923,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
-    const getInstanceLabel = (instance: InstalledVersionInfo) => {
-        const branchLabel = instance.branch === 'release' ? t('common.release') : t('common.preRelease');
-        const versionLabel = instance.version === 0 ? t('common.latest') : `v${instance.version}`;
-        return `${branchLabel} ${versionLabel}`;
-    };
-
-
     const handleGpuPreferenceChange = async (preference: string) => {
         setGpuPreferenceState(preference);
         try {
@@ -1040,6 +1012,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         const newValue = !devModeEnabled;
         setDevModeEnabled(newValue);
         localStorage.setItem('hyprism_dev_mode', newValue ? 'true' : 'false');
+
+        // Let other parts of the UI react immediately (storage event doesn't fire in the same window).
+        window.dispatchEvent(new CustomEvent('hyprism:devmode-changed', { detail: { enabled: newValue } }));
     };
 
     const openGitHub = () => BrowserOpenURL('https://github.com/HyPrismTeam/HyPrism');
@@ -1065,15 +1040,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         ...(devModeEnabled ? [{ id: 'developer' as const, icon: Code, label: t('settings.developer') }] : []),
     ];
 
-    // Profile helpers
-    const generateUUID = () => {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-            const r = (Math.random() * 16) | 0;
-            const v = c === 'x' ? r : (r & 0x3) | 0x8;
-            return v.toString(16);
-        });
-    };
-
     const truncateName = (name: string, maxLength: number = 10) => {
         if (name.length <= maxLength) return name;
         return name.slice(0, maxLength - 2) + '...';
@@ -1092,10 +1058,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* In modal mode, constrain width/height; in page mode, 'contents' makes this invisible to layout */}
                 <div className={isPageMode
                     ? "contents"
-                    : "w-full max-w-4xl mx-4 max-h-[85vh] flex gap-2 relative"
+                    : "w-full max-w-4xl mx-4 h-[85vh] flex gap-2 relative"
                 }>
                     {/* Sidebar - Independent glass panel */}
-                    <div className={`${isPageMode ? 'w-52' : 'w-48'} flex-shrink-0 flex flex-col py-4 rounded-2xl glass-panel-static-solid`}>
+                    <div className="w-52 h-full min-h-0 flex-shrink-0 flex flex-col py-4 rounded-2xl glass-panel-static-solid">
                         <nav className="flex-1 space-y-1 px-2">
                             {tabs.map((tab) => (
                                 <button
@@ -1136,7 +1102,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
 
                     {/* Content - Independent glass panel */}
-                    <div className={`flex-1 flex flex-col min-w-0 overflow-hidden rounded-2xl glass-panel-static-solid`}>
+                    <div className={`flex-1 h-full min-h-0 flex flex-col min-w-0 overflow-hidden rounded-2xl glass-panel-static-solid`}>
                         {/* Header */}
                         {activeTab !== 'logs' && (
                             <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
@@ -1394,6 +1360,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                         </div>
                                     </div>
 
+                                    {/* Launch After Download */}
+                                    <div
+                                        className={`flex items-center justify-between p-4 rounded-2xl ${gc} cursor-pointer hover:border-white/[0.12] transition-all`}
+                                        onClick={async () => {
+                                            const newValue = !launchAfterDownload;
+                                            setLaunchAfterDownload(newValue);
+                                            await ipc.settings.update({ launchAfterDownload: newValue });
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center flex-shrink-0">
+                                                <Power size={16} className="text-white/70" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <span className="text-white text-sm font-medium">{t('settings.downloads.launchAfterDownload')}</span>
+                                                <p className="text-xs text-white/40">{t('settings.downloads.launchAfterDownloadHint')}</p>
+                                            </div>
+                                        </div>
+                                        <div
+                                            className="w-12 h-7 rounded-full flex items-center transition-all duration-200 flex-shrink-0"
+                                            style={{ backgroundColor: launchAfterDownload ? accentColor : 'rgba(255,255,255,0.15)' }}
+                                        >
+                                            <div
+                                                className={`w-5 h-5 rounded-full shadow-md transform transition-all duration-200 ${launchAfterDownload ? 'translate-x-6' : 'translate-x-1'}`}
+                                                style={{ backgroundColor: launchAfterDownload ? accentTextColor : 'white' }}
+                                            />
+                                        </div>
+                                    </div>
+
                                     {/* Official Source Card - Only show if user has official account */}
                                     {hasOfficialAccount && (
                                         <div
@@ -1405,8 +1400,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                         >
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                                                        <Server size={20} className="text-blue-400" />
+                                                    <div
+                                                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                                                        style={{ backgroundColor: `${accentColor}20` }}
+                                                    >
+                                                        <HardDrive size={20} style={{ color: accentColor }} />
                                                     </div>
                                                     <div>
                                                         <div className="text-white text-sm font-medium">Hytale Official</div>
@@ -1469,8 +1467,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-lg">🪞</span>
+                                                <div
+                                                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                                                    style={{ backgroundColor: `${accentColor}20` }}
+                                                >
+                                                    <HardDrive size={20} style={{ color: accentColor }} />
                                                 </div>
                                                 <div>
                                                     <div className="text-white text-sm font-medium">EstroGen Mirror</div>
@@ -1532,8 +1533,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-lg">🌐</span>
+                                                <div
+                                                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                                                    style={{ backgroundColor: `${accentColor}20` }}
+                                                >
+                                                    <HardDrive size={20} style={{ color: accentColor }} />
                                                 </div>
                                                 <div>
                                                     <div className="text-white text-sm font-medium">CobyLobby Mirror</div>
@@ -1595,8 +1599,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-lg">🧶</span>
+                                                <div
+                                                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                                                    style={{ backgroundColor: `${accentColor}20` }}
+                                                >
+                                                    <HardDrive size={20} style={{ color: accentColor }} />
                                                 </div>
                                                 <div>
                                                     <div className="text-white text-sm font-medium">ShipOfYarn Mirror</div>
@@ -2533,19 +2540,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                         </div>
                                     </div>
 
+                                    <DeveloperUiCatalog />
+
                                     {/* Show Intro on Next Launch */}
                                     <div className={`p-4 rounded-2xl ${gc} space-y-4`}>
                                         <h3 className="text-white font-medium text-sm">{t('settings.developerSettings.onboarding')}</h3>
-                                        <button
+                                        <Button
                                             onClick={async () => {
                                                 await ResetOnboarding();
                                                 localStorage.removeItem('hyprism_onboarding_done');
                                                 alert(t('settings.developerSettings.introRestart'));
                                             }}
-                                            className="w-full p-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
+                                            className="w-full"
                                         >
                                             {t('settings.developerSettings.showIntro')}
-                                        </button>
+                                        </Button>
                                     </div>
 
                                     <div className={`p-4 rounded-2xl ${gc}`}>

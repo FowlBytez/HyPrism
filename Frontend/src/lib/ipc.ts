@@ -89,7 +89,7 @@ export interface NewsItem {
   publishedAt?: string;
   author?: string;
   imageUrl?: string;
-  source?: string;
+  source?: 'hytale' | 'hyprism';
 }
 
 export interface Profile {
@@ -119,7 +119,10 @@ export interface SettingsSnapshot {
   language: string;
   musicEnabled: boolean;
   launcherBranch: string;
+  versionType: string;
+  selectedVersion: number;
   closeAfterLaunch: boolean;
+  launchAfterDownload: boolean;
   showDiscordAnnouncements: boolean;
   disableNews: boolean;
   backgroundMode: string;
@@ -135,7 +138,10 @@ export interface SettingsSnapshot {
   dataDirectory: string;
   instanceDirectory: string;
   gpuPreference?: string;
+  gameEnvironmentVariables?: Record<string, string>;
   useDualAuth?: boolean;
+  showAlphaMods: boolean;
+  launcherVersion: string;
   launchOnStartup?: boolean;
   minimizeToTray?: boolean;
   animations?: boolean;
@@ -332,6 +338,7 @@ const _instance = {
   select: (data?: unknown) => invoke<boolean>('hyprism:instance:select', data),
   getSelected: (data?: unknown) => invoke<InstanceInfo | null>('hyprism:instance:getSelected', data),
   list: () => invoke<InstanceInfo[]>('hyprism:instance:list'),
+  changeVersion: (data?: unknown) => invoke<boolean>('hyprism:instance:changeVersion', data),
 };
 
 const _news = {
