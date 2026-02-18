@@ -1,7 +1,7 @@
 import React, { useState, useEffect, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Play, Download, Loader2, X, RefreshCw, User, ShieldAlert, Info } from 'lucide-react';
+import { Play, Download, Loader2, X, RefreshCw, User, ShieldAlert, Info, ArrowRight } from 'lucide-react';
 import { useAccentColor } from '../contexts/AccentColorContext';
 
 import { ipc, InstanceInfo } from '@/lib/ipc';
@@ -17,6 +17,12 @@ interface DashboardPageProps {
   uuid: string;
   launcherVersion: string;
   updateAvailable: boolean;
+  launcherUpdateInfo?: {
+    currentVersion: string;
+    latestVersion: string;
+    changelog?: string;
+    releaseUrl?: string;
+  } | null;
   avatarRefreshTrigger: number;
   onOpenProfileEditor: () => void;
   onLauncherUpdate: () => void;
@@ -346,6 +352,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
                 </LinkButton>
               )}
             </div>
+
+            {props.updateAvailable && props.launcherUpdateInfo?.latestVersion && (
+              <div className="mt-0.5 flex items-center gap-1 text-[10px] animate-rgb" style={{ color: accentColor }}>
+                <span className="font-medium">
+                  {props.launcherUpdateInfo.currentVersion || props.launcherVersion}
+                </span>
+                <ArrowRight size={12} />
+                <span className="font-medium">
+                  {props.launcherUpdateInfo.latestVersion}
+                </span>
+              </div>
+            )}
           </div>
         </motion.div>
 

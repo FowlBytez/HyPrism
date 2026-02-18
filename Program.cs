@@ -255,6 +255,21 @@ class Program
                 Logger.Warning("Boot", $"Failed to center window on startup: {ex.Message}");
             }
             mainWindow.Show();
+
+            // Check for launcher updates after the window exists so IPC events can be delivered.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(1200);
+                    var updateService = services.GetRequiredService<HyPrism.Services.Core.App.IUpdateService>();
+                    await updateService.CheckForLauncherUpdatesAsync();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning("Update", $"Startup update check failed: {ex.Message}");
+                }
+            });
         };
 
         Logger.Success("Boot", "Electron window created, IPC handlers registered");

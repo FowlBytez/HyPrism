@@ -303,9 +303,36 @@ export interface VersionListResponse {
   officialSourceAvailable: boolean;
 }
 
+export interface LauncherUpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  changelog?: string;
+  downloadUrl?: string;
+  assetName?: string;
+  releaseUrl?: string;
+  isBeta?: boolean;
+}
+
+export interface LauncherUpdateProgress {
+  stage: string;
+  progress: number;
+  message: string;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  downloadedFilePath?: string;
+  hasDownloadedFile?: boolean;
+}
+
 // #endregion
 
 // #region Typed IPC API (from @ipc annotations)
+
+const _update = {
+  check: (data?: unknown) => invoke<{ success: boolean }>('hyprism:update:check', data),
+  install: (data?: unknown) => invoke<boolean>('hyprism:update:install', data, 300000),
+  onAvailable: (cb: (data: LauncherUpdateInfo) => void) => on('hyprism:update:available', cb as (d: unknown) => void),
+  onProgress: (cb: (data: LauncherUpdateProgress) => void) => on('hyprism:update:progress', cb as (d: unknown) => void),
+};
 
 const _config = {
   get: () => invoke<AppConfig>('hyprism:config:get'),
@@ -440,6 +467,7 @@ const _file = {
 // #region Unified export
 
 export const ipc = {
+  update: _update,
   config: _config,
   game: _game,
   instance: _instance,

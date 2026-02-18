@@ -43,6 +43,14 @@ public class Config
     /// Beta releases are named like "beta3-3.0.0" on GitHub.
     /// </summary>
     public string LauncherBranch { get; set; } = "release";
+
+    /// <summary>
+    /// INTERNAL: Which launcher update channel is currently installed on disk.
+    /// Used to detect channel switches (release ↔ beta) and allow reinstall/downgrade
+    /// when the user changes <see cref="LauncherBranch"/>.
+    /// Empty means "unknown" and will be initialized at runtime.
+    /// </summary>
+    public string InstalledLauncherBranch { get; set; } = "";
     
     /// <summary>
     /// If true, the launcher will close after successfully launching the game.
