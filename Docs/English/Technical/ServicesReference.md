@@ -5,11 +5,11 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 ## Core Services (`Services/Core/`)
 
 ### IpcService
-- **File:** `Services/Core/IpcService.cs`
+- **File:** `Services/Core/Ipc/IpcService.cs`
 - **Purpose:** Central IPC channel registry — single source of truth for all React ↔ .NET communication
 - **Key method:** `RegisterAll()` — registers all IPC handlers
 - **Annotations:** Contains `@type` and `@ipc` doc comments used by code generator
-- **Domains:** config, game, news, profile, settings, i18n, window, browser, mods, console
+- **Domains:** config, game, news, profile, settings, update, i18n, window, browser, mods, console
 - **Instance saves handlers:** supports listing saves, opening save folders, and deleting save folders via IPC (`hyprism:instance:saves`, `hyprism:instance:openSaveFolder`, `hyprism:instance:deleteSave`)
 - **Folder picker timeout:** `hyprism:file:browseFolder` uses extended timeout (300s) to allow manual directory selection without frontend timeout.
 - **Mods target resolution:** mod IPC handlers resolve the target from installed instance metadata (including latest) and avoid implicit `branch/latest` placeholder fallback.
@@ -18,6 +18,10 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 - **Instance operations targeting:** instance delete/saves IPC handlers accept `instanceId` and resolve by GUID first, with branch/version kept only as backward-compatible fallback.
 - **Instance icon refresh:** `hyprism:instance:getIcon` returns a cache-busted file URL (`?v=<lastWriteTicks>`) so updated logos appear immediately after overwrite.
 - **Frontend icon loading rule:** instance list icon requests are executed sequentially (not in parallel) to avoid mixed responses on shared IPC reply channels.
+- **Launcher updater IPC:**
+  - `hyprism:update:available` (event) — emitted when a newer launcher version is found; includes current/latest + changelog.
+  - `hyprism:update:check` (invoke) — triggers a manual update check.
+  - `hyprism:update:install` (invoke) — downloads and applies the update (self-replace + restart).
 
 ### ConfigService
 - **File:** `Services/Core/ConfigService.cs`
@@ -52,6 +56,14 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 ### GitHubService
 - **File:** `Services/Core/GitHubService.cs`
 - **Purpose:** Release checking and self-update functionality
+
+### UpdateService
+- **File:** `Services/Core/App/UpdateService.cs`
+- **Purpose:** Checks GitHub Releases for a newer launcher version and applies a self-update.
+- **Update source:** `yyyumeniku/TEST` (GitHub Releases API)
+- **User flow:** on startup, if a newer version exists, the dashboard shows an update indicator. Installing the update downloads quietly in-app (with progress), replaces the launcher executable/app, and restarts.
+- **Fallback:** update assets are downloaded into the user **Downloads** folder when available, so users can manually install if auto-update fails.
+- **Windows portable updates:** when updating from a `.zip`, the updater copies the extracted app folder (including side-by-side runtime files like `ffmpeg.dll`) into the install directory.
 
 ## Game Services (`Services/Game/`)
 

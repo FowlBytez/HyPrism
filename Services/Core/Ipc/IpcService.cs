@@ -63,6 +63,8 @@ namespace HyPrism.Services.Core.Ipc;
 /// @type GpuAdapterInfo { name: string; vendor: string; type: string; }
 /// @type VersionInfo { version: number; source: 'Official' | 'Mirror'; isLatest: boolean; }
 /// @type VersionListResponse { versions: VersionInfo[]; hasOfficialAccount: boolean; officialSourceAvailable: boolean; }
+/// @type LauncherUpdateInfo { currentVersion: string; latestVersion: string; changelog?: string; downloadUrl?: string; assetName?: string; releaseUrl?: string; isBeta?: boolean; }
+/// @type LauncherUpdateProgress { stage: string; progress: number; message: string; downloadedBytes?: number; totalBytes?: number; downloadedFilePath?: string; hasDownloadedFile?: boolean; }
 public class IpcService
 {
     private readonly IServiceProvider _services;
@@ -234,6 +236,7 @@ public class IpcService
         RegisterProfileHandlers();
         RegisterAuthHandlers();
         RegisterSettingsHandlers();
+        RegisterUpdateHandlers();
         RegisterLocalizationHandlers();
         RegisterWindowHandlers();
         RegisterModHandlers();
@@ -243,6 +246,70 @@ public class IpcService
 
         Logger.Success("IPC", "All IPC handlers registered");
     }
+
+    // #region Launcher Update
+    // @ipc invoke hyprism:update:check -> { success: boolean }
+    // @ipc invoke hyprism:update:install -> boolean 300000
+    // @ipc event hyprism:update:available -> LauncherUpdateInfo
+    // @ipc event hyprism:update:progress -> LauncherUpdateProgress
+
+    private void RegisterUpdateHandlers()
+    {
+        var updateService = _services.GetRequiredService<IUpdateService>();
+
+        // Forward backend update notifications to renderer
+        updateService.LauncherUpdateAvailable += (info) =>
+        {
+            try { Reply("hyprism:update:available", info); } catch { /* swallow */ }
+        };
+
+        updateService.LauncherUpdateProgress += (progress) =>
+        {
+            try { Reply("hyprism:update:progress", progress); } catch { /* swallow */ }
+        };
+
+        // Explicit check (useful for manual refresh or debugging)
+        Electron.IpcMain.On("hyprism:update:check", async (_) =>
+        {
+            try
+            {
+                await updateService.CheckForLauncherUpdatesAsync();
+                Reply("hyprism:update:check:reply", new { success = true });
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Update check failed: {ex.Message}");
+                Reply("hyprism:update:check:reply", new { success = false, error = ex.Message });
+            }
+        });
+
+        // Install update (will usually terminate the current process after starting the replacement script)
+        Electron.IpcMain.On("hyprism:update:install", async (_) =>
+        {
+            try
+            {
+                var ok = await updateService.UpdateAsync(null);
+                Reply("hyprism:update:install:reply", ok);
+
+                if (ok)
+                {
+                    // Give IPC a moment to flush, then exit. The updater script will restart the app.
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(750);
+                        try { Electron.App.Exit(); } catch { Environment.Exit(0); }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Update install failed: {ex.Message}");
+                Reply("hyprism:update:install:reply", false);
+            }
+        });
+    }
+
+    // #endregion
 
     // #region Config
     // @ipc invoke hyprism:config:get -> AppConfig
@@ -1409,6 +1476,7 @@ public class IpcService
     {
         var settings = _services.GetRequiredService<ISettingsService>();
         var appPath = _services.GetRequiredService<AppPathConfiguration>();
+        var updateService = _services.GetRequiredService<IUpdateService>();
 
         Electron.IpcMain.On("hyprism:settings:get", (_) =>
         {
@@ -1447,11 +1515,24 @@ public class IpcService
         {
             try
             {
+                var oldLauncherBranch = settings.GetLauncherBranch();
                 var json = ArgsToJson(args);
                 var updates = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
                 if (updates != null)
                     foreach (var (key, value) in updates)
                         ApplySetting(settings, key, value);
+
+                // If the user changed the launcher branch, re-check updates immediately.
+                // This enables release ↔ beta switching without requiring restart.
+                var newLauncherBranch = settings.GetLauncherBranch();
+                if (!string.Equals(oldLauncherBranch, newLauncherBranch, StringComparison.OrdinalIgnoreCase))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try { await updateService.CheckForLauncherUpdatesAsync(); }
+                        catch (Exception ex) { Logger.Warning("Update", $"Update check after channel switch failed: {ex.Message}"); }
+                    });
+                }
 
                 Reply("hyprism:settings:update:reply", new { success = true });
             }
