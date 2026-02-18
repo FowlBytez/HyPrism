@@ -554,11 +554,12 @@ public class UpdateService : IUpdateService
                 var extractedExe = ExtractZipAndFindWindowsExe(targetPath);
                 if (string.IsNullOrWhiteSpace(extractedExe))
                     throw new Exception("Could not find .exe inside update .zip");
-                InstallWindowsUpdate(extractedExe);
+                var sourceDir = Path.GetDirectoryName(extractedExe);
+                InstallWindowsUpdate(extractedExe, sourceDir);
             }
             else
             {
-                InstallWindowsUpdate(targetPath);
+                InstallWindowsUpdate(targetPath, Path.GetDirectoryName(targetPath));
             }
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -900,7 +901,7 @@ rm -f ""$0""
         }
     }
 
-    private void InstallWindowsUpdate(string exePath)
+    private void InstallWindowsUpdate(string exePath, string? sourceDir)
     {
         try
         {
@@ -912,15 +913,49 @@ rm -f ""$0""
                 return;
             }
 
+            var targetDir = Path.GetDirectoryName(currentExe);
+            if (string.IsNullOrWhiteSpace(targetDir))
+            {
+                Logger.Error("Update", "Could not determine current install directory");
+                Process.Start("explorer.exe", $"/select,\"{exePath}\"");
+                return;
+            }
+            var safeSourceDir = string.IsNullOrWhiteSpace(sourceDir) ? Path.GetDirectoryName(exePath) : sourceDir;
+            if (string.IsNullOrWhiteSpace(safeSourceDir) || !Directory.Exists(safeSourceDir))
+                safeSourceDir = null;
+
             // Create a batch script to replace the exe and restart
             var batchPath = Path.Combine(Path.GetTempPath(), "hyprism_update.bat");
-            var batchContent = $@"@echo off
+                        var safeSourceDirValue = safeSourceDir ?? string.Empty;
+                        var batchContent = $$"""
+@echo off
 timeout /t 2 /nobreak >nul
-del ""{currentExe}"" 2>nul
-copy /y ""{exePath}"" ""{currentExe}"" >nul
-start """" ""{currentExe}""
-del ""%~f0""
-";
+set "DST={{targetDir}}"
+set "SRC={{safeSourceDirValue}}"
+
+if not "%SRC%"=="" (
+    xcopy /E /I /Y /Q "%SRC%\*" "%DST%" >nul
+)
+
+del "{{currentExe}}" 2>nul
+copy /y "{{exePath}}" "{{currentExe}}" >nul
+
+rem Ensure ffmpeg.dll is present next to the launcher exe (some packages keep it deeper).
+if not "%SRC%"=="" (
+    setlocal EnableDelayedExpansion
+    set "FF="
+    for /r "%SRC%" %%F in (ffmpeg.dll) do (
+        set "FF=%%F"
+        goto :_fffound
+    )
+    :_fffound
+    if not "!FF!"=="" copy /y "!FF!" "%DST%\ffmpeg.dll" >nul
+    endlocal
+)
+
+start "" "{{currentExe}}"
+del "%~f0"
+""";
             File.WriteAllText(batchPath, batchContent);
 
             // Start the batch script and exit

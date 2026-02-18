@@ -61,7 +61,9 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 - **File:** `Services/Core/App/UpdateService.cs`
 - **Purpose:** Checks GitHub Releases for a newer launcher version and applies a self-update.
 - **Update source:** `yyyumeniku/TEST` (GitHub Releases API)
-- **User flow:** on startup, if a newer version exists, the dashboard shows a banner with current/latest + release description (changelog). Installing the update replaces the launcher executable/app and restarts.
+- **User flow:** on startup, if a newer version exists, the dashboard shows an update indicator. Installing the update downloads quietly in-app (with progress), replaces the launcher executable/app, and restarts.
+- **Fallback:** update assets are downloaded into the user **Downloads** folder when available, so users can manually install if auto-update fails.
+- **Windows portable updates:** when updating from a `.zip`, the updater copies the extracted app folder (including side-by-side runtime files like `ffmpeg.dll`) into the install directory.
 
 ## Game Services (`Services/Game/`)
 
